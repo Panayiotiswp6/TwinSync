@@ -4,7 +4,7 @@
 import { randomUUID } from 'node:crypto';
 import seed from './data/seed.json';
 import { decide } from '../shared/engine';
-import { PREF_META, describePref } from '../shared/prefs';
+import { PREF_META, describePref, prefSlot } from '../shared/prefs';
 import { extractWithRules } from '../shared/extractRules';
 import type {
   Decision,
@@ -151,7 +151,7 @@ export const store = {
     if (weight !== undefined && PREF_META[p.key].kind === 'preference') p.weight = weight;
     p.status = 'confirmed';
     for (const other of state.preferences) {
-      if (other !== p && other.ownerId === p.ownerId && other.key === p.key && other.scope === p.scope && other.status === 'confirmed') {
+      if (other !== p && prefSlot(other) === prefSlot(p) && other.scope === p.scope && other.status === 'confirmed') {
         other.status = 'superseded';
       }
     }
@@ -175,7 +175,8 @@ export const store = {
         ? `Διόρθωση από ${owner.name}, μόνο για το ${state.request.weekendLabel}: ${label}.`
         : `Διόρθωση από ${owner.name}, αποθηκεύεται στο προφίλ: ${label}.`;
     const src = store.addSource(ownerId, 'owner_correction', scope === 'trip' ? 'Διόρθωση μόνο για αυτό το διήμερο' : 'Διόρθωση προφίλ', text);
-    const previous = state.preferences.find((p) => p.ownerId === ownerId && p.key === key && p.status === 'confirmed' && (p.scope === scope || scope === 'trip'));
+    const slot = prefSlot({ ownerId, key, value });
+    const previous = state.preferences.find((p) => prefSlot(p) === slot && p.status === 'confirmed' && (p.scope === scope || scope === 'trip'));
     const p: Preference = {
       id: `pref-${ownerId}-${key}-${scope}-${randomUUID().slice(0, 6)}`,
       ownerId,
@@ -191,7 +192,7 @@ export const store = {
       createdAt: nowIso(),
     };
     for (const other of state.preferences) {
-      if (other.ownerId === ownerId && other.key === key && other.scope === scope && other.status === 'confirmed') other.status = 'superseded';
+      if (prefSlot(other) === slot && other.scope === scope && other.status === 'confirmed') other.status = 'superseded';
     }
     p.memory = stampPreference(p, state.sources);
     state.preferences.push(p);
@@ -207,7 +208,7 @@ export const store = {
   effectivePreferences(participants: OwnerId[]): Preference[] {
     const confirmed = state.preferences.filter((p) => p.status === 'confirmed' && participants.includes(p.ownerId));
     const trip = confirmed.filter((p) => p.scope === 'trip');
-    const profile = confirmed.filter((p) => p.scope === 'profile' && !trip.some((t) => t.ownerId === p.ownerId && t.key === p.key));
+    const profile = confirmed.filter((p) => p.scope === 'profile' && !trip.some((t) => prefSlot(t) === prefSlot(p)));
     return [...profile, ...trip];
   },
 
@@ -284,7 +285,7 @@ export function diffDecisions(prev: Decision, next: Decision, trips: TripOption[
   const from = prev.result.chosenOptionId;
   const to = next.result.chosenOptionId;
   const changes: string[] = [];
-  const key = (p: Preference) => `${p.ownerId}:${p.key}`;
+  const key = (p: Preference) => prefSlot(p);
   const before = new Map(prev.inputs.map((p) => [key(p), p]));
   const after = new Map(next.inputs.map((p) => [key(p), p]));
   const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;

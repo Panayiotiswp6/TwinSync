@@ -49,7 +49,7 @@ app.post(
     const source = store.addSource(owner.id, 'owner_input', body.title || 'Νέα σημείωση κατόχου', body.text);
     const result = await extractCandidates(body.text);
     const created = store.addCandidates(owner.id, source, result.candidates, result.mode === 'live' ? 'ai' : 'rules');
-    res.json({ source, candidates: created, mode: result.mode, model: result.model, note: result.note, dropped: result.candidates.length - created.length, state: snapshot() });
+    res.json({ source, candidates: created, unmapped: result.unmapped ?? [], mode: result.mode, model: result.model, note: result.note, dropped: result.candidates.length - created.length, state: snapshot() });
   }),
 );
 

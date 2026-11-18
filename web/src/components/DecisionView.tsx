@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { Decision, Owner, Preference, PrefKey, TripOption } from '../../../shared/types';
-import { PREF_META, describePref, formatValue } from '../../../shared/prefs';
+import { ACTIVITY_LABEL, ACTIVITY_TAGS, PREF_META, describePref, formatValue } from '../../../shared/prefs';
 import { STANCE_THRESHOLDS } from '../../../shared/engine';
 import { api, type AppState } from '../api';
 import { Avatar, Badge, Cite, Details, Section, type OpenSource } from './ui';
@@ -146,6 +146,14 @@ function Options({ d, owners, trips, onOpen }: { d: Decision; owners: Owner[]; t
                 </tbody>
               </table>
               <p className="small muted">Δραστηριότητες: {t.activities.join(' · ')}</p>
+              {t.tags && (
+                <p className="small muted">
+                  Χαρακτηριστικά:{' '}
+                  {ACTIVITY_TAGS.filter((tag) => (t.tags?.[tag] ?? 0) >= 0.3)
+                    .map((tag) => `${ACTIVITY_LABEL[tag]}${(t.tags?.[tag] ?? 0) >= 0.7 ? ' ●●' : ' ●'}`)
+                    .join(' · ')}
+                </p>
+              )}
               <p className="small muted">
                 Τιμή: {t.priceNote} — ενδεικτική τιμή demo, όχι live. Αναχώρηση Σάββατο {t.departSaturday}.
               </p>
@@ -158,7 +166,7 @@ function Options({ d, owners, trips, onOpen }: { d: Decision; owners: Owner[]; t
 }
 
 // ---------- Corrections ----------
-const CORRECTABLE: PrefKey[] = ['budget_max', 'return_by', 'requires_private_bath', 'no_camping', 'likes_hiking', 'likes_sea', 'prefers_comfort', 'prefers_low_cost', 'max_hike_hours'];
+const CORRECTABLE: PrefKey[] = ['budget_max', 'return_by', 'requires_private_bath', 'no_camping', 'likes_hiking', 'likes_sea', 'prefers_comfort', 'prefers_low_cost', 'max_hike_hours', 'likes_activity', 'avoids_activity'];
 
 function Corrections({ owners, inputs, onDecision }: { owners: Owner[]; inputs: Preference[]; onDecision: (r: { decision: Decision; state: AppState }) => void }) {
   const [ownerId, setOwnerId] = useState(owners.find((o) => o.id === 'geo')?.id ?? owners[0].id);
@@ -173,7 +181,7 @@ function Corrections({ owners, inputs, onDecision }: { owners: Owner[]; inputs: 
     setKey(k);
     const cur = inputs.find((p) => p.ownerId === ownerId && p.key === k);
     const m = PREF_META[k];
-    setValue(cur ? String(cur.value) : m.valueType === 'boolean' ? 'true' : m.valueType === 'time' ? '20:00' : '100');
+    setValue(cur ? String(cur.value) : m.valueType === 'boolean' ? 'true' : m.valueType === 'tag' ? 'nightlife' : m.valueType === 'time' ? '20:00' : '100');
   };
 
   const submit = async (scope: 'trip' | 'profile') => {
@@ -217,6 +225,14 @@ function Corrections({ owners, inputs, onDecision }: { owners: Owner[]; inputs: 
             <select value={value} onChange={(e) => setValue(e.target.value)}>
               <option value="true">ναι</option>
               <option value="false">όχι</option>
+            </select>
+          ) : meta.valueType === 'tag' ? (
+            <select value={value} onChange={(e) => setValue(e.target.value)}>
+              {ACTIVITY_TAGS.map((t) => (
+                <option key={t} value={t}>
+                  {ACTIVITY_LABEL[t]}
+                </option>
+              ))}
             </select>
           ) : (
             <input value={value} onChange={(e) => setValue(e.target.value)} inputMode={meta.valueType === 'number' ? 'numeric' : 'text'} placeholder={meta.valueType === 'time' ? 'ΩΩ:ΛΛ' : meta.unit} />

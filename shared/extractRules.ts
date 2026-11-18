@@ -3,8 +3,8 @@
 // and as a fallback if the live model call fails. Every candidate carries
 // the exact sentence it came from, so the owner can check it.
 
-import { PREF_META } from './prefs';
-import type { ExtractionCandidate, PrefKey, PrefValue } from './types';
+import { PREF_META, isTagKey } from './prefs';
+import type { ActivityTag, ExtractionCandidate, PrefKey, PrefValue } from './types';
 
 /** Lowercase and strip Greek accents/diaeresis so "Θάλασσα" ~ "θαλασσα". */
 export function normalizeGreek(s: string): string {
@@ -20,6 +20,15 @@ export function sentences(text: string): string[] {
 }
 
 const NEG = /(^|\s)(δεν|οχι|ουτε|ποτε|καθολου)(\s|$|,)/;
+
+const ACTIVITY_RULES: [ActivityTag, RegExp][] = [
+  ['nightlife', /(κλαμπ|club|μπαρ|ξενυχτ|νυχτεριν|παρτι|party|διασκεδα|χορο)/],
+  ['social', /(γνωρισ|νεα ατομα|νεουσ ανθρωπουσ|νεο κοσμο|κοσμο να)/],
+  ['culture', /(μουσει|ιστορι|αρχαι|αξιοθεατ|καστρο|πολιτισμ)/],
+  ['food', /(φαγητ|ταβερν|γαστρονομ|μεζε)/],
+  ['quiet', /(ησυχ|ξεκουρασ|ηρεμι|χαλαρωσ)/],
+  ['nature', /(φυση|δασοσ|δαση|λιμνη|καταρρακτ)/],
+];
 
 function cand(key: PrefKey, value: PrefValue, quote: string, confidence = 0.6, weight?: number): ExtractionCandidate {
   return { key, value, quote: quote.replace(/[.!;;]+$/, ''), confidence, weight: weight ?? PREF_META[key].defaultWeight };
@@ -71,16 +80,22 @@ export function extractWithRules(text: string): ExtractionCandidate[] {
 
     // Sea
     if (/(θαλασσ|παραλι|βουτι|κολυμπ)/.test(n)) out.push(cand('likes_sea', !NEG.test(n), s));
+
+    // Interests beyond the fixed trip keys
+    for (const [tag, re] of ACTIVITY_RULES) {
+      if (re.test(n)) out.push(cand(NEG.test(n) ? 'avoids_activity' : 'likes_activity', tag, s));
+    }
   }
 
-  // One candidate per key: keep the first (most explicit sentence comes first in our sources),
-  // except numeric constraints where the strictest value wins.
-  const byKey = new Map<PrefKey, ExtractionCandidate>();
+  // One candidate per key (per key+tag for interests): keep the first (most explicit sentence
+  // comes first in our sources), except numeric constraints where the strictest value wins.
+  const byKey = new Map<string, ExtractionCandidate>();
   for (const c of out) {
-    const prev = byKey.get(c.key);
-    if (!prev) byKey.set(c.key, c);
-    else if (c.key === 'budget_max' && Number(c.value) < Number(prev.value)) byKey.set(c.key, c);
-    else if (c.key === 'return_by' && String(c.value) < String(prev.value)) byKey.set(c.key, c);
+    const slot = isTagKey(c.key) ? `${c.key}:${String(c.value)}` : c.key;
+    const prev = byKey.get(slot);
+    if (!prev) byKey.set(slot, c);
+    else if (c.key === 'budget_max' && Number(c.value) < Number(prev.value)) byKey.set(slot, c);
+    else if (c.key === 'return_by' && String(c.value) < String(prev.value)) byKey.set(slot, c);
   }
   return [...byKey.values()];
 }

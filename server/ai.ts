@@ -13,8 +13,8 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import { extractWithRules } from '../shared/extractRules';
-import { PREF_KEYS, PREF_META, coerceValue, isPrefKey } from '../shared/prefs';
-import type { ExtractionCandidate } from '../shared/types';
+import { ACTIVITY_LABEL, ACTIVITY_TAGS, PREF_KEYS, PREF_META, coerceValue, isPrefKey } from '../shared/prefs';
+import type { ExtractionCandidate, UnmappedInterest } from '../shared/types';
 
 export type Provider = 'openai' | 'anthropic' | 'demo';
 
@@ -112,13 +112,26 @@ const ItemSchema = z.object({
   quote: z.string(),
   confidence: z.number(),
 });
-const ExtractionOutput = z.object({ items: z.array(ItemSchema) });
+const ExtractionOutput = z.object({ items: z.array(ItemSchema), unmapped: z.array(z.object({ label: z.string(), quote: z.string() })) });
 
 const EXTRACTION_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['items'],
+  required: ['items', 'unmapped'],
   properties: {
+    unmapped: {
+      type: 'array',
+      description: 'Things the person clearly wants or avoids for a weekend that no allowed key/tag can express.',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        required: ['label', 'quote'],
+        properties: {
+          label: { type: 'string', description: 'short Greek label' },
+          quote: { type: 'string', description: 'exact verbatim span from the owner text' },
+        },
+      },
+    },
     items: {
       type: 'array',
       items: {
@@ -127,7 +140,10 @@ const EXTRACTION_SCHEMA = {
         required: ['key', 'value', 'importance', 'quote', 'confidence'],
         properties: {
           key: { type: 'string', enum: PREF_KEYS },
-          value: { type: 'string', description: 'number for budget_max / max_hike_hours, HH:MM for return_by, "true"/"false" otherwise' },
+          value: {
+            type: 'string',
+            description: `number for budget_max / max_hike_hours, HH:MM for return_by, one of ${ACTIVITY_TAGS.join('|')} for likes_activity / avoids_activity, "true"/"false" otherwise`,
+          },
           importance: { type: 'string', enum: ['low', 'medium', 'high'] },
           quote: { type: 'string', description: 'exact, verbatim span copied from the owner text that supports the item' },
           confidence: { type: 'number', description: '0..1' },
@@ -138,6 +154,7 @@ const EXTRACTION_SCHEMA = {
 };
 
 const KEY_GUIDE = PREF_KEYS.map((k) => `- ${k} (${PREF_META[k].kind}): ${PREF_META[k].label}`).join('\n');
+const TAG_GUIDE = ACTIVITY_TAGS.map((t) => `- ${t}: ${ACTIVITY_LABEL[t]}`).join('\n');
 
 const EXTRACTION_SYSTEM = `You build the profile of a person's digital twin for weekend-trip planning with friends.
 From the owner's own Greek text, extract only preferences and hard constraints that the text clearly supports.
@@ -145,12 +162,17 @@ From the owner's own Greek text, extract only preferences and hard constraints t
 Allowed keys:
 ${KEY_GUIDE}
 
+Interest tags for likes_activity / avoids_activity (one item per tag):
+${TAG_GUIDE}
+
 Rules:
 - A constraint is something the person says they cannot or will not accept (a money limit, a time they must be back, never sleeping in a tent, must have a private bathroom). Everything else is a preference.
 - likes_hiking / likes_sea: "true" if they seek it, "false" if they avoid it.
 - prefers_low_cost only if they want to spend less; willingness to pay more is NOT prefers_low_cost.
 - Quote the exact words from the text (verbatim, same accents), as short as possible while still supporting the item.
-- If the text does not support any allowed key, return an empty list. Never infer values the text does not state, and never invent numbers or times.
+- Map interests (clubs, bars, partying, meeting new people, museums, food, quiet, nature…) to likes_activity / avoids_activity with the closest tag.
+- Anything else the person clearly wants or avoids for the weekend that no key or tag can express goes to "unmapped" with a verbatim quote; never drop it silently.
+- If the text does not support any allowed key, return an empty items list. Never infer values the text does not state, and never invent numbers or times.
 - Confidence reflects how explicit the text is (explicit statement ~0.9, implied by a past decision ~0.6).`;
 
 const IMPORTANCE = { low: 0.3, medium: 0.6, high: 0.9 } as const;
@@ -159,6 +181,7 @@ export interface ExtractionResult {
   mode: 'live' | 'demo' | 'demo-fallback';
   model?: string;
   candidates: ExtractionCandidate[];
+  unmapped?: UnmappedInterest[];
   note?: string;
 }
 
@@ -186,7 +209,8 @@ export async function extractCandidates(text: string): Promise<ExtractionResult>
         confidence: Math.max(0, Math.min(1, item.confidence)),
       });
     }
-    return { mode: 'live', model, candidates };
+    const unmapped = parsed.unmapped.map((u) => ({ label: u.label.trim(), quote: u.quote.trim() })).filter((u) => u.label && text.includes(u.quote));
+    return { mode: 'live', model, candidates, unmapped };
   } catch (err) {
     const reason = reasonOf(err);
     console.warn(`[ai] live extraction failed (${reason}); using rule extractor`);

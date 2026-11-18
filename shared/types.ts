@@ -49,7 +49,12 @@ export type PrefKey =
   | 'max_hike_hours'
   | 'prefers_low_cost'
   | 'prefers_comfort'
-  | 'likes_sea';
+  | 'likes_sea'
+  | 'likes_activity'
+  | 'avoids_activity';
+
+/** Interests a twin can learn beyond the fixed trip keys; value of likes_/avoids_activity. */
+export type ActivityTag = 'nightlife' | 'social' | 'culture' | 'food' | 'quiet' | 'nature';
 
 export type PrefKind = 'constraint' | 'preference';
 export type PrefValue = number | string | boolean;
@@ -102,6 +107,8 @@ export interface TripOption {
   /** 0 = no sea, 1 = beach is a main part of the trip. */
   seaAccess: number;
   stay: { kind: StayKind; label: string; privateBath: boolean };
+  /** How much the trip offers each interest, 0..1 (missing = 0). */
+  tags?: Partial<Record<ActivityTag, number>>;
 }
 
 export interface TripRequest {
@@ -217,6 +224,12 @@ export interface Decision {
   diff?: DecisionDiff;
   messages?: TwinMessage[];
   messagesNote?: string;
+}
+
+/** Something the owner clearly cares about that no profile key can express yet (shown, not used). */
+export interface UnmappedInterest {
+  label: string;
+  quote: string;
 }
 
 export interface ExtractionCandidate {

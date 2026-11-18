@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import type { Owner, Preference, Source } from '../../../shared/types';
-import { PREF_META, describePref, formatValue, importanceLabel } from '../../../shared/prefs';
+import { ACTIVITY_LABEL, ACTIVITY_TAGS, PREF_META, describePref, formatValue, importanceLabel } from '../../../shared/prefs';
 import { api, type AppState } from '../api';
 import { Avatar, Badge } from './ui';
 
@@ -72,6 +72,14 @@ function CandidateRow({ p, onState }: { p: Preference; onState: (s: AppState) =>
               <option value="true">ναι</option>
               <option value="false">όχι</option>
             </select>
+          ) : meta.valueType === 'tag' ? (
+            <select value={value} onChange={(e) => setValue(e.target.value)} aria-label="Ενδιαφέρον">
+              {ACTIVITY_TAGS.map((t) => (
+                <option key={t} value={t}>
+                  {ACTIVITY_LABEL[t]}
+                </option>
+              ))}
+            </select>
           ) : (
             <input value={value} onChange={(e) => setValue(e.target.value)} aria-label="Τιμή" placeholder={meta.valueType === 'time' ? 'ΩΩ:ΛΛ' : meta.unit} />
           )}
@@ -108,7 +116,7 @@ function CandidateRow({ p, onState }: { p: Preference; onState: (s: AppState) =>
 export function TwinBuilder({ owner, state, sample, onState, onClose }: Props) {
   const [text, setText] = useState(sample);
   const [busy, setBusy] = useState(false);
-  const [result, setResult] = useState<{ ids: string[]; source?: Source; mode: string; model?: string; note?: string; dropped: number } | null>(null);
+  const [result, setResult] = useState<{ ids: string[]; source?: Source; mode: string; model?: string; note?: string; dropped: number; unmapped: { label: string; quote: string }[] } | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const extract = async () => {
@@ -118,7 +126,8 @@ export function TwinBuilder({ owner, state, sample, onState, onClose }: Props) {
       const r = await api.ingest(owner.id, text);
       onState(r.state);
       const source = r.state.sources.find((s) => r.candidates[0]?.sourceRefs[0]?.sourceId === s.id);
-      setResult({ ids: r.candidates.map((c) => c.id), source, mode: r.mode, model: r.model, note: r.note, dropped: r.dropped });
+      const src = source ?? r.state.sources.filter((s) => s.ownerId === owner.id && s.kind === 'owner_input').at(-1);
+      setResult({ ids: r.candidates.map((c) => c.id), source: src, mode: r.mode, model: r.model, note: r.note, dropped: r.dropped, unmapped: r.unmapped ?? [] });
     } catch (e) {
       setErr((e as Error).message);
     } finally {
@@ -166,13 +175,31 @@ export function TwinBuilder({ owner, state, sample, onState, onClose }: Props) {
               </blockquote>
             )}
             {candidates.length === 0 ? (
-              <p className="muted">Δεν βρέθηκε κάτι που να στηρίζεται καθαρά στο κείμενο. Το Twin δεν μαντεύει — καμία αλλαγή στο προφίλ.</p>
+              <p className="muted">
+                {result.unmapped.length
+                  ? 'Κανένα στοιχείο δεν μπαίνει στο προφίλ απόφασης — δείτε παρακάτω τι κατάλαβε το Twin.'
+                  : 'Δεν βρέθηκε κάτι που να στηρίζεται καθαρά στο κείμενο. Το Twin δεν μαντεύει — καμία αλλαγή στο προφίλ.'}
+              </p>
             ) : (
               <ul className="plain">
                 {candidates.map((p) => (
                   <CandidateRow key={p.id} p={p} onState={onState} />
                 ))}
               </ul>
+            )}
+            {result.unmapped.length > 0 && (
+              <div className="unmapped">
+                <p className="small">
+                  <strong>Το Twin το κατάλαβε, αλλά δεν επηρεάζει ακόμα την απόφαση</strong> — κανένα διήμερο δεν περιγράφεται με αυτό:
+                </p>
+                <ul className="plain">
+                  {result.unmapped.map((u) => (
+                    <li key={u.label + u.quote} className="small">
+                      • {u.label} <span className="muted">«{u.quote}»</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             )}
             {result.dropped > 0 && <p className="muted small">{result.dropped} προτάσεις απορρίφθηκαν αυτόματα γιατί το απόσπασμά τους δεν υπάρχει αυτούσιο στο κείμενο.</p>}
           </div>

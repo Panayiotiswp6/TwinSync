@@ -6,7 +6,7 @@
 // negotiation prompt (MIT per its README, backend/features/trip.py @ 51bfb33);
 // agent_mesh lets an LLM score proposals, here the same rules are enforced in code.
 
-import { DIMENSION_LABEL, PREF_META, describePref, formatValue, toMinutes, type Dimension } from './prefs';
+import { ACTIVITY_LABEL, DIMENSION_LABEL, PREF_META, describePref, formatValue, isActivityTag, toMinutes, type Dimension } from './prefs';
 import type {
   Concession,
   Confidence,
@@ -72,9 +72,20 @@ export function satisfaction(p: Preference, o: TripOption): number | null {
       return stayComfort(o);
     case 'likes_sea':
       return p.value ? o.seaAccess : 1 - o.seaAccess;
+    case 'likes_activity':
+      return isActivityTag(p.value) ? o.tags?.[p.value] ?? 0 : null;
+    case 'avoids_activity':
+      return isActivityTag(p.value) ? 1 - (o.tags?.[p.value] ?? 0) : null;
     default:
       return null;
   }
+}
+
+function activityLevel(o: TripOption, tag: unknown): string {
+  if (!isActivityTag(tag)) return '';
+  const v = o.tags?.[tag] ?? 0;
+  const amount = v >= 0.7 ? 'πολλή' : v >= 0.3 ? 'λίγη' : 'καθόλου';
+  return `${ACTIVITY_LABEL[tag]}: ${amount}`;
 }
 
 function softPrefs(prefs: Preference[]) {
@@ -99,7 +110,7 @@ export function scoreOption(prefs: Preference[], o: TripOption): number {
 
 // ---------- Text for reasons ----------
 
-function optionFact(key: Preference['key'], o: TripOption): string {
+function optionFact(key: Preference['key'], o: TripOption, value?: Preference['value']): string {
   switch (key) {
     case 'likes_hiking':
     case 'max_hike_hours':
@@ -110,6 +121,9 @@ function optionFact(key: Preference['key'], o: TripOption): string {
       return o.stay.label;
     case 'likes_sea':
       return o.seaAccess >= 0.9 ? 'θάλασσα στο πρόγραμμα' : o.seaAccess > 0 ? 'σύντομη βουτιά' : 'χωρίς θάλασσα';
+    case 'likes_activity':
+    case 'avoids_activity':
+      return activityLevel(o, value);
     default:
       return '';
   }
@@ -123,7 +137,7 @@ function reasonFor(p: Preference, o: TripOption): Reason | null {
     prefId: p.id,
     key: p.key,
     effect,
-    text: `${optionFact(p.key, o)} — ${effect === 'for' ? 'ταιριάζει με' : 'αντίθετο με'} «${describePref(p)}»`,
+    text: `${optionFact(p.key, o, p.value)} — ${effect === 'for' ? 'ταιριάζει με' : 'αντίθετο με'} «${describePref(p)}»`,
     sourceRefs: p.sourceRefs,
   };
 }
@@ -150,6 +164,7 @@ function uncertaintiesFor(prefs: Preference[], options: TripOption[], ranking: T
     stay: new Set(options.map((o) => stayComfort(o))).size > 1,
     hiking: new Set(options.map((o) => o.hikeHours)).size > 1,
     sea: new Set(options.map((o) => o.seaAccess)).size > 1,
+    activities: new Set(options.map((o) => JSON.stringify(o.tags ?? {}))).size > 1,
   };
   const out: string[] = [];
   for (const dim of Object.keys(varying) as Dimension[]) {
@@ -236,6 +251,10 @@ function concessionItems(prefs: Preference[], vote: TripOption, final: TripOptio
         break;
       case 'likes_sea':
         items.push(`${optionFact('likes_sea', final)} αντί για ${optionFact('likes_sea', vote).toLowerCase()}`);
+        break;
+      case 'likes_activity':
+      case 'avoids_activity':
+        items.push(`${optionFact(p.key, final, p.value)} (αντί για ${optionFact(p.key, vote, p.value).split(': ')[1] ?? ''})`);
         break;
     }
   }

@@ -1,10 +1,10 @@
-import type { PrefKey, PrefKind, PrefValue, Preference } from './types';
+import type { ActivityTag, PrefKey, PrefKind, PrefValue, Preference } from './types';
 
 export interface PrefMeta {
   kind: PrefKind;
   /** Short Greek label for the profile chip. */
   label: string;
-  valueType: 'number' | 'time' | 'boolean';
+  valueType: 'number' | 'time' | 'boolean' | 'tag';
   unit?: string;
   /** Default importance when an extractor proposes this key. */
   defaultWeight: number;
@@ -12,7 +12,7 @@ export interface PrefMeta {
   dimension: Dimension;
 }
 
-export type Dimension = 'cost' | 'return' | 'stay' | 'hiking' | 'sea';
+export type Dimension = 'cost' | 'return' | 'stay' | 'hiking' | 'sea' | 'activities';
 
 export const DIMENSION_LABEL: Record<Dimension, string> = {
   cost: 'κόστος',
@@ -20,7 +20,24 @@ export const DIMENSION_LABEL: Record<Dimension, string> = {
   stay: 'διαμονή',
   hiking: 'πεζοπορία',
   sea: 'θάλασσα',
+  activities: 'ενδιαφέροντα (νυχτερινή ζωή, φαγητό, πολιτισμός κ.λπ.)',
 };
+
+export const ACTIVITY_LABEL: Record<ActivityTag, string> = {
+  nightlife: 'νυχτερινή ζωή / κλαμπ',
+  social: 'γνωριμίες με νέο κόσμο',
+  culture: 'πολιτισμός / αξιοθέατα',
+  food: 'καλό φαγητό',
+  quiet: 'ησυχία / ξεκούραση',
+  nature: 'φύση',
+};
+export const ACTIVITY_TAGS = Object.keys(ACTIVITY_LABEL) as ActivityTag[];
+export const isActivityTag = (v: unknown): v is ActivityTag => typeof v === 'string' && v in ACTIVITY_LABEL;
+
+/** Keys whose value is part of their identity (an owner can like several activities). */
+export const isTagKey = (key: PrefKey) => PREF_META[key].valueType === 'tag';
+/** Slot used for supersede / override / diff: one per key, or per key+tag for activity keys. */
+export const prefSlot = (p: { ownerId: string; key: PrefKey; value: PrefValue }) => `${p.ownerId}:${p.key}${isTagKey(p.key) ? `:${String(p.value)}` : ''}`;
 
 export const PREF_META: Record<PrefKey, PrefMeta> = {
   budget_max: { kind: 'constraint', label: 'Όριο κόστους / άτομο', valueType: 'number', unit: '€', defaultWeight: 1, dimension: 'cost' },
@@ -32,6 +49,8 @@ export const PREF_META: Record<PrefKey, PrefMeta> = {
   prefers_low_cost: { kind: 'preference', label: 'Χαμηλό κόστος', valueType: 'boolean', defaultWeight: 0.4, dimension: 'cost' },
   prefers_comfort: { kind: 'preference', label: 'Άνετη διαμονή', valueType: 'boolean', defaultWeight: 0.7, dimension: 'stay' },
   likes_sea: { kind: 'preference', label: 'Θάλασσα', valueType: 'boolean', defaultWeight: 0.5, dimension: 'sea' },
+  likes_activity: { kind: 'preference', label: 'Του αρέσει', valueType: 'tag', defaultWeight: 0.6, dimension: 'activities' },
+  avoids_activity: { kind: 'preference', label: 'Αποφεύγει', valueType: 'tag', defaultWeight: 0.5, dimension: 'activities' },
 };
 
 export const PREF_KEYS = Object.keys(PREF_META) as PrefKey[];
@@ -47,6 +66,7 @@ export function formatValue(key: PrefKey, value: PrefValue): string {
     return value ? 'ναι' : 'όχι';
   }
   if (meta.valueType === 'time') return String(value);
+  if (meta.valueType === 'tag') return isActivityTag(value) ? ACTIVITY_LABEL[value] : String(value);
   return `${value}${meta.unit === '€' ? '€' : meta.unit ? ` ${meta.unit}` : ''}`;
 }
 
@@ -75,6 +95,10 @@ export function coerceValue(key: PrefKey, raw: unknown): PrefValue | null {
     if (raw === 'true') return true;
     if (raw === 'false') return false;
     return null;
+  }
+  if (meta.valueType === 'tag') {
+    const v = String(raw).trim().toLowerCase();
+    return isActivityTag(v) ? v : null;
   }
   if (meta.valueType === 'number') {
     const n = typeof raw === 'number' ? raw : Number(String(raw).replace(',', '.').replace(/[^\d.]/g, ''));

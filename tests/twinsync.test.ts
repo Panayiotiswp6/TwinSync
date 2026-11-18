@@ -129,3 +129,28 @@ describe('group messages in the owner style: grounding guard (no network)', asyn
     expect(ungroundedReason(t, messageFacts(stuck, 'geo', store.trips, store.owners), store.trips), t).toBeNull();
   });
 });
+
+describe('interests beyond the fixed trip keys', () => {
+  beforeEach(() => store.reset());
+
+  it('the judge sentence about clubs and new people becomes two cited interests, not "nothing found"', () => {
+    const text = 'Θέλω να πάω σε κλαμπ ,. να γνωρίσω νέα άτομα και να διασκεδάσω';
+    const c = extractWithRules(text);
+    expect(c.map((x) => `${x.key}:${x.value}`).sort()).toEqual(['likes_activity:nightlife', 'likes_activity:social']);
+    for (const x of c) expect(text).toContain(x.quote);
+  });
+
+  it('several interests of one owner coexist and change that twin scores', async () => {
+    const { twinPosition } = await import('../shared/engine');
+    const src = store.addSource('pan', 'owner_input', 'test', 'Θέλω κλαμπ και να γνωρίσω νέα άτομα.');
+    const created = store.addCandidates('pan', src, extractWithRules(src.text), 'rules');
+    for (const p of created) store.confirm(p.id);
+    const active = store.preferences.filter((p) => p.ownerId === 'pan' && p.key === 'likes_activity' && p.status === 'confirmed');
+    expect(active).toHaveLength(2);
+    const before = twinPosition('pan', store.preferences.filter((p) => p.ownerId === 'pan' && p.key !== 'likes_activity' && p.status === 'confirmed'), store.trips);
+    const after = twinPosition('pan', store.effectivePreferences(['pan']), store.trips);
+    const score = (pos: typeof after, id: string) => pos.ranking.find((r) => r.optionId === id)!.score;
+    expect(score(after, 'trip-nafplio')).toBeGreaterThan(score(before, 'trip-nafplio'));
+    expect(after.reasons.some((r) => r.text.includes('νυχτερινή ζωή'))).toBe(true);
+  });
+});

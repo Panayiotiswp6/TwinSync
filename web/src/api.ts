@@ -27,7 +27,7 @@ export const api = {
   state: () => call<AppState>('GET', '/api/state'),
   reset: () => call<AppState>('POST', '/api/reset'),
   ingest: (ownerId: string, text: string, title?: string) =>
-    call<{ candidates: Preference[]; mode: string; model?: string; note?: string; dropped: number; state: AppState }>('POST', `/api/twins/${ownerId}/ingest`, { text, title }),
+    call<{ candidates: Preference[]; unmapped: { label: string; quote: string }[]; mode: string; model?: string; note?: string; dropped: number; state: AppState }>('POST', `/api/twins/${ownerId}/ingest`, { text, title }),
   confirm: (id: string, value?: unknown, weight?: number) => call<AppState>('POST', `/api/preferences/${id}/confirm`, { value, weight }),
   reject: (id: string) => call<AppState>('POST', `/api/preferences/${id}/reject`),
   plan: (text: string, participants: string[]) => call<{ decision: Decision; state: AppState }>('POST', '/api/plan', { text, participants }),
