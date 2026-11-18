@@ -1,301 +1,301 @@
-// In-memory store. Loads the synthetic seed, validates every citation, and keeps
-// profiles, trip-only overrides and decisions. "Reset demo" reloads the seed.
+// Persistent store. State lives in DATA_DIR/state.json (a Docker volume in compose),
+// so personas, uploaded sources, confirmed memory and decisions survive restarts.
+// First run (or "Reset demo") loads the synthetic seed.
 
 import { randomUUID } from 'node:crypto';
-import seed from './data/seed.json';
-import { decide } from '../shared/engine';
-import { PREF_META, describePref } from '../shared/prefs';
-import { extractWithRules } from '../shared/extractRules';
-import type {
-  Decision,
-  DecisionDiff,
-  ExtractionCandidate,
-  Owner,
-  OwnerId,
-  Preference,
-  PrefKey,
-  PrefOrigin,
-  PrefScope,
-  PrefValue,
-  Source,
-  SourceKind,
-  TripOption,
-  TripRequest,
-} from '../shared/types';
-import { stampPreference } from './memory';
+import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import { containsQuote, slug } from '../shared/text';
+import type { MemoryDraft } from '../shared/heuristics';
+import type { Approval, Decision, GroupRequest, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage } from '../shared/types';
+import { stamp } from './memory';
+import { loadSeed, type CatalogEntry } from './seed';
 
-const nowIso = () => new Date().toISOString();
-
-export function findQuote(text: string, quote: string): boolean {
-  const norm = (s: string) => s.replace(/\s+/g, ' ').trim();
-  return norm(text).includes(norm(quote));
-}
+export const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
+const STATE_FILE = path.join(DATA_DIR, 'state.json');
+const STATE_VERSION = 2;
 
 interface State {
-  owners: Owner[];
+  version: number;
+  personas: Persona[];
   sources: Source[];
-  preferences: Preference[]; // profile + trip scope, all statuses
-  trips: TripOption[];
-  request: TripRequest;
+  memory: MemoryItem[];
+  requests: GroupRequest[];
   decisions: Decision[];
+  usage: Usage;
+  /** Embedding cache: memory id -> vector (only with an OpenAI key). */
+  vectors: Record<string, number[]>;
+  liveEval?: unknown;
 }
 
-function loadSeed(): State {
-  const sources = seed.sources as Source[];
-  const preferences: Preference[] = seed.preferences.map((p) => ({
-    ...(p as Omit<Preference, 'status' | 'scope' | 'origin' | 'createdAt'>),
-    key: p.key as PrefKey,
-    status: 'confirmed',
-    scope: 'profile',
-    origin: 'seed',
-    createdAt: '2026-11-12T12:00:00+02:00',
-  }));
-  for (const p of preferences) {
-    for (const ref of p.sourceRefs) {
-      const src = sources.find((s) => s.id === ref.sourceId);
-      if (!src || !findQuote(src.text, ref.quote)) {
-        throw new Error(`Seed citation does not match its source: ${p.id} -> ${ref.sourceId} «${ref.quote}»`);
-      }
+const nowIso = () => new Date().toISOString();
+const PALETTE: [string, string][] = [
+  ['#f72585', '#7209b7'],
+  ['#4361ee', '#4cc9f0'],
+  ['#ff9f1c', '#ff4040'],
+  ['#06d6a0', '#118ab2'],
+  ['#8338ec', '#ff006e'],
+];
+
+let catalog: CatalogEntry[] = [];
+
+function fresh(): State {
+  const seed = loadSeed();
+  catalog = seed.catalog;
+  return { version: STATE_VERSION, personas: seed.personas, sources: seed.sources, memory: seed.memory, requests: [], decisions: [], usage: { calls: 0, inputTokens: 0, outputTokens: 0, embeddingTokens: 0 }, vectors: {} };
+}
+
+function load(): State {
+  const seedState = fresh(); // also loads the catalog
+  if (process.env.TWINSYNC_EPHEMERAL === '1') return seedState;
+  try {
+    if (existsSync(STATE_FILE)) {
+      const s = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as State;
+      if (s.version === STATE_VERSION) return s;
+      console.warn('[store] state file from another version — starting from the seed');
     }
-    p.memory = stampPreference(p, sources);
+  } catch (e) {
+    console.warn('[store] could not read state file, starting from the seed:', (e as Error).message);
   }
-  return {
-    owners: seed.owners as Owner[],
-    sources,
-    preferences,
-    trips: seed.trips as TripOption[],
-    request: { ...seed.defaultRequest },
-    decisions: [],
-  };
+  return seedState;
 }
 
-let state: State = loadSeed();
+let state: State = load();
+let saveTimer: NodeJS.Timeout | null = null;
+
+function persist() {
+  if (process.env.TWINSYNC_EPHEMERAL === '1') return;
+  if (saveTimer) return;
+  saveTimer = setTimeout(() => {
+    saveTimer = null;
+    try {
+      mkdirSync(DATA_DIR, { recursive: true });
+      const tmp = `${STATE_FILE}.tmp`;
+      writeFileSync(tmp, JSON.stringify(state));
+      renameSync(tmp, STATE_FILE);
+    } catch (e) {
+      console.warn('[store] save failed:', (e as Error).message);
+    }
+  }, 150);
+}
 
 export const store = {
-  reset() {
-    state = loadSeed();
-  },
-  get owners() {
-    return state.owners;
+  get personas() {
+    return state.personas;
   },
   get sources() {
     return state.sources;
   },
-  get trips() {
-    return state.trips;
+  get memory() {
+    return state.memory;
   },
-  get request() {
-    return state.request;
+  get requests() {
+    return state.requests;
   },
   get decisions() {
     return state.decisions;
   },
-  get preferences() {
-    return state.preferences;
+  get usage() {
+    return state.usage;
   },
-  samples: seed.twinBuilderSamples as Record<OwnerId, string>,
+  get vectors() {
+    return state.vectors;
+  },
+  get catalog() {
+    return catalog;
+  },
+  get liveEval() {
+    return state.liveEval;
+  },
+  set liveEval(v: unknown) {
+    state.liveEval = v;
+    persist();
+  },
+  save: persist,
 
-  owner(id: OwnerId) {
-    return state.owners.find((o) => o.id === id);
-  },
-  pref(id: string) {
-    return state.preferences.find((p) => p.id === id);
+  reset() {
+    state = fresh();
+    persist();
   },
 
-  addSource(ownerId: OwnerId | 'group', kind: SourceKind, title: string, text: string): Source {
-    const src: Source = {
-      id: `src-${ownerId}-${kind === 'owner_correction' ? 'fix' : kind === 'trip_request' ? 'req' : 'in'}-${randomUUID().slice(0, 6)}`,
-      ownerId,
-      kind,
-      title,
-      date: nowIso(),
-      text,
-      synthetic: true,
+  persona(id: PersonaId) {
+    return state.personas.find((p) => p.id === id);
+  },
+  source(id: string) {
+    return state.sources.find((s) => s.id === id);
+  },
+  item(id: string) {
+    return state.memory.find((m) => m.id === id);
+  },
+  request(id: string) {
+    return state.requests.find((r) => r.id === id);
+  },
+  decision(id: string) {
+    return state.decisions.find((d) => d.id === id);
+  },
+
+  addPersona(name: string, bio: string, emoji = '✨'): Persona {
+    const clean = name.trim().slice(0, 40);
+    const words = clean.split(/\s+/);
+    const initials = (words.length > 1 ? words[0][0] + words[1][0] : clean.slice(0, 2)).toUpperCase();
+    let id = slug(clean) || `p${state.personas.length + 1}`;
+    while (state.personas.some((p) => p.id === id)) id = `${id}-${randomUUID().slice(0, 4)}`;
+    const p: Persona = {
+      id,
+      name: clean,
+      handle: `${slug(clean).replace(/-/g, '.') || id}`,
+      initials,
+      colors: PALETTE[state.personas.length % PALETTE.length],
+      emoji,
+      bio: bio.trim().slice(0, 200),
+      style: null,
+      synthetic: false,
+      createdAt: nowIso(),
     };
-    state.sources.push(src);
-    return src;
+    state.personas.push(p);
+    persist();
+    return p;
   },
 
-  addCandidates(ownerId: OwnerId, source: Source, candidates: ExtractionCandidate[], origin: PrefOrigin): Preference[] {
-    const created: Preference[] = [];
-    for (const c of candidates) {
-      if (!findQuote(source.text, c.quote)) continue; // never keep a citation we cannot show
-      const p: Preference = {
-        id: `pref-${ownerId}-${c.key}-${randomUUID().slice(0, 6)}`,
-        ownerId,
-        key: c.key,
-        value: c.value,
-        weight: PREF_META[c.key].kind === 'constraint' ? 1 : c.weight,
-        status: 'candidate',
-        scope: 'profile',
-        confidence: c.confidence,
-        origin,
-        sourceRefs: [{ sourceId: source.id, quote: c.quote }],
+  addSource(personaId: PersonaId | 'group', kind: SourceKind, title: string, text: string, fileName?: string): Source {
+    const s: Source = {
+      id: `src-${personaId}-${randomUUID().slice(0, 8)}`,
+      personaId,
+      kind,
+      title: title.trim().slice(0, 120) || 'Χωρίς τίτλο',
+      date: nowIso(),
+      text: text.replace(/\r\n/g, '\n').trim(),
+      fileName,
+      synthetic: false,
+      analyzed: false,
+    };
+    state.sources.push(s);
+    persist();
+    return s;
+  },
+
+  deleteSource(id: string) {
+    state.sources = state.sources.filter((s) => s.id !== id);
+    for (const m of state.memory) if (m.refs.some((r) => r.sourceId === id) && m.status !== 'rejected') m.status = 'superseded';
+    persist();
+  },
+
+  /** Store extracted drafts. Drafts whose quote is not an exact span of the source are dropped. */
+  addMemory(
+    personaId: PersonaId,
+    source: Source,
+    drafts: MemoryDraft[],
+    opts: { origin: Origin; status: MemoryItem['status']; scope: MemoryItem['scope']; requestId?: string },
+  ): { created: MemoryItem[]; dropped: number } {
+    const created: MemoryItem[] = [];
+    let dropped = 0;
+    for (const d of drafts) {
+      if (!containsQuote(source.text, d.quote)) {
+        dropped++;
+        continue;
+      }
+      const m: MemoryItem = {
+        id: `mem-${personaId}-${randomUUID().slice(0, 8)}`,
+        personaId,
+        kind: d.kind,
+        statement: d.statement,
+        domain: d.domain,
+        polarity: d.polarity,
+        strength: d.strength,
+        hard: d.hard,
+        rule: d.rule,
+        categories: d.categories,
+        keywords: d.keywords,
+        refs: [{ sourceId: source.id, quote: d.quote }],
+        confidence: d.confidence,
+        status: opts.status,
+        origin: opts.origin,
+        scope: opts.scope,
+        requestId: opts.requestId,
         createdAt: nowIso(),
       };
-      p.memory = stampPreference(p, state.sources);
-      state.preferences.push(p);
-      created.push(p);
+      m.memory = stamp(m, state.sources);
+      state.memory.push(m);
+      created.push(m);
     }
-    return created;
+    persist();
+    return { created, dropped };
   },
 
-  /** Confirm (optionally corrected) candidate into the profile; supersedes an older item with the same key. */
-  confirm(id: string, value?: PrefValue, weight?: number): Preference {
-    const p = store.pref(id);
-    if (!p) throw new Error('not found');
-    if (value !== undefined && value !== p.value) {
-      p.correctedFrom = p.value;
-      p.value = value;
-    }
-    if (weight !== undefined && PREF_META[p.key].kind === 'preference') p.weight = weight;
-    p.status = 'confirmed';
-    for (const other of state.preferences) {
-      if (other !== p && other.ownerId === p.ownerId && other.key === p.key && other.scope === p.scope && other.status === 'confirmed') {
-        other.status = 'superseded';
+  updateMemory(id: string, patch: Partial<Pick<MemoryItem, 'statement' | 'strength' | 'hard' | 'rule' | 'status' | 'polarity'>>) {
+    const m = store.item(id);
+    if (!m) throw new Error('not found');
+    const edited = patch.statement !== undefined && patch.statement !== m.statement;
+    Object.assign(m, patch);
+    if (edited) m.origin = 'owner';
+    m.memory = stamp(m, state.sources);
+    persist();
+    return m;
+  },
+
+  confirmAll(personaId: PersonaId) {
+    for (const m of state.memory) {
+      if (m.personaId === personaId && m.status === 'candidate' && m.scope === 'profile') {
+        m.status = 'confirmed';
+        m.memory = stamp(m, state.sources);
       }
     }
-    p.memory = stampPreference(p, state.sources);
-    return p;
+    persist();
   },
 
-  reject(id: string) {
-    const p = store.pref(id);
-    if (!p) throw new Error('not found');
-    p.status = 'rejected';
-    return p;
+  /** Confirmed permanent profile of a persona. */
+  profile(personaId: PersonaId): MemoryItem[] {
+    return state.memory.filter((m) => m.personaId === personaId && m.scope === 'profile' && m.status === 'confirmed');
+  },
+  requestItems(requestId: string, personaId?: PersonaId): MemoryItem[] {
+    return state.memory.filter((m) => m.scope === 'request' && m.requestId === requestId && m.status === 'confirmed' && (!personaId || m.personaId === personaId));
   },
 
-  /** Owner correction: "trip" applies only to this weekend, "profile" is saved to the twin. */
-  correct(ownerId: OwnerId, key: PrefKey, value: PrefValue, scope: PrefScope, weight?: number): Preference {
-    const owner = store.owner(ownerId)!;
-    const label = describePref({ key, value });
-    const text =
-      scope === 'trip'
-        ? `Διόρθωση από ${owner.name}, μόνο για το ${state.request.weekendLabel}: ${label}.`
-        : `Διόρθωση από ${owner.name}, αποθηκεύεται στο προφίλ: ${label}.`;
-    const src = store.addSource(ownerId, 'owner_correction', scope === 'trip' ? 'Διόρθωση μόνο για αυτό το διήμερο' : 'Διόρθωση προφίλ', text);
-    const previous = state.preferences.find((p) => p.ownerId === ownerId && p.key === key && p.status === 'confirmed' && (p.scope === scope || scope === 'trip'));
-    const p: Preference = {
-      id: `pref-${ownerId}-${key}-${scope}-${randomUUID().slice(0, 6)}`,
-      ownerId,
-      key,
-      value,
-      weight: PREF_META[key].kind === 'constraint' ? 1 : weight ?? previous?.weight ?? PREF_META[key].defaultWeight,
-      status: 'confirmed',
-      scope,
-      confidence: 1,
-      origin: 'owner',
-      sourceRefs: [{ sourceId: src.id, quote: label }],
-      correctedFrom: previous?.value,
-      createdAt: nowIso(),
-    };
-    for (const other of state.preferences) {
-      if (other.ownerId === ownerId && other.key === key && other.scope === scope && other.status === 'confirmed') other.status = 'superseded';
-    }
-    p.memory = stampPreference(p, state.sources);
-    state.preferences.push(p);
-    return p;
+  setStyle(personaId: PersonaId, style: Persona['style']) {
+    const p = store.persona(personaId);
+    if (p) p.style = style;
+    persist();
   },
 
-  removeOverride(id: string) {
-    const p = store.pref(id);
-    if (p && p.scope === 'trip') p.status = 'rejected';
+  addRequest(r: Omit<GroupRequest, 'id' | 'createdAt'>): GroupRequest {
+    const req: GroupRequest = { ...r, id: `req-${String(state.requests.length + 1).padStart(3, '0')}-${randomUUID().slice(0, 4)}`, createdAt: nowIso() };
+    state.requests.push(req);
+    persist();
+    return req;
+  },
+  updateRequest(id: string, patch: Partial<GroupRequest>) {
+    const r = store.request(id);
+    if (r) Object.assign(r, patch);
+    persist();
+    return r;
   },
 
-  /** Effective inputs for the engine: confirmed profile items, replaced per key by trip-only items. */
-  effectivePreferences(participants: OwnerId[]): Preference[] {
-    const confirmed = state.preferences.filter((p) => p.status === 'confirmed' && participants.includes(p.ownerId));
-    const trip = confirmed.filter((p) => p.scope === 'trip');
-    const profile = confirmed.filter((p) => p.scope === 'profile' && !trip.some((t) => t.ownerId === p.ownerId && t.key === p.key));
-    return [...profile, ...trip];
+  addDecision(d: Omit<Decision, 'id' | 'createdAt'>): Decision {
+    const dec: Decision = { ...d, id: `dec-${String(state.decisions.length + 1).padStart(3, '0')}`, createdAt: nowIso() };
+    state.decisions.push(dec);
+    persist();
+    return dec;
   },
-
-  /** Group constraints typed in the request ("μέχρι 100€") become trip-only items for every participant. */
-  applyRequest(request: TripRequest) {
-    state.request = request;
-    for (const p of state.preferences) if (p.scope === 'trip' && p.sourceRefs.some((r) => r.sourceId.startsWith('src-group-req'))) p.status = 'superseded';
-    const found = extractWithRules(request.text).filter((c) => PREF_META[c.key].kind === 'constraint');
-    if (!found.length) return;
-    const src = store.addSource('group', 'trip_request', 'Αίτημα παρέας', request.text);
-    for (const ownerId of request.participants) {
-      for (const c of found) {
-        for (const other of state.preferences) {
-          if (other.ownerId === ownerId && other.key === c.key && other.scope === 'trip' && other.status === 'confirmed') other.status = 'superseded';
-        }
-        const p: Preference = {
-          id: `pref-${ownerId}-${c.key}-req-${randomUUID().slice(0, 6)}`,
-          ownerId,
-          key: c.key,
-          value: c.value,
-          weight: 1,
-          status: 'confirmed',
-          scope: 'trip',
-          confidence: c.confidence,
-          origin: 'rules',
-          sourceRefs: [{ sourceId: src.id, quote: c.quote }],
-          createdAt: nowIso(),
-        };
-        // A group request can only tighten an owner's own limit, never loosen it.
-        const own = store.effectivePreferences([ownerId]).find((x) => x.key === c.key);
-        if (own && c.key === 'budget_max' && Number(own.value) <= Number(c.value)) continue;
-        if (own && c.key === 'return_by' && String(own.value) <= String(c.value)) continue;
-        p.memory = stampPreference(p, state.sources);
-        state.preferences.push(p);
-      }
-    }
+  decisionsFor(requestId: string) {
+    return state.decisions.filter((d) => d.requestId === requestId);
   },
-
-  plan(): Decision {
-    const req = state.request;
-    const owners = state.owners.filter((o) => req.participants.includes(o.id));
-    const inputs = store.effectivePreferences(req.participants);
-    const result = decide(owners, inputs, state.trips);
-    const previous = state.decisions[state.decisions.length - 1];
-    const decision: Decision = {
-      id: `dec-${String(state.decisions.length + 1).padStart(3, '0')}`,
-      createdAt: nowIso(),
-      request: { ...req },
-      inputs: inputs.map((p) => ({ ...p })),
-      result,
-      approvals: Object.fromEntries(owners.map((o) => [o.id, 'pending'])),
-      status: result.status === 'deadlock' ? 'deadlock' : 'awaiting_approval',
-    };
-    if (previous) decision.diff = diffDecisions(previous, decision, state.trips, state.owners);
-    state.decisions.push(decision);
-    return decision;
-  },
-
-  approve(decisionId: string, ownerId: OwnerId, approve: boolean): Decision {
-    const d = state.decisions.find((x) => x.id === decisionId);
+  approve(decisionId: string, personaId: PersonaId, value: Approval) {
+    const d = store.decision(decisionId);
     if (!d) throw new Error('not found');
     if (d.status === 'deadlock') throw new Error('Δεν υπάρχει πρόταση προς έγκριση.');
-    if (!(ownerId in d.approvals)) throw new Error('Ο κάτοχος δεν συμμετέχει.');
-    d.approvals[ownerId] = approve ? 'approved' : 'rejected';
-    const vals = Object.values(d.approvals);
-    d.status = vals.includes('rejected') ? 'rejected' : vals.every((v) => v === 'approved') ? 'approved' : 'awaiting_approval';
+    if (!(personaId in d.approvals)) throw new Error('Δεν συμμετέχει.');
+    d.approvals[personaId] = value;
+    const v = Object.values(d.approvals);
+    d.status = v.includes('rejected') ? 'rejected' : v.every((x) => x === 'approved') ? 'approved' : 'awaiting_approval';
+    persist();
     return d;
   },
-};
 
-export function diffDecisions(prev: Decision, next: Decision, trips: TripOption[], owners: Owner[]): DecisionDiff {
-  const name = (id: string | null) => (id ? trips.find((t) => t.id === id)?.name ?? id : 'καμία εφικτή επιλογή');
-  const price = (id: string | null) => (id ? trips.find((t) => t.id === id)?.pricePerPerson ?? null : null);
-  const from = prev.result.chosenOptionId;
-  const to = next.result.chosenOptionId;
-  const changes: string[] = [];
-  const key = (p: Preference) => `${p.ownerId}:${p.key}`;
-  const before = new Map(prev.inputs.map((p) => [key(p), p]));
-  const after = new Map(next.inputs.map((p) => [key(p), p]));
-  const ownerName = (id: string) => owners.find((o) => o.id === id)?.name ?? id;
-  for (const [k, p] of after) {
-    const b = before.get(k);
-    if (!b) changes.push(`Νέο: ${ownerName(p.ownerId)} — ${describePref(p)}${p.scope === 'trip' ? ' (μόνο για αυτό το διήμερο)' : ''}`);
-    else if (b.value !== p.value) changes.push(`${ownerName(p.ownerId)}: ${describePref(b)} → ${describePref(p)}${p.scope === 'trip' ? ' (μόνο για αυτό το διήμερο)' : ''}`);
-  }
-  for (const [k, b] of before) if (!after.has(k)) changes.push(`Αφαιρέθηκε: ${ownerName(b.ownerId)} — ${describePref(b)}`);
-  if (from !== to) changes.push(`Πρόταση: ${name(from)} → ${name(to)}`);
-  const pf = price(from);
-  const pt = price(to);
-  return { previousDecisionId: prev.id, fromOptionId: from, toOptionId: to, priceDelta: pf !== null && pt !== null ? pt - pf : null, changes };
-}
+  addUsage(u: Partial<Usage>) {
+    state.usage.calls += u.calls ?? 0;
+    state.usage.inputTokens += u.inputTokens ?? 0;
+    state.usage.outputTokens += u.outputTokens ?? 0;
+    state.usage.embeddingTokens += u.embeddingTokens ?? 0;
+    persist();
+  },
+};

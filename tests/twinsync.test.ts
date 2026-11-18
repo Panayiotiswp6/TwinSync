@@ -1,131 +1,138 @@
+// Offline tests (no network, ephemeral store — see vitest.config.ts).
 import { beforeEach, describe, expect, it } from 'vitest';
-import { runEvaluation } from '../server/evaluation';
+import { checkRule, decide } from '../shared/decide';
+import { evaluateWithRules, extractWithRules, parseRequestWithRules } from '../shared/heuristics';
+import { messageFacts, templateMessage, ungroundedReason } from '../shared/messages';
+import { deadlineFor } from '../shared/time';
+import type { CandidateOption, MemoryItem } from '../shared/types';
+import { evaluationReport } from '../server/evaluation';
+import { addWish, analyzeAndStore, createRequest, groupMessages, setLimit } from '../server/pipeline';
+import { loadSeed } from '../server/seed';
 import { store } from '../server/store';
-import { extractWithRules } from '../shared/extractRules';
-import seed from '../server/data/seed.json';
 
-describe('decision engine scenarios (synthetic data)', () => {
-  const report = runEvaluation();
-  for (const s of report.scenarios) {
-    it(s.name, () => expect(s.pass, s.detail).toBe(true));
-  }
-  it('predicts held-out decisions it was never given, and reports uncertainty instead of guessing', () => {
-    expect(report.holdout.correct).toBeGreaterThanOrEqual(6);
-    const unseen = report.holdout.rows.find((r) => r.id === 'hold-pant-3')!;
-    expect(unseen.outcome).toBe('uncertain');
-  });
-  it('rule extractor recovers every seed profile key from the seed sources', () => {
-    for (const e of report.extraction) expect(e.recall, e.ownerId).toBe(1);
+const opt = (o: Partial<CandidateOption>): CandidateOption => ({ id: 'o', title: 'Επιλογή', emoji: '', summary: '', location: '', costPerPerson: 100, costNote: '', startsAt: null, endsAt: null, features: [], origin: 'catalog', ...o });
+const rule = (metric: 'max_cost' | 'latest_end', value: string): MemoryItem => ({
+  id: 'r', personaId: 'geo', kind: 'constraint', statement: 'κανόνας', domain: 'money', polarity: 'neutral', strength: 1, hard: true, rule: { metric, value },
+  categories: [], keywords: [], refs: [], confidence: 1, status: 'confirmed', origin: 'owner', scope: 'request', createdAt: '',
+});
+
+describe('seed data', () => {
+  it('loads persona text files and every citation is an exact span of its source', () => {
+    const s = loadSeed();
+    expect(s.personas).toHaveLength(3);
+    expect(s.sources.length).toBeGreaterThanOrEqual(21);
+    expect(s.memory.length).toBeGreaterThanOrEqual(30);
+    for (const m of s.memory) expect(m.memory?.contentHash).toMatch(/^[0-9a-f]{64}$/);
   });
 });
 
-describe('demo-mode extraction', () => {
-  it('turns an owner note into a cited private-bathroom constraint', () => {
-    const c = extractWithRules(seed.twinBuilderSamples.pant);
-    const bath = c.find((x) => x.key === 'requires_private_bath');
-    expect(bath?.value).toBe(true);
-    expect(seed.twinBuilderSamples.pant).toContain(bath!.quote);
-    // "ακόμα κι αν βγει λίγο ακριβότερο" = willing to pay more, must not become "prefers low cost"
-    expect(c.find((x) => x.key === 'prefers_low_cost')).toBeUndefined();
+describe('numeric hard rules are checked in code', () => {
+  it('max_cost', () => {
+    expect(checkRule(rule('max_cost', '150'), opt({ costPerPerson: 165 }))).toMatch(/165/);
+    expect(checkRule(rule('max_cost', '150'), opt({ costPerPerson: 150 }))).toBeNull();
+    expect(checkRule(rule('max_cost', '150'), opt({ costPerPerson: null }))).toBeNull(); // unknown -> warning, not a guess
   });
-  it('reads budget and return time, and invents nothing for unrelated text', () => {
-    const c = extractWithRules(seed.twinBuilderSamples.geo);
-    expect(c.find((x) => x.key === 'budget_max')?.value).toBe(110);
-    expect(c.find((x) => x.key === 'return_by')?.value).toBe('20:30');
+  it('latest_end: weekly "Sunday 21:00" relative to the option start', () => {
+    const r = rule('latest_end', 'weekly:0:21:00');
+    expect(checkRule(r, opt({ startsAt: '2026-11-21T09:00:00+02:00', endsAt: '2026-11-22T22:30:00+02:00' }))).toMatch(/22:30/);
+    expect(checkRule(r, opt({ startsAt: '2026-11-21T09:00:00+02:00', endsAt: '2026-11-22T20:15:00+02:00' }))).toBeNull();
+    expect(deadlineFor('weekly:1:23:59', new Date('2026-12-04T18:00:00+02:00'))?.toISOString()).toBe('2026-12-07T21:59:00.000Z');
+  });
+});
+
+describe('demo-mode understanding (rules)', () => {
+  it('turns one-off wishes into hard rules and soft preferences with quotes', () => {
+    const d = extractWithRules('Δεν θέλω να κοστίσει πάνω από 150€. Μέχρι Δευτέρα να έχουμε γυρίσει. Θέλω να γνωρίσουμε νέα άτομα.');
+    expect(d.find((x) => x.rule?.metric === 'max_cost')?.rule?.value).toBe('150');
+    expect(d.find((x) => x.rule?.metric === 'latest_end')?.rule?.value).toBe('weekly:1:23:59');
+    expect(d.some((x) => x.domain === 'social' && x.polarity === 'likes')).toBe(true);
     expect(extractWithRules('Ο καιρός σήμερα είναι συννεφιασμένος.')).toEqual([]);
   });
-});
-
-describe('store flow: source -> preference -> position -> decision -> correction -> new decision', () => {
-  beforeEach(() => store.reset());
-
-  it('every seed citation is an exact span of its source and carries an OpenSelf memory stamp', () => {
-    for (const p of store.preferences) {
-      expect(p.memory?.contentHash).toMatch(/^[0-9a-f]{64}$/);
-      for (const r of p.sourceRefs) expect(store.sources.find((s) => s.id === r.sourceId)?.text).toContain(r.quote);
-    }
-  });
-
-  it('confirming an extracted constraint changes the outcome only after owner approval', () => {
-    const src = store.addSource('pant', 'owner_input', 'test', seed.twinBuilderSamples.pant);
-    const [cand] = store.addCandidates('pant', src, extractWithRules(src.text).filter((c) => c.key === 'requires_private_bath'), 'rules');
-    expect(cand.status).toBe('candidate');
-    expect(cand.memory?.sourceTrust).toBe('external');
-    store.correct('geo', 'budget_max', 110, 'trip');
-    expect(store.plan().result.chosenOptionId).toBe('trip-geraneia'); // candidate not used yet
-    store.confirm(cand.id);
-    expect(store.pref(cand.id)?.memory?.sourceTrust).toBe('verified');
-    const d = store.plan();
-    expect(d.result.status).toBe('deadlock');
-    expect(d.diff?.changes.join(' ')).toContain('Παντελής');
-  });
-
-  it('trip-only correction does not touch the profile; profile correction does', () => {
-    store.applyRequest(store.request);
-    const first = store.plan();
-    store.correct('geo', 'budget_max', 110, 'trip');
-    const second = store.plan();
-    expect(second.diff?.priceDelta).toBe(-30);
-    const profileBudget = store.preferences.find((p) => p.ownerId === 'geo' && p.key === 'budget_max' && p.scope === 'profile' && p.status === 'confirmed');
-    expect(profileBudget?.value).toBe(150);
-    expect(first.result.chosenOptionId).not.toBe(second.result.chosenOptionId);
-
-    store.correct('geo', 'budget_max', 95, 'profile');
-    const saved = store.preferences.find((p) => p.ownerId === 'geo' && p.key === 'budget_max' && p.scope === 'profile' && p.status === 'confirmed');
-    expect(saved?.value).toBe(95);
-    expect(saved?.memory?.sourceTrust).toBe('owner');
-  });
-
-  it('a limit in the request text applies to everyone for this weekend only', () => {
-    store.applyRequest({ ...store.request, text: 'Βρες μας κάτι μέχρι 100€ το άτομο αυτό το ΣΚ.' });
-    const d = store.plan();
-    expect(d.result.chosenOptionId).toBe('trip-geraneia');
-    expect(d.inputs.filter((p) => p.scope === 'trip' && p.key === 'budget_max')).toHaveLength(3);
-  });
-
-  it('final proposal needs every owner to approve', () => {
-    const d = store.plan();
-    store.approve(d.id, 'pan', true);
-    store.approve(d.id, 'pant', true);
-    expect(d.status).toBe('awaiting_approval');
-    store.approve(d.id, 'geo', true);
-    expect(d.status).toBe('approved');
+  it('recognises the kind of request', () => {
+    const now = new Date('2026-11-18T12:00:00+02:00');
+    expect(parseRequestWithRules('Βρείτε μας ένα τριήμερο', now).category).toBe('trip');
+    expect(parseRequestWithRules('Πού να φάμε την Παρασκευή;', now).category).toBe('food');
+    expect(parseRequestWithRules('Έξοδος για ποτό', now).category).toBe('entertainment');
   });
 });
 
-describe('group messages in the owner style: grounding guard (no network)', async () => {
-  const { messageFacts, styleSamples, templateMessage, ungroundedReason } = await import('../shared/messages');
+describe('group decision scenarios', () => {
+  const r = evaluationReport();
+  for (const s of r.scenarios) it(s.name, () => expect(s.pass, s.detail).toBe(true));
+  it('held-out decisions: reports uncertainty instead of guessing on the unknowable case', () => {
+    expect(r.heuristic.rows.find((x) => x.id === 'hold-pant-3')?.outcome).toBe('uncertain');
+    expect(r.heuristic.correct).toBeGreaterThanOrEqual(6);
+  });
+});
+
+describe('end-to-end pipeline (demo mode, no network)', () => {
   beforeEach(() => store.reset());
 
-  it('facts come only from the decision, style samples only from the owner own writing', () => {
-    const d = store.plan();
-    const facts = messageFacts(d, 'geo', store.trips, store.owners);
-    expect(facts.join(' ')).toContain('Στενή Δίρφυος & Χιλιαδού');
-    expect(facts.join(' ')).toContain('128€');
-    const samples = styleSamples(store.sources, 'geo');
-    expect(samples.length).toBe(4);
-    expect(samples.every((s) => s.ownerId === 'geo')).toBe(true);
+  it('request + one-off wishes -> options -> evaluations -> decision with votes', async () => {
+    const { request, decision } = await createRequest('Βρείτε μας ένα τριήμερο αυτό το ΣΚ', ['pan', 'pant', 'geo'], { geo: 'Θέλω να γνωρίσουμε νέα άτομα.' });
+    expect(request.category).toBe('trip');
+    expect(decision.options.length).toBeGreaterThanOrEqual(4);
+    expect(decision.evaluations).toHaveLength(decision.options.length * 3);
+    expect(decision.outcome.votes).toHaveLength(3);
+    expect(store.requestItems(request.id, 'geo').some((m) => m.domain === 'social')).toBe(true);
+    expect(decision.steps.map((s) => s.key)).toEqual(['parse', 'retrieve', 'options', 'evaluate', 'decide']);
   });
 
-  it('rejects a draft that invents a price, a time or another destination', () => {
-    const d = store.plan();
-    const facts = messageFacts(d, 'pan', store.trips, store.owners);
-    expect(ungroundedReason('Οκ για Δίρφυ, 128€ και πίσω 20:15, πάμε!', facts, store.trips)).toBeNull();
-    expect(ungroundedReason('Πάμε Δίρφυ, βγαίνει 99€ όλο!', facts, store.trips)).toMatch(/99/);
-    expect(ungroundedReason('Πάμε, γυρνάμε στις 18:00', facts, store.trips)).toMatch(/18:00/);
-    expect(ungroundedReason('Καλύτερα Ναύπλιο ρε παιδιά', facts, store.trips)).toMatch(/Ναύπλιο/);
+  it('a numeric limit re-decides in code without re-evaluating', async () => {
+    const { request, decision } = await createRequest('Βρες μας ένα διήμερο αυτό το ΣΚ', ['pan', 'pant', 'geo'], {});
+    const d2 = await setLimit(request.id, 'geo', 'max_cost', 60);
+    expect(d2.evaluations).toBe(decision.evaluations);
+    expect(d2.steps.find((s) => s.key === 'evaluate')?.mode).toBe('code');
+    expect(d2.outcome.status).toBe('deadlock');
+    expect(d2.diff?.changes.join(' ')).toMatch(/60€/);
   });
 
-  it('templates pass the guard for agreement and deadlock', () => {
-    const ok = store.plan();
-    for (const o of store.owners) {
-      const t = templateMessage(ok, o.id, store.trips);
-      expect(ungroundedReason(t, messageFacts(ok, o.id, store.trips, store.owners), store.trips), t).toBeNull();
+  it('a soft wish saved to the profile becomes permanent memory', async () => {
+    const { request } = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'pant'], {});
+    await addWish(request.id, 'pan', 'Λατρεύω το καλό κρασί.', 'profile');
+    expect(store.profile('pan').some((m) => m.origin === 'owner' && m.domain === 'food')).toBe(true);
+  });
+
+  it('uploaded text becomes candidate memory with exact quotes, confirmed only by the owner', async () => {
+    const src = store.addSource('pant', 'note', 'test', 'Από εδώ και πέρα θέλω οπωσδήποτε δωμάτιο με δικό μας μπάνιο.');
+    const r = await analyzeAndStore(src.id);
+    expect(r.created.length).toBeGreaterThan(0);
+    for (const m of r.created) {
+      expect(m.status).toBe('candidate');
+      expect(src.text).toContain(m.refs[0].quote);
+      expect(m.memory?.sourceTrust).toBe('external');
     }
-    store.correct('geo', 'budget_max', 90, 'trip');
-    const stuck = store.plan();
-    expect(stuck.result.status).toBe('deadlock');
-    const t = templateMessage(stuck, 'geo', store.trips);
-    expect(ungroundedReason(t, messageFacts(stuck, 'geo', store.trips, store.owners), store.trips), t).toBeNull();
+    expect(store.profile('pant').some((m) => r.created.includes(m))).toBe(false);
+  });
+
+  it('every owner must approve; group messages stay grounded in the decision', async () => {
+    const { decision } = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'pant', 'geo'], {});
+    expect(decision.outcome.status).toBe('agreement');
+    store.approve(decision.id, 'pan', 'approved');
+    store.approve(decision.id, 'pant', 'approved');
+    expect(decision.status).toBe('awaiting_approval');
+    store.approve(decision.id, 'geo', 'approved');
+    expect(decision.status).toBe('approved');
+    const d = await groupMessages(decision.id);
+    for (const m of d.messages!) expect(ungroundedReason(m.text, m.facts, d.options), m.text).toBeNull();
+  });
+});
+
+describe('message grounding guard', () => {
+  it('rejects invented numbers and destinations', async () => {
+    store.reset();
+    const { request, decision } = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'pant', 'geo'], {});
+    const facts = messageFacts(decision, request, 'pan', store.personas);
+    expect(ungroundedReason(templateMessage(decision, 'pan'), facts, decision.options)).toBeNull();
+    expect(ungroundedReason('Πάμε, βγαίνει 7€ μόνο!', facts, decision.options)).toMatch(/7/);
+  });
+  it('demo evaluator cites only the persona own memory', () => {
+    const s = loadSeed();
+    const items = s.memory.filter((m) => m.personaId === 'geo');
+    const ev = evaluateWithRules('geo', items, [opt({ id: 'a', features: ['θάλασσα', 'beach bar'] })]);
+    expect(ev[0].reasons.every((r) => items.some((m) => m.id === r.memoryId))).toBe(true);
+    expect(ev[0].score).toBeGreaterThan(50);
+    const out = decide([s.personas[2]], items, [opt({ id: 'a', features: ['θάλασσα'] })], ev, 'food');
+    expect(out.status).toBe('deadlock'); // 100€ > 25€ dinner limit
   });
 });

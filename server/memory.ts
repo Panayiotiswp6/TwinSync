@@ -1,42 +1,38 @@
-// Adapter between TwinSync preferences and OpenSelf memory records.
-// Smallest working integration: we reuse OpenSelf's validated record shape
-// (memory type, source locator, trust ladder, content hash) for every profile
-// item, instead of inventing our own provenance format.
+// Adapter between TwinSync memory items and OpenSelf memory records (vendored, MIT).
+// Every profile item gets OpenSelf's validated record shape: memory type, source
+// locator, trust ladder (external -> verified -> owner) and content hash.
 
 import { normalizeMemory } from './vendor/openself/schema.js';
-import { describePref } from '../shared/prefs';
-import type { MemoryStamp, Preference, Source } from '../shared/types';
+import type { MemoryItem, MemoryStamp, Source } from '../shared/types';
 
-function trustFor(p: Preference): MemoryStamp['sourceTrust'] {
-  if (p.origin === 'owner') return 'owner'; // owner typed the correction
-  if (p.status === 'confirmed') return 'verified'; // owner confirmed it against the source
-  return 'external'; // model or rule proposal, not yet reviewed
+const TYPE: Record<MemoryItem['kind'], string> = {
+  preference: 'preference',
+  constraint: 'commitment',
+  fact: 'fact',
+  decision_pattern: 'decision',
+  style: 'note',
+};
+
+function trustFor(m: MemoryItem): MemoryStamp['sourceTrust'] {
+  if (m.origin === 'owner') return 'owner';
+  if (m.status === 'confirmed') return 'verified';
+  return 'external';
 }
 
-export function stampPreference(p: Preference, sources: Source[]): MemoryStamp {
-  const first = p.sourceRefs[0];
+export function stamp(m: MemoryItem, sources: Source[]): MemoryStamp {
+  const first = m.refs[0];
   const src = first ? sources.find((s) => s.id === first.sourceId) : undefined;
   const record = normalizeMemory({
-    type: 'preference',
-    content: `${describePref(p)} — «${p.sourceRefs.map((r) => r.quote).join('» / «')}»`,
-    summary: `${p.key}=${String(p.value)}`,
-    source: {
-      kind: src?.kind ?? 'manual',
-      locator: first ? `twinsync://sources/${first.sourceId}` : '',
-      title: src?.title ?? '',
-    },
-    scope: `twin/${p.ownerId}${p.scope === 'trip' ? '/trip' : ''}`,
+    type: TYPE[m.kind],
+    content: `${m.statement} — «${m.refs.map((r) => r.quote).join('» / «')}»`,
+    summary: m.statement.slice(0, 480),
+    source: { kind: src?.kind ?? 'manual', locator: first ? `twinsync://sources/${first.sourceId}` : '', title: src?.title ?? '' },
+    scope: `twin/${m.personaId}${m.scope === 'request' ? `/request/${m.requestId ?? ''}` : ''}`,
     sensitivity: 'personal',
-    sourceTrust: trustFor(p),
-    confidence: Math.max(0, Math.min(1, p.confidence)),
-    occurredAt: src?.date ?? null,
-    tags: [p.key, p.scope],
+    sourceTrust: trustFor(m),
+    confidence: Math.max(0, Math.min(1, m.confidence)),
+    occurredAt: src && Number.isFinite(Date.parse(src.date)) ? new Date(src.date).toISOString() : null,
+    tags: [m.domain, m.kind, ...(m.hard ? ['hard'] : [])],
   });
-  return {
-    id: record.id,
-    type: 'preference',
-    sourceTrust: record.sourceTrust,
-    contentHash: record.contentHash,
-    scope: record.scope,
-  };
+  return { id: record.id, type: record.type, sourceTrust: record.sourceTrust, contentHash: record.contentHash, scope: record.scope };
 }

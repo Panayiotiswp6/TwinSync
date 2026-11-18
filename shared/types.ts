@@ -1,160 +1,181 @@
-// Shared domain model for TwinSync. Used by the server, the decision engine,
-// the evaluation script and the React UI — one definition of Owner, Source,
-// Preference and Decision across the whole app.
+// TwinSync v2 domain model — shared by server, decision logic, evaluation and UI.
+// Generic: any group wish (trip, dinner, night out, gift…), not only trips.
 
-export type OwnerId = string;
+export type PersonaId = string;
 
-export interface Owner {
-  id: OwnerId;
-  name: string;
-  initials: string;
-  color: string;
-  tagline: string;
-  /** Every profile in the demo is synthetic. Kept explicit so the UI can label it. */
-  synthetic: true;
+export type Category = 'trip' | 'food' | 'entertainment' | 'activity' | 'gift' | 'other';
+export const CATEGORIES: Category[] = ['trip', 'food', 'entertainment', 'activity', 'gift', 'other'];
+
+export type Domain = 'travel' | 'food' | 'money' | 'schedule' | 'social' | 'activities' | 'comfort' | 'style' | 'other';
+export const DOMAINS: Domain[] = ['travel', 'food', 'money', 'schedule', 'social', 'activities', 'comfort', 'style', 'other'];
+
+export interface StyleCard {
+  summary: string;
+  traits: string[];
+  /** Short verbatim phrases from the persona's own writing. */
+  phrases: SourceRef[];
+  usesEmoji: boolean;
 }
 
-export type SourceKind =
-  | 'note'
-  | 'past_decision'
-  | 'chat'
-  | 'owner_input'
-  | 'owner_correction'
-  | 'trip_request';
+export interface Persona {
+  id: PersonaId;
+  name: string;
+  handle: string;
+  initials: string;
+  /** Two colours for the avatar gradient. */
+  colors: [string, string];
+  emoji: string;
+  bio: string;
+  style: StyleCard | null;
+  synthetic: boolean;
+  createdAt: string;
+}
+
+export type SourceKind = 'document' | 'note' | 'chat' | 'email' | 'past_decision' | 'wish' | 'correction' | 'request';
 
 export interface Source {
   id: string;
-  /** Owner id, or "group" for the shared trip request. */
-  ownerId: OwnerId | 'group';
+  personaId: PersonaId | 'group';
   kind: SourceKind;
   title: string;
-  /** ISO 8601 with offset. */
   date: string;
   text: string;
+  fileName?: string;
   synthetic: boolean;
+  /** true once the AI/rules have extracted memory from it. */
+  analyzed: boolean;
 }
 
-/** A citation: the exact text span of a source that supports a profile item. */
+/** Exact text span of a source that supports a memory item. */
 export interface SourceRef {
   sourceId: string;
   quote: string;
 }
 
-export type PrefKey =
-  | 'budget_max'
-  | 'return_by'
-  | 'no_camping'
-  | 'requires_private_bath'
-  | 'likes_hiking'
-  | 'max_hike_hours'
-  | 'prefers_low_cost'
-  | 'prefers_comfort'
-  | 'likes_sea';
+/** Machine-checkable part of a constraint. Checked in code, never by the model. */
+export type Metric = 'max_cost' | 'latest_end';
+export interface NumericRule {
+  metric: Metric;
+  /** max_cost: euros per person. latest_end: ISO datetime, or "weekly:<0-6, Sunday=0>:HH:MM". */
+  value: string;
+}
 
-export type PrefKind = 'constraint' | 'preference';
-export type PrefValue = number | string | boolean;
+export type MemoryKind = 'preference' | 'constraint' | 'fact' | 'decision_pattern' | 'style';
+export type Polarity = 'likes' | 'avoids' | 'neutral';
+export type MemoryStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
+export type Origin = 'seed' | 'ai' | 'rules' | 'owner';
 
-export type PrefStatus = 'candidate' | 'confirmed' | 'rejected' | 'superseded';
-/** seed = team-authored synthetic profile; ai = live LLM extraction; rules = demo-mode extractor; owner = owner correction. */
-export type PrefOrigin = 'seed' | 'ai' | 'rules' | 'owner';
-export type PrefScope = 'profile' | 'trip';
-
-/** OpenSelf memory record stamp (see server/memory.ts). */
+/** OpenSelf memory record stamp (server/memory.ts). */
 export interface MemoryStamp {
   id: string;
-  type: 'preference' | 'decision' | 'note';
+  type: string;
   sourceTrust: 'untrusted' | 'external' | 'trusted' | 'verified' | 'owner';
   contentHash: string;
   scope: string;
 }
 
-export interface Preference {
+export interface MemoryItem {
   id: string;
-  ownerId: OwnerId;
-  key: PrefKey;
-  value: PrefValue;
-  /** Importance for soft preferences (0..1). Constraints are binary and ignore it. */
-  weight: number;
-  status: PrefStatus;
-  scope: PrefScope;
+  personaId: PersonaId;
+  kind: MemoryKind;
+  statement: string;
+  domain: Domain;
+  polarity: Polarity;
+  /** 0..1 importance. */
+  strength: number;
+  hard: boolean;
+  rule?: NumericRule;
+  /** Request categories this applies to; empty = all. */
+  categories: Category[];
+  keywords: string[];
+  refs: SourceRef[];
   confidence: number;
-  origin: PrefOrigin;
-  sourceRefs: SourceRef[];
-  /** Previous value if the owner corrected the extracted candidate. */
-  correctedFrom?: PrefValue;
+  status: MemoryStatus;
+  origin: Origin;
+  /** profile = permanent; request = only for one request ("μόνο για αυτό"). */
+  scope: 'profile' | 'request';
+  requestId?: string;
   memory?: MemoryStamp;
   createdAt: string;
 }
 
-export type StayKind = 'hotel' | 'guesthouse' | 'refuge' | 'tent';
-
-export interface TripOption {
+export interface GroupRequest {
   id: string;
-  name: string;
-  region: string;
-  /** Indicative demo price per person (transport + stay + food), EUR. Synthetic, not live. */
-  pricePerPerson: number;
-  priceNote: string;
-  departSaturday: string; // HH:MM
-  returnSunday: string; // HH:MM, arrival back in Athens
-  activities: string[];
-  hikeHours: number;
-  /** 0 = no sea, 1 = beach is a main part of the trip. */
-  seaAccess: number;
-  stay: { kind: StayKind; label: string; privateBath: boolean };
-}
-
-export interface TripRequest {
   text: string;
-  participants: OwnerId[];
-  weekendLabel: string;
+  title: string;
+  category: Category;
+  periodStart: string | null;
+  periodEnd: string | null;
+  participants: PersonaId[];
+  createdAt: string;
 }
 
-// ---------- Decision engine output ----------
-
-export interface Violation {
-  ownerId: OwnerId;
-  prefId: string;
-  key: PrefKey;
-  scope: PrefScope;
-  message: string;
-  sourceRefs: SourceRef[];
-}
-
-export interface OptionEval {
-  optionId: string;
-  feasible: boolean;
-  violations: Violation[];
-  scores: Record<OwnerId, number>;
-  avg: number;
-  min: number;
+export interface CandidateOption {
+  id: string;
+  title: string;
+  emoji: string;
+  summary: string;
+  location: string;
+  /** EUR per person; null = unknown (reported as uncertainty). */
+  costPerPerson: number | null;
+  costNote: string;
+  startsAt: string | null;
+  endsAt: string | null;
+  features: string[];
+  origin: 'ai' | 'catalog';
 }
 
 export interface Reason {
-  prefId: string;
-  key: PrefKey;
+  memoryId: string;
   effect: 'for' | 'against';
   text: string;
-  sourceRefs: SourceRef[];
 }
 
-export type Confidence = 'low' | 'medium' | 'high';
-
-export interface TwinPosition {
-  ownerId: OwnerId;
-  /** Best option that satisfies this twin's own hard constraints (null if none). */
-  voteOptionId: string | null;
-  ranking: { optionId: string; score: number; okForMe: boolean }[];
+/** One twin's judgement of one option (AI in live mode, heuristic in demo mode). */
+export interface Evaluation {
+  personaId: PersonaId;
+  optionId: string;
+  score: number;
+  verdict: string;
   reasons: Reason[];
-  constraints: Reason[];
-  uncertainties: string[];
-  confidence: Confidence;
+  /** Qualitative hard-constraint breaches judged by the evaluator (memory ids). */
+  violations: { memoryId: string; text: string }[];
+  unknowns: string[];
+}
+
+export interface Violation {
+  personaId: PersonaId;
+  memoryId: string;
+  text: string;
+  /** code = numeric rule checked in code; judged = evaluator judgement of a qualitative hard constraint. */
+  checkedBy: 'code' | 'judged';
+  scope: 'profile' | 'request';
+}
+
+export interface OptionResult {
+  optionId: string;
+  feasible: boolean;
+  violations: Violation[];
+  warnings: string[];
+  scores: Record<PersonaId, number>;
+  min: number;
+  avg: number;
+}
+
+export interface TwinVote {
+  personaId: PersonaId;
+  optionId: string | null;
+  score: number;
+  verdict: string;
+  reasons: Reason[];
+  unknowns: string[];
+  confidence: 'low' | 'medium' | 'high';
 }
 
 export type Stance = 'agree' | 'agree_with_concession' | 'object';
 
 export interface Concession {
-  ownerId: OwnerId;
+  personaId: PersonaId;
   stance: Stance;
   finalScore: number;
   voteScore: number;
@@ -162,67 +183,63 @@ export interface Concession {
 }
 
 export interface Relaxation {
-  ownerId: OwnerId;
-  prefId: string;
-  key: PrefKey;
+  personaId: PersonaId;
+  memoryId: string;
   optionId: string;
-  message: string;
+  text: string;
 }
 
-export interface DecisionResult {
+export interface Outcome {
   status: 'agreement' | 'deadlock';
   chosenOptionId: string | null;
-  options: OptionEval[];
-  positions: TwinPosition[];
+  results: OptionResult[];
+  votes: TwinVote[];
   concessions: Concession[];
   relaxations: Relaxation[];
   rationale: string[];
 }
 
-export type Approval = 'pending' | 'approved' | 'rejected';
-
-export interface DecisionDiff {
-  previousDecisionId: string;
-  fromOptionId: string | null;
-  toOptionId: string | null;
-  priceDelta: number | null;
-  changes: string[];
-}
-
-/** Draft message a twin proposes to post in the group chat, in its owner's style. */
 export interface TwinMessage {
-  ownerId: OwnerId;
+  personaId: PersonaId;
   text: string;
-  /** live = written by the model in the owner's style; template = demo mode or rejected model output. */
   mode: 'live' | 'template';
-  model?: string;
-  /** Owner's own writing used as style reference. */
-  styleSourceIds: string[];
-  /** Facts the message was allowed to state (all come from the decision). */
   facts: string[];
-  /** Set when a model draft was replaced because it stated something not in the facts. */
+  styleSourceIds: string[];
   guardNote?: string;
   status: 'draft' | 'approved';
 }
 
-export interface Decision {
-  id: string;
-  createdAt: string;
-  request: TripRequest;
-  /** Snapshot of the effective preferences the engine used (profile + trip-only). */
-  inputs: Preference[];
-  result: DecisionResult;
-  approvals: Record<OwnerId, Approval>;
-  status: 'awaiting_approval' | 'approved' | 'rejected' | 'deadlock';
-  diff?: DecisionDiff;
-  messages?: TwinMessage[];
-  messagesNote?: string;
+export type Approval = 'pending' | 'approved' | 'rejected';
+
+export interface PipelineStep {
+  key: 'parse' | 'retrieve' | 'options' | 'evaluate' | 'decide';
+  label: string;
+  detail: string;
+  mode: 'ai' | 'code' | 'demo';
+  ms: number;
 }
 
-export interface ExtractionCandidate {
-  key: PrefKey;
-  value: PrefValue;
-  weight: number;
-  quote: string;
-  confidence: number;
+export interface Decision {
+  id: string;
+  requestId: string;
+  createdAt: string;
+  options: CandidateOption[];
+  evaluations: Evaluation[];
+  /** Memory items the run used (profile + request-only), snapshot. */
+  inputs: MemoryItem[];
+  outcome: Outcome;
+  steps: PipelineStep[];
+  approvals: Record<PersonaId, Approval>;
+  status: 'awaiting_approval' | 'approved' | 'rejected' | 'deadlock';
+  diff?: { previousId: string; changes: string[] };
+  messages?: TwinMessage[];
+  messagesNote?: string;
+  aiModel: string | null;
+}
+
+export interface Usage {
+  calls: number;
+  inputTokens: number;
+  outputTokens: number;
+  embeddingTokens: number;
 }

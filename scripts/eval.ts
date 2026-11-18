@@ -1,16 +1,16 @@
-// Prints the evaluation report (synthetic data). Run: npm run eval
-import { runEvaluation } from '../server/evaluation';
+// Prints the offline evaluation (synthetic data, no AI cost). Run: npm run eval
+// For the live AI held-out evaluation use the UI ("Αξιολόγηση") or POST /api/eval/live.
+import { evaluationReport } from '../server/evaluation';
 
-const r = runEvaluation();
+const r = evaluationReport();
 console.log('TwinSync evaluation — dataset: SYNTHETIC\n');
-console.log(`Held-out decisions: ${r.holdout.correct}/${r.holdout.total} correct, ${r.holdout.wrong} wrong, ${r.holdout.uncertain} uncertain`);
-for (const row of r.holdout.rows) {
-  console.log(`  [${row.outcome.padEnd(9)}] ${row.id} (${row.ownerId}) predicted=${row.predicted} actual=${row.actual} margin=${row.margin} — ${row.note}`);
-}
+console.log('Integrity:', r.integrity);
+const h = r.heuristic;
+console.log(`\nHeld-out (demo heuristic): ${h.correct}/${h.total} correct, ${h.wrong} wrong, ${h.uncertain} uncertain`);
+for (const row of h.rows) console.log(`  [${row.outcome.padEnd(9)}] ${row.id} predicted=${row.predicted} actual=${row.actual} margin=${row.margin} — ${row.note}`);
+if (r.live) console.log(`\nHeld-out (live ${r.live.model}, ${r.live.ranAt}): ${r.live.correct}/${r.live.total} correct, ${r.live.wrong} wrong, ${r.live.uncertain} uncertain`);
 console.log('\nScenarios:');
 for (const s of r.scenarios) console.log(`  ${s.pass ? 'PASS' : 'FAIL'}  ${s.name} — ${s.detail}`);
-console.log('\nRule extractor recall on seed sources:');
-for (const e of r.extraction) console.log(`  ${e.ownerId}: recall ${e.recall} expected=[${e.expected}] found=[${e.found}]`);
 console.log('\nWhat is measured:');
 for (const m of r.measures) console.log(`  - ${m}`);
 process.exitCode = r.scenarios.every((s) => s.pass) ? 0 : 1;

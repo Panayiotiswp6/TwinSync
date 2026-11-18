@@ -1,0 +1,119 @@
+{
+  "_notice": "SYNTHETIC personas written by the TwinSync team. No real person's data.",
+  "personas": [
+    {
+      "id": "pan",
+      "name": "Παναγιώτης",
+      "handle": "panos.trails",
+      "initials": "ΠΝ",
+      "colors": [
+        "#16a085",
+        "#2ecc71"
+      ],
+      "emoji": "🥾",
+      "bio": "Φοιτητής πληροφορικής · βουνό, μονοπάτια, φωτογραφία · χορτοφάγος",
+      "synthetic": true,
+      "createdAt": "2026-09-01T10:00:00+03:00",
+      "style": {
+        "summary": "Σύντομα, ζωηρά μηνύματα, φιλικός και άμεσος, με θαυμαστικά και «χαχα».",
+        "traits": [
+          "σύντομες προτάσεις",
+          "«ρε συ» και «χαχα»",
+          "διπλά θαυμαστικά",
+          "πρακτικός, οργανωτικός"
+        ],
+        "phrases": [
+          {
+            "sourceId": "src-pan-06",
+            "quote": "Ρε συ, Σάββατο 7 το πρωί φεύγουμε"
+          },
+          {
+            "sourceId": "src-pan-06",
+            "quote": "Πάρε και φακό!!"
+          },
+          {
+            "sourceId": "src-pan-04",
+            "quote": "φθηνά και καλά"
+          }
+        ],
+        "usesEmoji": false
+      }
+    },
+    {
+      "id": "pant",
+      "name": "Παντελής",
+      "handle": "pantelis.cozy",
+      "initials": "ΠΤ",
+      "colors": [
+        "#6c5ce7",
+        "#a29bfe"
+      ],
+      "emoji": "🍷",
+      "bio": "Junior designer · καλό φαγητό, κρασί, σινεμά, επιτραπέζια · όχι πριν τις 9",
+      "synthetic": true,
+      "createdAt": "2026-09-03T11:00:00+03:00",
+      "style": {
+        "summary": "Ευγενικός και ζεστός, μεγαλύτερες προτάσεις, ξεκινά με «Παιδιά», βάζει emoji.",
+        "traits": [
+          "ξεκινά με «Παιδιά»",
+          "emoji 😅 😊",
+          "ρωτά τη γνώμη των άλλων",
+          "εκφράζει συναίσθημα"
+        ],
+        "phrases": [
+          {
+            "sourceId": "src-pant-05",
+            "quote": "Παιδιά, ό,τι κι αν κανονίσουμε"
+          },
+          {
+            "sourceId": "src-pant-07",
+            "quote": "Πες μου τη γνώμη σου 😊"
+          },
+          {
+            "sourceId": "src-pant-06",
+            "quote": "Τέτοια βράδια αξίζουν τα λεφτά τους"
+          }
+        ],
+        "usesEmoji": true
+      }
+    },
+    {
+      "id": "geo",
+      "name": "Γιώργος",
+      "handle": "giorgos.k",
+      "initials": "ΓΚ",
+      "colors": [
+        "#e17055",
+        "#fdcb6e"
+      ],
+      "emoji": "🌊",
+      "bio": "Logistics · θάλασσα, beach bar, μπάλα, νέος κόσμος · δουλειά Δευτέρα 8:00",
+      "synthetic": true,
+      "createdAt": "2026-09-05T09:30:00+03:00",
+      "style": {
+        "summary": "Πολύ σύντομα μηνύματα, πεζά, συχνά χωρίς τόνους, κοφτός και πρακτικός.",
+        "traits": [
+          "πεζά χωρίς τόνους",
+          "«οκ»",
+          "μία γραμμή",
+          "πάντα θυμίζει τη Δευτέρα"
+        ],
+        "phrases": [
+          {
+            "sourceId": "src-geo-06",
+            "quote": "οκ μεσα"
+          },
+          {
+            "sourceId": "src-geo-06",
+            "quote": "δευτερα εχω δουλεια"
+          },
+          {
+            "sourceId": "src-geo-07",
+            "quote": "Αυτό είναι έξοδος για μένα"
+          }
+        ],
+        "usesEmoji": false
+      }
+    }
+  ]
+}

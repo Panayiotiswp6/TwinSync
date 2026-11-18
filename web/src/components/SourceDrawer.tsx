@@ -1,18 +1,9 @@
-import type { Owner, Preference, Source, SourceRef } from '../../../shared/types';
-import { describePref } from '../../../shared/prefs';
-import { Badge } from './ui';
-
-const KIND_LABEL: Record<Source['kind'], string> = {
-  note: 'Σημείωση',
-  past_decision: 'Παλιά απόφαση με αιτιολόγηση',
-  chat: 'Μήνυμα σε chat',
-  owner_input: 'Κείμενο που πρόσθεσε ο κάτοχος',
-  owner_correction: 'Διόρθωση κατόχου',
-  trip_request: 'Αίτημα παρέας',
-};
+import { X } from 'lucide-react';
+import type { MemoryItem, Persona, Source, SourceRef } from '../../../shared/types';
+import { Avatar, Badge, DOMAIN, KIND, SOURCE_KIND } from './ui';
 
 function highlight(text: string, quote: string) {
-  const i = text.indexOf(quote);
+  const i = quote ? text.indexOf(quote) : -1;
   if (i < 0) return <>{text}</>;
   return (
     <>
@@ -23,58 +14,57 @@ function highlight(text: string, quote: string) {
   );
 }
 
-export function SourceDrawer({
-  target,
-  sources,
-  owners,
-  preferences,
-  onClose,
-}: {
-  target: SourceRef | null;
-  sources: Source[];
-  owners: Owner[];
-  preferences: Preference[];
-  onClose: () => void;
-}) {
+export function SourceDrawer({ target, sources, personas, memory, onClose }: { target: SourceRef | null; sources: Source[]; personas: Persona[]; memory: MemoryItem[]; onClose: () => void }) {
   if (!target) return null;
   const src = sources.find((s) => s.id === target.sourceId);
-  const owner = owners.find((o) => o.id === src?.ownerId);
-  const citing = preferences.filter((p) => p.sourceRefs.some((r) => r.sourceId === target.sourceId) && p.status !== 'rejected');
+  const owner = personas.find((p) => p.id === src?.personaId);
+  const citing = memory.filter((m) => m.refs.some((r) => r.sourceId === target.sourceId));
   return (
-    <div className="drawer-backdrop" onClick={onClose}>
+    <div className="backdrop backdrop-right" onClick={onClose}>
       <aside className="drawer" role="dialog" aria-label="Πηγή" onClick={(e) => e.stopPropagation()}>
-        <button className="icon-btn drawer-close" onClick={onClose} aria-label="Κλείσιμο">
-          ×
+        <button className="icon-btn drawer-x" onClick={onClose} aria-label="Κλείσιμο">
+          <X size={20} />
         </button>
         {!src ? (
           <p>Η πηγή {target.sourceId} δεν βρέθηκε.</p>
         ) : (
           <>
-            <p className="eyebrow">
-              {src.id} · {KIND_LABEL[src.kind]}
-            </p>
-            <h3>{src.title}</h3>
-            <p className="muted small">
-              {owner ? owner.name : 'Παρέα'} · {new Date(src.date).toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' })}{' '}
-              {src.synthetic && <Badge tone="info">Συνθετικά δεδομένα</Badge>}
-            </p>
+            <div className="drawer-head">
+              {owner && <Avatar persona={owner} size={44} ring />}
+              <div>
+                <p className="eyebrow">
+                  {SOURCE_KIND[src.kind].emoji} {SOURCE_KIND[src.kind].label} · {src.id}
+                </p>
+                <h3>{src.title}</h3>
+                <p className="muted small">
+                  {owner?.name ?? 'Παρέα'} · {new Date(src.date).toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {src.fileName && ` · ${src.fileName}`}
+                </p>
+              </div>
+            </div>
+            {src.synthetic && <Badge tone="info">Συνθετικά δεδομένα</Badge>}
             <blockquote className="source-text">{highlight(src.text, target.quote)}</blockquote>
-            <h4>Στοιχεία προφίλ που στηρίζονται εδώ</h4>
+            <h4 className="drawer-sub">Τι έμαθε το Twin από εδώ ({citing.length})</h4>
             <ul className="plain">
-              {citing.map((p) => (
-                <li key={p.id} className="memory-row">
-                  <strong>{describePref(p)}</strong>{' '}
-                  <Badge tone={p.status === 'confirmed' ? 'good' : p.status === 'candidate' ? 'warn' : 'neutral'}>
-                    {p.status === 'confirmed' ? 'επιβεβαιωμένο' : p.status === 'candidate' ? 'προς επιβεβαίωση' : 'αντικαταστάθηκε'}
-                  </Badge>
-                  {p.memory && (
-                    <div className="mono small muted">
-                      OpenSelf memory · trust: {p.memory.sourceTrust} · scope: {p.memory.scope} · hash {p.memory.contentHash.slice(0, 12)}…
+              {citing.map((m) => (
+                <li key={m.id} className="drawer-mem">
+                  <span className="dot" style={{ background: DOMAIN[m.domain].color }} />
+                  <div>
+                    <strong>{m.statement}</strong>
+                    <div className="small muted">
+                      {KIND[m.kind]}
+                      {m.hard && ' · υποχρεωτικό'}
+                      {m.scope === 'request' && ' · μόνο για ένα αίτημα'} · {m.status === 'confirmed' ? 'επιβεβαιωμένο' : m.status === 'candidate' ? 'προς έλεγχο' : 'ανενεργό'}
                     </div>
-                  )}
+                    {m.memory && (
+                      <div className="mono tiny muted">
+                        OpenSelf · trust {m.memory.sourceTrust} · {m.memory.contentHash.slice(0, 10)}…
+                      </div>
+                    )}
+                  </div>
                 </li>
               ))}
-              {!citing.length && <li className="muted">Κανένα.</li>}
+              {!citing.length && <li className="muted small">Τίποτα ακόμα.</li>}
             </ul>
           </>
         )}
