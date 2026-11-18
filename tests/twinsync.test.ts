@@ -92,3 +92,40 @@ describe('store flow: source -> preference -> position -> decision -> correction
     expect(d.status).toBe('approved');
   });
 });
+
+describe('group messages in the owner style: grounding guard (no network)', async () => {
+  const { messageFacts, styleSamples, templateMessage, ungroundedReason } = await import('../shared/messages');
+  beforeEach(() => store.reset());
+
+  it('facts come only from the decision, style samples only from the owner own writing', () => {
+    const d = store.plan();
+    const facts = messageFacts(d, 'geo', store.trips, store.owners);
+    expect(facts.join(' ')).toContain('Στενή Δίρφυος & Χιλιαδού');
+    expect(facts.join(' ')).toContain('128€');
+    const samples = styleSamples(store.sources, 'geo');
+    expect(samples.length).toBe(4);
+    expect(samples.every((s) => s.ownerId === 'geo')).toBe(true);
+  });
+
+  it('rejects a draft that invents a price, a time or another destination', () => {
+    const d = store.plan();
+    const facts = messageFacts(d, 'pan', store.trips, store.owners);
+    expect(ungroundedReason('Οκ για Δίρφυ, 128€ και πίσω 20:15, πάμε!', facts, store.trips)).toBeNull();
+    expect(ungroundedReason('Πάμε Δίρφυ, βγαίνει 99€ όλο!', facts, store.trips)).toMatch(/99/);
+    expect(ungroundedReason('Πάμε, γυρνάμε στις 18:00', facts, store.trips)).toMatch(/18:00/);
+    expect(ungroundedReason('Καλύτερα Ναύπλιο ρε παιδιά', facts, store.trips)).toMatch(/Ναύπλιο/);
+  });
+
+  it('templates pass the guard for agreement and deadlock', () => {
+    const ok = store.plan();
+    for (const o of store.owners) {
+      const t = templateMessage(ok, o.id, store.trips);
+      expect(ungroundedReason(t, messageFacts(ok, o.id, store.trips, store.owners), store.trips), t).toBeNull();
+    }
+    store.correct('geo', 'budget_max', 90, 'trip');
+    const stuck = store.plan();
+    expect(stuck.result.status).toBe('deadlock');
+    const t = templateMessage(stuck, 'geo', store.trips);
+    expect(ungroundedReason(t, messageFacts(stuck, 'geo', store.trips, store.owners), store.trips), t).toBeNull();
+  });
+});

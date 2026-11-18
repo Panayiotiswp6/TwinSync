@@ -3,7 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { MODEL, extractCandidates, liveAiEnabled } from './ai';
+import { aiModel, aiProvider, extractCandidates } from './ai';
+import { approveGroupMessage, generateGroupMessages } from './groupMessages';
 import { runEvaluation } from './evaluation';
 import { store } from './store';
 import { PREF_KEYS, coerceValue, isPrefKey } from '../shared/prefs';
@@ -12,8 +13,9 @@ const app = express();
 app.use(express.json({ limit: '64kb' }));
 
 const status = () => ({
-  aiMode: liveAiEnabled() ? 'live' : 'demo',
-  model: liveAiEnabled() ? MODEL : null,
+  aiMode: aiProvider() === 'demo' ? 'demo' : 'live',
+  provider: aiProvider(),
+  model: aiModel(),
   dataset: 'synthetic',
 });
 
@@ -126,6 +128,24 @@ app.post(
   }),
 );
 
+// Twins draft a group-chat message in their owner's style (cached per decision).
+app.post(
+  '/api/decisions/:id/messages',
+  wrap(async (req, res) => {
+    if (!store.decisions.some((d) => d.id === req.params.id)) return res.status(404).json({ error: 'not found' });
+    await generateGroupMessages(req.params.id, req.query.regenerate === '1');
+    res.json(snapshot());
+  }),
+);
+const MessageApproveBody = z.object({ text: z.string().max(300).optional() });
+app.post(
+  '/api/decisions/:id/messages/:ownerId/approve',
+  wrap((req, res) => {
+    approveGroupMessage(req.params.id, req.params.ownerId, MessageApproveBody.parse(req.body ?? {}).text);
+    res.json(snapshot());
+  }),
+);
+
 app.post('/api/reset', (_req, res) => {
   store.reset();
   res.json(snapshot());
@@ -154,5 +174,5 @@ if (webDir) {
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
   const s = status();
-  console.log(`TwinSync on http://localhost:${port} — AI mode: ${s.aiMode}${s.model ? ` (${s.model})` : ' (demo: rule-based extraction, no API key)'}`);
+  console.log(`TwinSync on http://localhost:${port} — AI: ${s.aiMode === 'live' ? `${s.provider} (${s.model})` : 'demo mode (no OPENAI_API_KEY / ANTHROPIC_API_KEY set: rules and templates)'}`);
 });
