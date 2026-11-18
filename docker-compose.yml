@@ -1,0 +1,12 @@
+services:
+  twinsync:
+    build: .
+    image: twinsync:local
+    ports:
+      - "${TWINSYNC_PORT:-8080}:8080"
+    environment:
+      # Optional. Empty = demo mode (rule-based extraction, clearly labelled in the UI).
+      # Read from your shell or from a local .env file (see .env.example). Stays server-side.
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5-5}
+    restart: unless-stopped
