@@ -1,0 +1,69 @@
+{
+  "_notice": "SYNTHETIC held-out decisions written by the TwinSync team. None of these texts or choices is given to the twins as a source; they are used only to test whether a twin predicts a decision it has not seen.",
+  "cases": [
+    {
+      "id": "hold-pan-1", "ownerId": "pan", "question": "Νοέμβριος 2025: Ζαγόρι ή Ναύπλιο;",
+      "actualOptionId": "z", "note": "Διάλεξε το Ζαγόρι για τον Βίκο.",
+      "options": [
+        { "id": "z", "name": "Ζαγόρι – φαράγγι Βίκου", "region": "Ήπειρος", "pricePerPerson": 85, "priceNote": "", "departSaturday": "06:30", "returnSunday": "21:30", "activities": ["Βίκος 6 ώρες"], "hikeHours": 6, "seaAccess": 0, "stay": { "kind": "refuge", "label": "Καταφύγιο", "privateBath": false } },
+        { "id": "n", "name": "Ναύπλιο – boutique", "region": "Αργολίδα", "pricePerPerson": 170, "priceNote": "", "departSaturday": "10:00", "returnSunday": "19:00", "activities": ["Βόλτες"], "hikeHours": 0, "seaAccess": 1, "stay": { "kind": "hotel", "label": "Ξενοδοχείο", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-pan-2", "ownerId": "pan", "question": "Σεπτέμβριος 2025: Πάρνηθα ή spa στο Λουτράκι;",
+      "actualOptionId": "p", "note": "Πάρνηθα, 5 ώρες μονοπάτι.",
+      "options": [
+        { "id": "p", "name": "Πάρνηθα – Μπάφι", "region": "Αττική", "pricePerPerson": 50, "priceNote": "", "departSaturday": "08:00", "returnSunday": "18:00", "activities": ["Πεζοπορία 5 ωρών"], "hikeHours": 5, "seaAccess": 0, "stay": { "kind": "refuge", "label": "Καταφύγιο Μπάφι", "privateBath": false } },
+        { "id": "l", "name": "Λουτράκι – spa", "region": "Κορινθία", "pricePerPerson": 130, "priceNote": "", "departSaturday": "10:00", "returnSunday": "19:00", "activities": ["Spa", "Θάλασσα"], "hikeHours": 0, "seaAccess": 1, "stay": { "kind": "hotel", "label": "Ξενοδοχείο spa", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-pant-1", "ownerId": "pant", "question": "Ιανουάριος 2026: Καλάβρυτα με σκηνή ή Αράχωβα με ξενοδοχείο;",
+      "actualOptionId": "a", "note": "Αράχωβα.",
+      "options": [
+        { "id": "k", "name": "Καλάβρυτα – κάμπινγκ", "region": "Αχαΐα", "pricePerPerson": 60, "priceNote": "", "departSaturday": "07:00", "returnSunday": "20:00", "activities": ["Πεζοπορία 3 ωρών"], "hikeHours": 3, "seaAccess": 0, "stay": { "kind": "tent", "label": "Σκηνή", "privateBath": false } },
+        { "id": "a", "name": "Αράχωβα – ξενοδοχείο", "region": "Βοιωτία", "pricePerPerson": 140, "priceNote": "", "departSaturday": "09:00", "returnSunday": "19:00", "activities": ["Βόλτα 1 ώρας"], "hikeHours": 1, "seaAccess": 0, "stay": { "kind": "hotel", "label": "Ξενοδοχείο", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-pant-2", "ownerId": "pant", "question": "Απρίλιος 2026: κοιτώνας 45€ ή ξενώνας με δικό μπάνιο 75€;",
+      "actualOptionId": "x", "note": "Πήρε τον ξενώνα.",
+      "options": [
+        { "id": "d", "name": "Κοιτώνας ορειβατικού", "region": "Φωκίδα", "pricePerPerson": 45, "priceNote": "", "departSaturday": "08:00", "returnSunday": "19:00", "activities": ["Πεζοπορία 3 ωρών"], "hikeHours": 3, "seaAccess": 0, "stay": { "kind": "refuge", "label": "Κοιτώνας", "privateBath": false } },
+        { "id": "x", "name": "Ξενώνας στο χωριό", "region": "Φωκίδα", "pricePerPerson": 75, "priceNote": "", "departSaturday": "08:00", "returnSunday": "19:00", "activities": ["Πεζοπορία 2 ωρών"], "hikeHours": 2, "seaAccess": 0, "stay": { "kind": "guesthouse", "label": "Ξενώνας, δικό μπάνιο", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-pant-3", "ownerId": "pant", "question": "Ιούνιος 2026: Ερμιόνη ή Μέτσοβο (ίδια τιμή, ίδια άνεση);",
+      "actualOptionId": "e", "note": "Διάλεξε θάλασσα — κάτι που δεν φαίνεται πουθενά στα δεδομένα του Twin.",
+      "options": [
+        { "id": "e", "name": "Ερμιόνη", "region": "Αργολίδα", "pricePerPerson": 120, "priceNote": "", "departSaturday": "09:00", "returnSunday": "19:00", "activities": ["Θάλασσα"], "hikeHours": 1, "seaAccess": 1, "stay": { "kind": "hotel", "label": "Ξενοδοχείο", "privateBath": true } },
+        { "id": "m", "name": "Μέτσοβο", "region": "Ήπειρος", "pricePerPerson": 120, "priceNote": "", "departSaturday": "07:00", "returnSunday": "20:00", "activities": ["Βόλτα στο χωριό"], "hikeHours": 1, "seaAccess": 0, "stay": { "kind": "hotel", "label": "Ξενοδοχείο", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-geo-1", "ownerId": "geo", "question": "Ιούνιος 2026: Ύδρα με το τελευταίο πλοίο ή Αίγινα;",
+      "actualOptionId": "ai", "note": "Αίγινα, για να γυρίσει νωρίς.",
+      "options": [
+        { "id": "hy", "name": "Ύδρα", "region": "Νησιά Αργοσαρωνικού", "pricePerPerson": 120, "priceNote": "", "departSaturday": "08:00", "returnSunday": "22:45", "activities": ["Θάλασσα"], "hikeHours": 1, "seaAccess": 1, "stay": { "kind": "guesthouse", "label": "Δωμάτια", "privateBath": true } },
+        { "id": "ai", "name": "Αίγινα", "region": "Νησιά Αργοσαρωνικού", "pricePerPerson": 110, "priceNote": "", "departSaturday": "09:00", "returnSunday": "19:00", "activities": ["Θάλασσα"], "hikeHours": 0, "seaAccess": 1, "stay": { "kind": "guesthouse", "label": "Δωμάτια", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-geo-2", "ownerId": "geo", "question": "Οκτώβριος 2026: Μονεμβασιά ή Λουτράκι;",
+      "actualOptionId": "lo", "note": "Λουτράκι, λόγω κόστους.",
+      "options": [
+        { "id": "mo", "name": "Μονεμβασιά", "region": "Λακωνία", "pricePerPerson": 190, "priceNote": "", "departSaturday": "07:30", "returnSunday": "20:00", "activities": ["Κάστρο", "Θάλασσα"], "hikeHours": 1, "seaAccess": 1, "stay": { "kind": "hotel", "label": "Ξενοδοχείο", "privateBath": true } },
+        { "id": "lo", "name": "Λουτράκι", "region": "Κορινθία", "pricePerPerson": 90, "priceNote": "", "departSaturday": "09:00", "returnSunday": "18:30", "activities": ["Θάλασσα"], "hikeHours": 0, "seaAccess": 1, "stay": { "kind": "guesthouse", "label": "Δωμάτια", "privateBath": true } }
+      ]
+    },
+    {
+      "id": "hold-geo-3", "ownerId": "geo", "question": "Αύγουστος 2026: Άνδρος ή Λίμνη Πλαστήρα;",
+      "actualOptionId": "pl", "note": "Διάλεξε τη λίμνη γιατί ερχόταν η αδερφή του — παράγοντας που δεν υπάρχει στα δεδομένα του Twin.",
+      "options": [
+        { "id": "an", "name": "Άνδρος", "region": "Κυκλάδες", "pricePerPerson": 140, "priceNote": "", "departSaturday": "07:00", "returnSunday": "20:30", "activities": ["Πεζοπορία 4 ωρών", "Θάλασσα"], "hikeHours": 4, "seaAccess": 1, "stay": { "kind": "guesthouse", "label": "Δωμάτια", "privateBath": true } },
+        { "id": "pl", "name": "Λίμνη Πλαστήρα", "region": "Καρδίτσα", "pricePerPerson": 120, "priceNote": "", "departSaturday": "07:00", "returnSunday": "20:00", "activities": ["Βόλτα 1 ώρας"], "hikeHours": 1, "seaAccess": 0, "stay": { "kind": "guesthouse", "label": "Ξενώνας", "privateBath": true } }
+      ]
+    }
+  ]
+}
