@@ -3,31 +3,30 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
-import { aiModel, aiProvider, extractCandidates } from './ai';
-import { approveGroupMessage, generateGroupMessages } from './groupMessages';
-import { runEvaluation } from './evaluation';
-import { store } from './store';
-import { PREF_KEYS, coerceValue, isPrefKey } from '../shared/prefs';
+import { aiModel, aiProvider, embeddingsEnabled } from './ai';
+import { evaluationReport, holdoutLive } from './evaluation';
+import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
+import { DATA_DIR, store } from './store';
 
 const app = express();
-app.use(express.json({ limit: '64kb' }));
+app.use(express.json({ limit: '1mb' }));
 
 const status = () => ({
-  aiMode: aiProvider() === 'demo' ? 'demo' : 'live',
+  aiMode: aiProvider() === 'demo' ? ('demo' as const) : ('live' as const),
   provider: aiProvider(),
   model: aiModel(),
-  dataset: 'synthetic',
+  embeddings: embeddingsEnabled(),
+  dataset: 'synthetic' as const,
+  usage: store.usage,
 });
 
 const snapshot = () => ({
   status: status(),
-  owners: store.owners,
+  personas: store.personas,
   sources: store.sources,
-  preferences: store.preferences,
-  trips: store.trips,
-  request: store.request,
-  decisions: store.decisions.slice(-6),
-  samples: store.samples,
+  memory: store.memory.filter((m) => m.status !== 'rejected'),
+  requests: store.requests,
+  decisions: store.decisions,
 });
 
 const wrap =
@@ -38,129 +37,152 @@ const wrap =
 app.get('/api/health', (_req, res) => res.json({ ok: true, ...status() }));
 app.get('/api/state', (_req, res) => res.json(snapshot()));
 
-// 1. Create / extend a twin from plain text.
-const IngestBody = z.object({ text: z.string().trim().min(5).max(4000), title: z.string().trim().max(120).optional() });
+// ---- Personas & permanent memory ----
 app.post(
-  '/api/twins/:ownerId/ingest',
-  wrap(async (req, res) => {
-    const owner = store.owner(req.params.ownerId);
-    if (!owner) return res.status(404).json({ error: 'Άγνωστος κάτοχος' });
-    const body = IngestBody.parse(req.body);
-    const source = store.addSource(owner.id, 'owner_input', body.title || 'Νέα σημείωση κατόχου', body.text);
-    const result = await extractCandidates(body.text);
-    const created = store.addCandidates(owner.id, source, result.candidates, result.mode === 'live' ? 'ai' : 'rules');
-    res.json({ source, candidates: created, unmapped: result.unmapped ?? [], mode: result.mode, model: result.model, note: result.note, dropped: result.candidates.length - created.length, state: snapshot() });
+  '/api/personas',
+  wrap((req, res) => {
+    const b = z.object({ name: z.string().trim().min(2).max(40), bio: z.string().max(200).default(''), emoji: z.string().max(4).optional() }).parse(req.body);
+    const p = store.addPersona(b.name, b.bio, b.emoji);
+    res.json({ persona: p, state: snapshot() });
   }),
 );
 
-const ConfirmBody = z.object({ value: z.union([z.string(), z.number(), z.boolean()]).optional(), weight: z.number().min(0).max(1).optional() });
-app.post(
-  '/api/preferences/:id/confirm',
-  wrap((req, res) => {
-    const p = store.pref(req.params.id);
-    if (!p) return res.status(404).json({ error: 'not found' });
-    const body = ConfirmBody.parse(req.body ?? {});
-    const value = body.value === undefined ? undefined : coerceValue(p.key, body.value);
-    if (value === null) return res.status(400).json({ error: 'Μη έγκυρη τιμή' });
-    store.confirm(p.id, value, body.weight);
-    res.json(snapshot());
-  }),
-);
-app.post(
-  '/api/preferences/:id/reject',
-  wrap((req, res) => {
-    if (!store.pref(req.params.id)) return res.status(404).json({ error: 'not found' });
-    store.reject(req.params.id);
-    res.json(snapshot());
-  }),
-);
-
-// 2–3. Run the plan: positions -> constraints -> shared proposal.
-const PlanBody = z.object({ text: z.string().trim().min(3).max(1000), participants: z.array(z.string()).min(2) });
-app.post(
-  '/api/plan',
-  wrap((req, res) => {
-    const body = PlanBody.parse(req.body);
-    const participants = body.participants.filter((id) => store.owner(id));
-    if (participants.length < 2) return res.status(400).json({ error: 'Χρειάζονται τουλάχιστον δύο συμμετέχοντες' });
-    store.applyRequest({ ...store.request, text: body.text, participants });
-    const decision = store.plan();
-    res.json({ decision, state: snapshot() });
-  }),
-);
-
-// 4. Owner correction: trip-only or saved to profile, then re-run.
-const CorrectionBody = z.object({
-  ownerId: z.string(),
-  key: z.enum(PREF_KEYS as [string, ...string[]]),
-  value: z.union([z.string(), z.number(), z.boolean()]),
-  scope: z.enum(['trip', 'profile']),
-  weight: z.number().min(0).max(1).optional(),
+const SourceBody = z.object({
+  title: z.string().trim().max(120).default(''),
+  text: z.string().trim().min(5).max(200_000),
+  kind: z.enum(['document', 'note', 'chat', 'email', 'past_decision']).default('document'),
+  fileName: z.string().max(200).optional(),
 });
 app.post(
-  '/api/corrections',
-  wrap((req, res) => {
-    const body = CorrectionBody.parse(req.body);
-    if (!store.owner(body.ownerId) || !isPrefKey(body.key)) return res.status(400).json({ error: 'Μη έγκυρη διόρθωση' });
-    const value = coerceValue(body.key, body.value);
-    if (value === null) return res.status(400).json({ error: 'Μη έγκυρη τιμή' });
-    const pref = store.correct(body.ownerId, body.key, value, body.scope, body.weight);
-    const decision = store.plan();
-    res.json({ pref, decision, state: snapshot() });
-  }),
-);
-app.delete(
-  '/api/overrides/:id',
-  wrap((req, res) => {
-    store.removeOverride(req.params.id);
-    const decision = store.plan();
-    res.json({ decision, state: snapshot() });
-  }),
-);
-
-const ApproveBody = z.object({ ownerId: z.string(), approve: z.boolean() });
-app.post(
-  '/api/decisions/:id/approval',
-  wrap((req, res) => {
-    const body = ApproveBody.parse(req.body);
-    store.approve(req.params.id, body.ownerId, body.approve);
-    res.json(snapshot());
-  }),
-);
-
-// Twins draft a group-chat message in their owner's style (cached per decision).
-app.post(
-  '/api/decisions/:id/messages',
+  '/api/personas/:id/sources',
   wrap(async (req, res) => {
-    if (!store.decisions.some((d) => d.id === req.params.id)) return res.status(404).json({ error: 'not found' });
-    await generateGroupMessages(req.params.id, req.query.regenerate === '1');
-    res.json(snapshot());
+    if (!store.persona(req.params.id)) return res.status(404).json({ error: 'Άγνωστο Twin' });
+    const b = SourceBody.parse(req.body);
+    const src = store.addSource(req.params.id, b.kind, b.title || b.fileName || 'Νέα πηγή', b.text, b.fileName);
+    const r = await analyzeAndStore(src.id);
+    res.json({ ...r, state: snapshot() });
   }),
 );
-const MessageApproveBody = z.object({ text: z.string().max(300).optional() });
 app.post(
-  '/api/decisions/:id/messages/:ownerId/approve',
-  wrap((req, res) => {
-    approveGroupMessage(req.params.id, req.params.ownerId, MessageApproveBody.parse(req.body ?? {}).text);
-    res.json(snapshot());
+  '/api/sources/:id/analyze',
+  wrap(async (req, res) => {
+    const r = await analyzeAndStore(req.params.id);
+    res.json({ ...r, state: snapshot() });
   }),
 );
-
-app.post('/api/reset', (_req, res) => {
-  store.reset();
+app.delete('/api/sources/:id', (req, res) => {
+  store.deleteSource(req.params.id);
   res.json(snapshot());
 });
 
-app.get('/api/eval', (_req, res) => {
-  const profile = store.preferences.filter((p) => p.status === 'confirmed' && p.scope === 'profile');
-  res.json(runEvaluation(profile));
+app.post(
+  '/api/memory/:id',
+  wrap((req, res) => {
+    const b = z
+      .object({ statement: z.string().trim().min(2).max(200).optional(), status: z.enum(['confirmed', 'rejected', 'candidate']).optional(), hard: z.boolean().optional(), strength: z.number().min(0).max(1).optional() })
+      .parse(req.body);
+    store.updateMemory(req.params.id, b);
+    res.json(snapshot());
+  }),
+);
+app.post('/api/personas/:id/confirm-all', (req, res) => {
+  store.confirmAll(req.params.id);
+  res.json(snapshot());
+});
+app.post(
+  '/api/personas/:id/style',
+  wrap(async (req, res) => {
+    const r = await refreshStyle(req.params.id);
+    res.json({ ...r, state: snapshot() });
+  }),
+);
+
+// ---- Group requests ----
+app.post(
+  '/api/requests',
+  wrap(async (req, res) => {
+    const b = z.object({ text: z.string().trim().min(3).max(1000), participants: z.array(z.string()).min(2), wishes: z.record(z.string(), z.string().max(1000)).default({}) }).parse(req.body);
+    const participants = b.participants.filter((id) => store.persona(id));
+    if (participants.length < 2) return res.status(400).json({ error: 'Χρειάζονται τουλάχιστον δύο Twins' });
+    const r = await createRequest(b.text, participants, b.wishes);
+    res.json({ requestId: r.request.id, decisionId: r.decision.id, state: snapshot() });
+  }),
+);
+app.post(
+  '/api/requests/:id/wishes',
+  wrap(async (req, res) => {
+    const b = z.object({ personaId: z.string(), text: z.string().trim().min(3).max(1000), scope: z.enum(['request', 'profile']) }).parse(req.body);
+    const r = await addWish(req.params.id, b.personaId, b.text, b.scope);
+    res.json({ decisionId: r.decision.id, created: r.created.length, state: snapshot() });
+  }),
+);
+app.post(
+  '/api/requests/:id/limit',
+  wrap(async (req, res) => {
+    const b = z.object({ personaId: z.string(), value: z.number().positive().max(100000) }).parse(req.body);
+    const d = await setLimit(req.params.id, b.personaId, 'max_cost', Math.round(b.value));
+    res.json({ decisionId: d.id, state: snapshot() });
+  }),
+);
+app.delete(
+  '/api/requests/:id/items/:memoryId',
+  wrap(async (req, res) => {
+    const d = await removeItemAndRerun(req.params.id, req.params.memoryId);
+    res.json({ decisionId: d.id, state: snapshot() });
+  }),
+);
+app.post(
+  '/api/requests/:id/rerun',
+  wrap(async (req, res) => {
+    const b = z.object({ regenerateOptions: z.boolean().default(false) }).parse(req.body ?? {});
+    const d = await runDecision(req.params.id, b);
+    res.json({ decisionId: d.id, state: snapshot() });
+  }),
+);
+
+// ---- Decisions ----
+app.post(
+  '/api/decisions/:id/approval',
+  wrap((req, res) => {
+    const b = z.object({ personaId: z.string(), approve: z.boolean() }).parse(req.body);
+    store.approve(req.params.id, b.personaId, b.approve ? 'approved' : 'rejected');
+    res.json(snapshot());
+  }),
+);
+app.post(
+  '/api/decisions/:id/messages',
+  wrap(async (req, res) => {
+    await groupMessages(req.params.id, req.query.regenerate === '1');
+    res.json(snapshot());
+  }),
+);
+app.post(
+  '/api/decisions/:id/messages/:personaId/approve',
+  wrap((req, res) => {
+    approveMessage(req.params.id, req.params.personaId, z.object({ text: z.string().max(300).optional() }).parse(req.body ?? {}).text);
+    res.json(snapshot());
+  }),
+);
+
+// ---- Evaluation & reset ----
+app.get('/api/eval', (_req, res) => res.json(evaluationReport()));
+app.post(
+  '/api/eval/live',
+  wrap(async (_req, res) => {
+    const live = await holdoutLive();
+    res.json({ ...evaluationReport(), live });
+  }),
+);
+app.post('/api/reset', (_req, res) => {
+  store.reset();
+  res.json(snapshot());
 });
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {
   if (err instanceof z.ZodError) return res.status(400).json({ error: 'Μη έγκυρο αίτημα', details: err.issues });
   const msg = err instanceof Error ? err.message : 'Σφάλμα';
   console.error('[api]', msg);
-  res.status(500).json({ error: msg });
+  res.status(msg === 'not found' ? 404 : 500).json({ error: msg });
 });
 
 // Static frontend (production build).
@@ -174,5 +196,7 @@ if (webDir) {
 const port = Number(process.env.PORT || 8080);
 app.listen(port, () => {
   const s = status();
-  console.log(`TwinSync on http://localhost:${port} — AI: ${s.aiMode === 'live' ? `${s.provider} (${s.model})` : 'demo mode (no OPENAI_API_KEY / ANTHROPIC_API_KEY set: rules and templates)'}`);
+  console.log(
+    `TwinSync on http://localhost:${port} — AI: ${s.aiMode === 'live' ? `${s.provider} (${s.model})${s.embeddings ? ' + embeddings' : ''}` : 'demo mode (no OPENAI_API_KEY / ANTHROPIC_API_KEY: rules, catalog, templates)'} — data: ${DATA_DIR}`,
+  );
 });

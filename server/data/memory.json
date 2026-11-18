@@ -1,0 +1,773 @@
+{
+  "_notice": "SYNTHETIC seed profile, pre-extracted from the files in server/data/personas/ so the demo opens without AI cost. Every quote is checked against its source at startup.",
+  "items": [
+    {
+      "id": "mem-pan-01",
+      "personaId": "pan",
+      "kind": "preference",
+      "statement": "Του αρέσει πολύ η πεζοπορία και το βουνό",
+      "domain": "activities",
+      "polarity": "likes",
+      "strength": 0.9,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "πεζοπορία",
+        "μονοπάτι",
+        "βουνό",
+        "ανάβαση",
+        "φαράγγι"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-01",
+          "quote": "Τα Σαββατοκύριακα τα περνάω όσο πιο συχνά γίνεται στο βουνό"
+        },
+        {
+          "sourceId": "src-pan-02",
+          "quote": "έξι ώρες πεζοπορία μέχρι τη Στύγα"
+        },
+        {
+          "sourceId": "src-pan-04",
+          "quote": "να έχει μονοπάτι"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-02",
+      "personaId": "pan",
+      "kind": "preference",
+      "statement": "Προτιμά χαμηλό κόστος, δεν πληρώνει για πολυτέλειες",
+      "domain": "money",
+      "polarity": "likes",
+      "strength": 0.7,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "φθηνό",
+        "οικονομικό"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-03",
+          "quote": "Τα 180€ τη βραδιά για ένα δωμάτιο δεν τα δίνω"
+        },
+        {
+          "sourceId": "src-pan-04",
+          "quote": "να μη σκάσουμε μια περιουσία για δύο μέρες"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-03",
+      "personaId": "pan",
+      "kind": "constraint",
+      "statement": "Χορτοφάγος: σε κάθε φαγητό χρειάζεται επιλογές χωρίς κρέας",
+      "domain": "food",
+      "polarity": "likes",
+      "strength": 1,
+      "hard": true,
+      "categories": [
+        "food"
+      ],
+      "keywords": [
+        "χορτοφαγικ",
+        "χωρίς κρέας",
+        "vegan"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-01",
+          "quote": "Είμαι χορτοφάγος εδώ και τρία χρόνια, οπότε σε κάθε φαγητό χρειάζομαι κάτι χωρίς κρέας"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-04",
+      "personaId": "pan",
+      "kind": "preference",
+      "statement": "Δεν του αρέσουν τα κλαμπ και η δυνατή μουσική",
+      "domain": "social",
+      "polarity": "avoids",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "κλαμπ",
+        "dj",
+        "δυνατή μουσική",
+        "ξενύχτι"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-01",
+          "quote": "Δεν μου αρέσουν τα κλαμπ και η πολύ δυνατή μουσική"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-05",
+      "personaId": "pan",
+      "kind": "preference",
+      "statement": "Προτιμά ήσυχη μπύρα με την παρέα",
+      "domain": "social",
+      "polarity": "likes",
+      "strength": 0.4,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "μπύρα",
+        "ήσυχο",
+        "ησυχία"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-01",
+          "quote": "προτιμώ μια ήσυχη μπύρα με την παρέα"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-06",
+      "personaId": "pan",
+      "kind": "fact",
+      "statement": "Ξυπνά νωρίς χωρίς πρόβλημα, ακόμα και στις 6",
+      "domain": "schedule",
+      "polarity": "neutral",
+      "strength": 0.3,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "νωρίς",
+        "πρωί"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-01",
+          "quote": "Ξυπνάω νωρίς χωρίς πρόβλημα, ακόμα και στις 6"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-07",
+      "personaId": "pan",
+      "kind": "preference",
+      "statement": "Του αρέσει η φωτογραφία τοπίων",
+      "domain": "activities",
+      "polarity": "likes",
+      "strength": 0.4,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "θέα",
+        "τοπίο",
+        "φωτογραφία",
+        "ηλιοβασίλεμα"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-01",
+          "quote": "φωτογραφία τοπίων"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-08",
+      "personaId": "pan",
+      "kind": "decision_pattern",
+      "statement": "Διαλέγει μαγαζί με πολλά πιάτα χωρίς κρέας και λογική τιμή αντί για ακριβό κρεατοφαγικό",
+      "domain": "food",
+      "polarity": "likes",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [
+        "food"
+      ],
+      "keywords": [
+        "ταβέρνα",
+        "χορτοφαγικ",
+        "χωρίς κρέας"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-05",
+          "quote": "Είχε πέντε πιάτα χωρίς κρέας και βγήκαμε 18€ ο καθένας"
+        },
+        {
+          "sourceId": "src-pan-05",
+          "quote": "Στο steakhouse θα έτρωγα μόνο πατάτες"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-09",
+      "personaId": "pan",
+      "kind": "fact",
+      "statement": "Έχει εμπειρία σε ορειβατικές διαδρομές μέχρι 7 ωρών",
+      "domain": "activities",
+      "polarity": "neutral",
+      "strength": 0.3,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "ανάβαση"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-07",
+          "quote": "Έχω εμπειρία σε διαδρομές μέχρι 7 ωρών"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pan-10",
+      "personaId": "pan",
+      "kind": "decision_pattern",
+      "statement": "Προτιμά να ξοδέψει σε εξοπλισμό/εμπειρίες βουνού παρά σε ακριβή διαμονή",
+      "domain": "money",
+      "polarity": "likes",
+      "strength": 0.5,
+      "hard": false,
+      "categories": [
+        "trip"
+      ],
+      "keywords": [
+        "καταφύγιο",
+        "οικονομικό"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pan-03",
+          "quote": "προτιμώ να τα βάλω σε καλά παπούτσια πεζοπορίας"
+        },
+        {
+          "sourceId": "src-pan-02",
+          "quote": "Δεν χρειάζομαι πολυτέλειες"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-01",
+      "personaId": "pant",
+      "kind": "constraint",
+      "statement": "Δεν κοιμάται σε σκηνή",
+      "domain": "comfort",
+      "polarity": "avoids",
+      "strength": 1,
+      "hard": true,
+      "categories": [
+        "trip"
+      ],
+      "keywords": [
+        "σκηνή",
+        "κάμπινγκ",
+        "camping"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-02",
+          "quote": "Σε σκηνή δεν ξανακοιμάμαι"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-02",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Θέλει άνετη διαμονή: κανονικό κρεβάτι, ζεστό ντους, ιδιωτικό μπάνιο",
+      "domain": "comfort",
+      "polarity": "likes",
+      "strength": 0.8,
+      "hard": false,
+      "categories": [
+        "trip"
+      ],
+      "keywords": [
+        "ξενοδοχείο",
+        "ιδιωτικό μπάνιο",
+        "δίκλινα",
+        "άνετ"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-02",
+          "quote": "θέλω κανονικό κρεβάτι και ζεστό ντους"
+        },
+        {
+          "sourceId": "src-pant-03",
+          "quote": "γιατί είχε ιδιωτικό μπάνιο. Άξιζε τα 20€ παραπάνω"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-03",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Πεζοπορία έως 3-4 ώρες είναι οκ, όχι πολύωρες αναβάσεις",
+      "domain": "activities",
+      "polarity": "avoids",
+      "strength": 0.5,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "6 ωρών",
+        "6 ώρες",
+        "έξι ωρών",
+        "πολύωρη"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-04",
+          "quote": "Μέχρι 3-4 ώρες περπάτημα είμαι μέσα, ανάβαση έξι ωρών όχι"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-04",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Δεν είναι πρωινός τύπος — όχι αναχωρήσεις πριν τις 9",
+      "domain": "schedule",
+      "polarity": "avoids",
+      "strength": 0.5,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "06:",
+        "07:",
+        "ξημερώματα",
+        "πολύ νωρίς"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-01",
+          "quote": "πριν τις 9 δεν λειτουργώ"
+        },
+        {
+          "sourceId": "src-pant-05",
+          "quote": "ας μην είναι αναχώρηση στις 6 το πρωί"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-05",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Δίνει μεγάλη σημασία στο καλό φαγητό και το κρασί",
+      "domain": "food",
+      "polarity": "likes",
+      "strength": 0.8,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "φαγητό",
+        "κρασί",
+        "εστιατόριο",
+        "ταβέρνα",
+        "γαστρονομ"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-01",
+          "quote": "Μου αρέσει το καλό φαγητό, ένα ποτήρι κρασί"
+        },
+        {
+          "sourceId": "src-pant-05",
+          "quote": "να φάμε κάπου ωραία το βράδυ"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-06",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Του αρέσουν τα επιτραπέζια με φίλους",
+      "domain": "social",
+      "polarity": "likes",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "επιτραπέζι",
+        "board game"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-01",
+          "quote": "τα επιτραπέζια με φίλους"
+        },
+        {
+          "sourceId": "src-pant-07",
+          "quote": "ίσως ένα επιτραπέζιο café"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-07",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Λατρεύει το σινεμά, κυρίως επιστημονική φαντασία",
+      "domain": "activities",
+      "polarity": "likes",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "σινεμά",
+        "ταινία",
+        "επιστημονικής φαντασίας",
+        "sci-fi"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-01",
+          "quote": "Λατρεύω το σινεμά, κυρίως ταινίες επιστημονικής φαντασίας"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-08",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Απολαμβάνει καλό μπαρ με μουσική, όχι όμως κλαμπ",
+      "domain": "social",
+      "polarity": "likes",
+      "strength": 0.5,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "μπαρ",
+        "live μουσική",
+        "cocktail"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-01",
+          "quote": "Για κλαμπ δεν τρελαίνομαι, αλλά ένα καλό μπαρ με μουσική το απολαμβάνω"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-09",
+      "personaId": "pant",
+      "kind": "decision_pattern",
+      "statement": "Πληρώνει παραπάνω για ποιότητα και χαλαρή εμπειρία",
+      "domain": "money",
+      "polarity": "neutral",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "ποιότητα",
+        "χαλαρό"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-06",
+          "quote": "Τέτοια βράδια αξίζουν τα λεφτά τους"
+        },
+        {
+          "sourceId": "src-pant-03",
+          "quote": "Άξιζε τα 20€ παραπάνω"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-pant-10",
+      "personaId": "pant",
+      "kind": "preference",
+      "statement": "Τα Σαββατοκύριακα θέλει πρώτα απ' όλα να ξεκουραστεί",
+      "domain": "comfort",
+      "polarity": "likes",
+      "strength": 0.5,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "ξεκούραση",
+        "χαλαρό",
+        "ήσυχο"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-pant-01",
+          "quote": "τα Σαββατοκύριακα θέλω πρώτα απ' όλα να ξεκουραστώ"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-01",
+      "personaId": "geo",
+      "kind": "constraint",
+      "statement": "Πρέπει να είναι πίσω στην Αθήνα έως Κυριακή 21:00 (δουλειά Δευτέρα 8:00)",
+      "domain": "schedule",
+      "polarity": "neutral",
+      "strength": 1,
+      "hard": true,
+      "categories": [],
+      "keywords": [],
+      "refs": [
+        {
+          "sourceId": "src-geo-01",
+          "quote": "πρέπει να είμαι πίσω στην Αθήνα μέχρι τις 21:00 το αργότερο"
+        },
+        {
+          "sourceId": "src-geo-03",
+          "quote": "η επιστροφή θα ήταν μεσάνυχτα και τη Δευτέρα είχα εξέταση"
+        },
+        {
+          "sourceId": "src-geo-06",
+          "quote": "δευτερα εχω δουλεια"
+        }
+      ],
+      "confidence": 0.95,
+      "rule": {
+        "metric": "latest_end",
+        "value": "weekly:0:21:00"
+      }
+    },
+    {
+      "id": "mem-geo-02",
+      "personaId": "geo",
+      "kind": "constraint",
+      "statement": "Όριο 150€ για όλο το διήμερο/ταξίδι (μαζί βενζίνη και φαγητό)",
+      "domain": "money",
+      "polarity": "neutral",
+      "strength": 1,
+      "hard": true,
+      "categories": [
+        "trip"
+      ],
+      "keywords": [],
+      "refs": [
+        {
+          "sourceId": "src-geo-02",
+          "quote": "έχω όριο 150€ για όλο το διήμερο"
+        }
+      ],
+      "confidence": 0.95,
+      "rule": {
+        "metric": "max_cost",
+        "value": "150"
+      }
+    },
+    {
+      "id": "mem-geo-03",
+      "personaId": "geo",
+      "kind": "constraint",
+      "statement": "Για έξοδο/φαγητό το πολύ 25€ το άτομο αυτή την περίοδο",
+      "domain": "money",
+      "polarity": "neutral",
+      "strength": 1,
+      "hard": true,
+      "categories": [
+        "food",
+        "entertainment"
+      ],
+      "keywords": [],
+      "refs": [
+        {
+          "sourceId": "src-geo-05",
+          "quote": "για έξοδο το πολύ 25€ το άτομο αυτή την περίοδο"
+        }
+      ],
+      "confidence": 0.9,
+      "rule": {
+        "metric": "max_cost",
+        "value": "25"
+      }
+    },
+    {
+      "id": "mem-geo-04",
+      "personaId": "geo",
+      "kind": "preference",
+      "statement": "Όσο πιο φθηνά τόσο καλύτερα",
+      "domain": "money",
+      "polarity": "likes",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "φθηνό",
+        "οικονομικό"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-02",
+          "quote": "Όσο πιο φθηνά τόσο καλύτερα"
+        },
+        {
+          "sourceId": "src-geo-07",
+          "quote": "Μισά λεφτά"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-05",
+      "personaId": "geo",
+      "kind": "preference",
+      "statement": "Λατρεύει τη θάλασσα, έστω και για μια βουτιά",
+      "domain": "activities",
+      "polarity": "likes",
+      "strength": 0.8,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "θάλασσα",
+        "παραλία",
+        "βουτιά",
+        "beach"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-04",
+          "quote": "το τέλειο ΣΚ έχει θάλασσα, έστω και για μια βουτιά"
+        },
+        {
+          "sourceId": "src-geo-07",
+          "quote": "θάλασσα"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-06",
+      "personaId": "geo",
+      "kind": "preference",
+      "statement": "Το πολύ βουνό τον κουράζει",
+      "domain": "activities",
+      "polarity": "avoids",
+      "strength": 0.3,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "ανάβαση",
+        "6 ωρών",
+        "βουνό"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-04",
+          "quote": "Το πολύ βουνό με κουράζει"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-07",
+      "personaId": "geo",
+      "kind": "preference",
+      "statement": "Του αρέσει να γνωρίζει νέο κόσμο",
+      "domain": "social",
+      "polarity": "likes",
+      "strength": 0.7,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "κόσμος",
+        "γνωριμίες",
+        "beach bar",
+        "μπαρ",
+        "κοινωνικ"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-05",
+          "quote": "Μου αρέσει να γνωρίζω νέο κόσμο"
+        },
+        {
+          "sourceId": "src-geo-07",
+          "quote": "γνώρισα και καινούργια άτομα"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-08",
+      "personaId": "geo",
+      "kind": "preference",
+      "statement": "Του αρέσουν τα beach bar",
+      "domain": "social",
+      "polarity": "likes",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "beach bar",
+        "μπαρ"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-05",
+          "quote": "τα beach bar"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-09",
+      "personaId": "geo",
+      "kind": "fact",
+      "statement": "Κάθε Κυριακή βράδυ βλέπει μπάλα με φίλους",
+      "domain": "schedule",
+      "polarity": "neutral",
+      "strength": 0.4,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "ποδόσφαιρο",
+        "μπάλα"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-05",
+          "quote": "κάθε Κυριακή βράδυ βλέπω μπάλα με τους φίλους μου"
+        }
+      ],
+      "confidence": 0.9
+    },
+    {
+      "id": "mem-geo-10",
+      "personaId": "geo",
+      "kind": "decision_pattern",
+      "statement": "Διαλέγει το φθηνότερο και πιο κοινωνικό (θάλασσα, κόσμος) αντί για το «κυριλέ»",
+      "domain": "money",
+      "polarity": "likes",
+      "strength": 0.6,
+      "hard": false,
+      "categories": [],
+      "keywords": [
+        "beach bar",
+        "θάλασσα",
+        "φθηνό"
+      ],
+      "refs": [
+        {
+          "sourceId": "src-geo-07",
+          "quote": "προτίμησα το beach bar στη Βάρκιζα αντί για το εστιατόριο στο Κολωνάκι"
+        }
+      ],
+      "confidence": 0.9
+    }
+  ]
+}

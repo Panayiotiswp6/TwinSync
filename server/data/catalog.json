@@ -1,0 +1,350 @@
+{
+  "_notice": "DEMO MODE ONLY: synthetic option catalog used when no AI key is configured. Prices are indicative demo values, not live quotes. Times are relative to the request period start (day offset + local time).",
+  "options": [
+    {
+      "id": "cat-helmos",
+      "category": "trip",
+      "title": "Χελμός – μονοπάτι Στύγας",
+      "emoji": "🏔️",
+      "summary": "Πεζοπορία 6 ωρών και διανυκτέρευση σε κάμπινγκ.",
+      "location": "Αχαΐα",
+      "costPerPerson": 95,
+      "costNote": "κάμπινγκ 20€ + βενζίνη/διόδια 45€ + φαγητό 30€",
+      "start": {
+        "day": 0,
+        "time": "07:00"
+      },
+      "end": {
+        "day": 1,
+        "time": "22:30"
+      },
+      "features": [
+        "πεζοπορία 6 ωρών",
+        "βουνό",
+        "σκηνή σε κάμπινγκ",
+        "βραδινή φωτιά",
+        "θέα"
+      ]
+    },
+    {
+      "id": "cat-nafplio",
+      "category": "trip",
+      "title": "Ναύπλιο & Καραθώνα",
+      "emoji": "🏰",
+      "summary": "Παλιά πόλη, Παλαμήδι, μπάνιο στην Καραθώνα, μπαράκια το βράδυ.",
+      "location": "Αργολίδα",
+      "costPerPerson": 165,
+      "costNote": "ξενοδοχείο 85€ + βενζίνη 35€ + φαγητό 45€",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "end": {
+        "day": 1,
+        "time": "19:30"
+      },
+      "features": [
+        "ξενοδοχείο με ιδιωτικό μπάνιο",
+        "κάστρο",
+        "θάλασσα",
+        "μπαρ με μουσική",
+        "ταβέρνες",
+        "ήπια πεζοπορία 2 ωρών"
+      ]
+    },
+    {
+      "id": "cat-dirfys",
+      "category": "trip",
+      "title": "Στενή Δίρφυος & Χιλιαδού",
+      "emoji": "🌲",
+      "summary": "Ανάβαση στη Δίρφυ και βουτιά στη Χιλιαδού την Κυριακή.",
+      "location": "Εύβοια",
+      "costPerPerson": 128,
+      "costNote": "ξενώνας 60€ + βενζίνη 30€ + φαγητό 38€",
+      "start": {
+        "day": 0,
+        "time": "08:30"
+      },
+      "end": {
+        "day": 1,
+        "time": "20:15"
+      },
+      "features": [
+        "πεζοπορία 4 ωρών",
+        "βουνό",
+        "ξενώνας, δίκλινα με ιδιωτικό μπάνιο",
+        "θάλασσα (σύντομη βουτιά)",
+        "ταβέρνα"
+      ]
+    },
+    {
+      "id": "cat-geraneia",
+      "category": "trip",
+      "title": "Γεράνεια & Αλεποχώρι",
+      "emoji": "🐟",
+      "summary": "Ήπια πεζοπορία στα Γεράνεια, ψάρι και μπάνιο στο Αλεποχώρι.",
+      "location": "Κορινθία / Αττική",
+      "costPerPerson": 98,
+      "costNote": "ξενώνας 40€ + βενζίνη 25€ + φαγητό 33€",
+      "start": {
+        "day": 0,
+        "time": "09:00"
+      },
+      "end": {
+        "day": 1,
+        "time": "19:00"
+      },
+      "features": [
+        "πεζοπορία 3 ωρών",
+        "θάλασσα",
+        "ξενώνας με κοινόχρηστο μπάνιο",
+        "ταβέρνα με ψάρι",
+        "ήσυχο"
+      ]
+    },
+    {
+      "id": "cat-aegina",
+      "category": "trip",
+      "title": "Αίγινα με ποδήλατο",
+      "emoji": "🚲",
+      "summary": "Ποδήλατο στο νησί, παραλίες και beach bar, επιστροφή με πλοίο.",
+      "location": "Αίγινα",
+      "costPerPerson": 112,
+      "costNote": "πλοίο 22€ + δωμάτια 50€ + φαγητό 40€",
+      "start": {
+        "day": 0,
+        "time": "09:30"
+      },
+      "end": {
+        "day": 1,
+        "time": "19:30"
+      },
+      "features": [
+        "θάλασσα",
+        "beach bar",
+        "δωμάτια με ιδιωτικό μπάνιο",
+        "ποδήλατο",
+        "κόσμος"
+      ]
+    },
+    {
+      "id": "cat-pagkrati",
+      "category": "food",
+      "title": "Ταβέρνα στο Παγκράτι",
+      "emoji": "🥗",
+      "summary": "Παραδοσιακή ταβέρνα με πολλά χορτοφαγικά πιάτα και ήσυχη αυλή.",
+      "location": "Παγκράτι",
+      "costPerPerson": 18,
+      "costNote": "μέσος λογαριασμός με κρασί",
+      "start": {
+        "day": 0,
+        "time": "21:00"
+      },
+      "end": {
+        "day": 0,
+        "time": "23:30"
+      },
+      "features": [
+        "ταβέρνα",
+        "χορτοφαγικά πιάτα",
+        "χωρίς κρέας επιλογές",
+        "κρασί",
+        "ήσυχο"
+      ]
+    },
+    {
+      "id": "cat-koukaki",
+      "category": "food",
+      "title": "Μικρό ιταλικό στο Κουκάκι",
+      "emoji": "🍝",
+      "summary": "Φρέσκα ζυμαρικά, καλή κάβα, χαλαρό service.",
+      "location": "Κουκάκι",
+      "costPerPerson": 35,
+      "costNote": "μέσος λογαριασμός με κρασί",
+      "start": {
+        "day": 0,
+        "time": "21:00"
+      },
+      "end": {
+        "day": 0,
+        "time": "00:00"
+      },
+      "features": [
+        "εστιατόριο",
+        "κρασί",
+        "χορτοφαγικά πιάτα",
+        "γαστρονομία",
+        "χαλαρό"
+      ]
+    },
+    {
+      "id": "cat-steak",
+      "category": "food",
+      "title": "Steakhouse στο Κολωνάκι",
+      "emoji": "🥩",
+      "summary": "Κρεατοφαγικό μενού και κοκτέιλ.",
+      "location": "Κολωνάκι",
+      "costPerPerson": 45,
+      "costNote": "μέσος λογαριασμός",
+      "start": {
+        "day": 0,
+        "time": "21:00"
+      },
+      "end": {
+        "day": 0,
+        "time": "23:30"
+      },
+      "features": [
+        "κρέας",
+        "εστιατόριο",
+        "cocktail"
+      ]
+    },
+    {
+      "id": "cat-varkiza",
+      "category": "food",
+      "title": "Beach bar–εστιατόριο στη Βάρκιζα",
+      "emoji": "🏖️",
+      "summary": "Φαγητό δίπλα στη θάλασσα, μουσική και κόσμος.",
+      "location": "Βάρκιζα",
+      "costPerPerson": 22,
+      "costNote": "μέσος λογαριασμός",
+      "start": {
+        "day": 0,
+        "time": "20:30"
+      },
+      "end": {
+        "day": 0,
+        "time": "00:30"
+      },
+      "features": [
+        "θάλασσα",
+        "beach bar",
+        "κόσμος",
+        "burger και χορτοφαγικά πιάτα",
+        "μουσική"
+      ]
+    },
+    {
+      "id": "cat-souvlaki",
+      "category": "food",
+      "title": "Σουβλατζίδικο & μπύρες στο Μετς",
+      "emoji": "🍺",
+      "summary": "Γρήγορο, φθηνό, μπύρες στο πεζοδρόμιο.",
+      "location": "Μετς",
+      "costPerPerson": 12,
+      "costNote": "μέσος λογαριασμός",
+      "start": {
+        "day": 0,
+        "time": "21:00"
+      },
+      "end": {
+        "day": 0,
+        "time": "23:00"
+      },
+      "features": [
+        "φθηνό",
+        "μπύρα",
+        "σουβλάκι με κρέας",
+        "πίτα με λαχανικά (χωρίς κρέας)"
+      ]
+    },
+    {
+      "id": "cat-boardgames",
+      "category": "entertainment",
+      "title": "Board game café στα Εξάρχεια",
+      "emoji": "🎲",
+      "summary": "Εκατοντάδες επιτραπέζια, μπύρες και snacks.",
+      "location": "Εξάρχεια",
+      "costPerPerson": 12,
+      "costNote": "είσοδος + ποτό",
+      "start": {
+        "day": 0,
+        "time": "20:00"
+      },
+      "end": {
+        "day": 0,
+        "time": "23:30"
+      },
+      "features": [
+        "επιτραπέζια",
+        "board game",
+        "μπύρα",
+        "ήσυχο",
+        "χορτοφαγικά snacks"
+      ]
+    },
+    {
+      "id": "cat-cinema",
+      "category": "entertainment",
+      "title": "Sci-fi προβολή & ποτό",
+      "emoji": "🎬",
+      "summary": "Νέα ταινία επιστημονικής φαντασίας και μετά ποτό σε μπαρ.",
+      "location": "Κέντρο",
+      "costPerPerson": 16,
+      "costNote": "εισιτήριο + ποτό",
+      "start": {
+        "day": 0,
+        "time": "20:30"
+      },
+      "end": {
+        "day": 0,
+        "time": "00:30"
+      },
+      "features": [
+        "σινεμά",
+        "ταινία επιστημονικής φαντασίας",
+        "μπαρ"
+      ]
+    },
+    {
+      "id": "cat-club",
+      "category": "entertainment",
+      "title": "Κλαμπ στο Γκάζι",
+      "emoji": "🪩",
+      "summary": "DJ set μέχρι το πρωί, πολύς κόσμος.",
+      "location": "Γκάζι",
+      "costPerPerson": 25,
+      "costNote": "είσοδος + ποτό",
+      "start": {
+        "day": 0,
+        "time": "23:30"
+      },
+      "end": {
+        "day": 1,
+        "time": "04:00"
+      },
+      "features": [
+        "κλαμπ",
+        "dj",
+        "δυνατή μουσική",
+        "κόσμος",
+        "νυχτερινή ζωή"
+      ]
+    },
+    {
+      "id": "cat-livebar",
+      "category": "entertainment",
+      "title": "Live μουσική σε μπαρ στο Ψυρρή",
+      "emoji": "🎸",
+      "summary": "Ζωντανή μουσική, cocktail, χαλαρή ατμόσφαιρα.",
+      "location": "Ψυρρή",
+      "costPerPerson": 18,
+      "costNote": "ποτό + είσοδος",
+      "start": {
+        "day": 0,
+        "time": "21:30"
+      },
+      "end": {
+        "day": 1,
+        "time": "01:00"
+      },
+      "features": [
+        "live μουσική",
+        "μπαρ",
+        "cocktail",
+        "κόσμος"
+      ]
+    }
+  ]
+}
