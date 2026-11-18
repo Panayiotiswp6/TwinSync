@@ -189,6 +189,22 @@ export interface DecisionDiff {
   changes: string[];
 }
 
+/** Draft message a twin proposes to post in the group chat, in its owner's style. */
+export interface TwinMessage {
+  ownerId: OwnerId;
+  text: string;
+  /** live = written by the model in the owner's style; template = demo mode or rejected model output. */
+  mode: 'live' | 'template';
+  model?: string;
+  /** Owner's own writing used as style reference. */
+  styleSourceIds: string[];
+  /** Facts the message was allowed to state (all come from the decision). */
+  facts: string[];
+  /** Set when a model draft was replaced because it stated something not in the facts. */
+  guardNote?: string;
+  status: 'draft' | 'approved';
+}
+
 export interface Decision {
   id: string;
   createdAt: string;
@@ -199,6 +215,8 @@ export interface Decision {
   approvals: Record<OwnerId, Approval>;
   status: 'awaiting_approval' | 'approved' | 'rejected' | 'deadlock';
   diff?: DecisionDiff;
+  messages?: TwinMessage[];
+  messagesNote?: string;
 }
 
 export interface ExtractionCandidate {

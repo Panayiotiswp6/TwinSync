@@ -255,3 +255,17 @@ textarea:focus, input:focus, select:focus { outline: 2px solid color-mix(in srgb
   .topbar { padding: 8px 14px; }
   .request-row .btn-lg { width: 100%; }
 }
+
+/* Group chat drafts */
+.chat-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 6px; }
+.bubbles { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
+.bubble-row { display: flex; gap: 10px; align-items: flex-start; }
+.bubble-wrap { flex: 1; min-width: 0; }
+.bubble-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.bubble {
+  display: inline-block; max-width: 640px; margin: 6px 0 4px; padding: 9px 13px; border-radius: 4px 16px 16px 16px;
+  background: color-mix(in srgb, var(--bg) 60%, var(--surface)); border-left: 3px solid var(--line); font-size: 15px;
+}
+.bubble-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.bubble-actions .more { margin-top: 0; flex-basis: 100%; }
+.warn-text { color: var(--warn); }

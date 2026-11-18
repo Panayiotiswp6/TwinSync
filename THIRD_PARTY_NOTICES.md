@@ -19,4 +19,4 @@ reviewers can verify it.
 
 ## npm dependencies
 
-Runtime: `express` (MIT), `zod` (MIT), `@anthropic-ai/sdk` (MIT). Build and dev: `react`, `react-dom`, `vite`, `@vitejs/plugin-react`, `esbuild`, `typescript`, `tsx`, `vitest`, all under MIT or Apache-2.0. See `package-lock.json` for the full tree.
+Runtime: `express` (MIT), `zod` (MIT), `openai` (Apache-2.0), `@anthropic-ai/sdk` (MIT). Build and dev: `react`, `react-dom`, `vite`, `@vitejs/plugin-react`, `esbuild`, `typescript`, `tsx`, `vitest`, all under MIT or Apache-2.0. See `package-lock.json` for the full tree.

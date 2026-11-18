@@ -2,7 +2,7 @@ import type { Decision, Owner, Preference, Source, TripOption, TripRequest } fro
 import type { EvalReport } from '../../server/evaluation';
 
 export interface AppState {
-  status: { aiMode: 'live' | 'demo'; model: string | null; dataset: 'synthetic' };
+  status: { aiMode: 'live' | 'demo'; provider: 'openai' | 'anthropic' | 'demo'; model: string | null; dataset: 'synthetic' };
   owners: Owner[];
   sources: Source[];
   preferences: Preference[];
@@ -36,4 +36,6 @@ export const api = {
   removeOverride: (id: string) => call<{ decision: Decision; state: AppState }>('DELETE', `/api/overrides/${id}`),
   approve: (decisionId: string, ownerId: string, approve: boolean) => call<AppState>('POST', `/api/decisions/${decisionId}/approval`, { ownerId, approve }),
   evaluation: () => call<EvalReport>('GET', '/api/eval'),
+  messages: (decisionId: string, regenerate = false) => call<AppState>('POST', `/api/decisions/${decisionId}/messages${regenerate ? '?regenerate=1' : ''}`),
+  approveMessage: (decisionId: string, ownerId: string, text?: string) => call<AppState>('POST', `/api/decisions/${decisionId}/messages/${ownerId}/approve`, { text }),
 };

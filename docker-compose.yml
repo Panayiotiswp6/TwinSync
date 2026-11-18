@@ -5,8 +5,11 @@ services:
     ports:
       - "${TWINSYNC_PORT:-8080}:8080"
     environment:
-      # Optional. Empty = demo mode (rule-based extraction, clearly labelled in the UI).
-      # Read from your shell or from a local .env file (see .env.example). Stays server-side.
+      # All optional. Read from a local .env file (see .env.example) or your shell; they stay server-side.
+      # No key = demo mode (rules + templates), clearly labelled in the UI.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_MODEL: ${OPENAI_MODEL:-gpt-6-luna}
       ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
       ANTHROPIC_MODEL: ${ANTHROPIC_MODEL:-claude-opus-5-5}
+      AI_PROVIDER: ${AI_PROVIDER:-}
     restart: unless-stopped

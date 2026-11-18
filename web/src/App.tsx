@@ -3,6 +3,7 @@ import type { Decision, SourceRef } from '../../shared/types';
 import { api, type AppState } from './api';
 import { DecisionView, Positions } from './components/DecisionView';
 import { EvalPanel } from './components/EvalPanel';
+import { GroupMessages } from './components/GroupMessages';
 import { SourceDrawer } from './components/SourceDrawer';
 import { TwinBuilder } from './components/TwinBuilder';
 import { TwinCards } from './components/TwinCards';
@@ -14,7 +15,10 @@ const STEPS = [
   ['positions', 'Θέσεις'],
   ['decision', 'Κοινή απόφαση'],
   ['correct', 'Διόρθωση & έγκριση'],
+  ['messages', 'Μηνύματα στο group'],
 ] as const;
+
+const PROVIDER_LABEL = { openai: 'OpenAI', anthropic: 'Anthropic', demo: '' } as const;
 
 export function App() {
   const [state, setState] = useState<AppState | null>(null);
@@ -91,7 +95,13 @@ export function App() {
         </div>
         <div className="topbar-right">
           <Badge tone="info">Συνθετικά δεδομένα</Badge>
-          {state.status.aiMode === 'live' ? <Badge tone="ai">Live AI · {state.status.model}</Badge> : <Badge tone="warn">Demo mode · χωρίς κλειδί AI</Badge>}
+          {state.status.aiMode === 'live' ? (
+            <Badge tone="ai">
+              Live AI · {PROVIDER_LABEL[state.status.provider]} {state.status.model}
+            </Badge>
+          ) : (
+            <Badge tone="warn">Demo mode · χωρίς κλειδί AI</Badge>
+          )}
           <button className="btn btn-ghost btn-sm" onClick={reset}>
             Reset demo
           </button>
@@ -100,7 +110,7 @@ export function App() {
 
       <nav className="stepper" aria-label="Βήματα">
         {STEPS.map(([id, label], i) => (
-          <a key={id} href={`#${id}`} className={(id === 'positions' || id === 'decision' || id === 'correct') && !decision ? 'disabled' : ''}>
+          <a key={id} href={`#${id}`} className={(id === 'positions' || id === 'decision' || id === 'correct' || id === 'messages') && !decision ? 'disabled' : ''}>
             <span>{i + 1}</span>
             {label}
           </a>
@@ -155,6 +165,7 @@ export function App() {
               <Positions d={decision} owners={state.owners.filter((o) => decision.request.participants.includes(o.id))} trips={state.trips} onOpen={setSource} />
             </Section>
             <DecisionView decision={decision} state={state} onOpen={setSource} onDecision={onDecision} onState={adopt} />
+            <GroupMessages key={decision.id} decision={decision} state={state} onState={adopt} onOpen={setSource} />
           </>
         )}
 
