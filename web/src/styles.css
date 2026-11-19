@@ -432,3 +432,5 @@ textarea { resize: vertical; }
 .zip-import { display: flex; flex-direction: column; gap: 10px; }
 .zip-import .drop { width: 100%; font: inherit; }
 .zip-preview { background: var(--surface-2); border-radius: 14px; padding: 12px 14px; }
+.zip-fields { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.zip-fields .field { margin: 4px 0; }

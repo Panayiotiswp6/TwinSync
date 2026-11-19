@@ -103,27 +103,47 @@ app.post(
 );
 
 // ---- Questionnaire ZIP import (unzipped in the browser) ----
-const ImportBody = z.object({
-  persona: z.object({ name: z.string().trim().min(2).max(60), handle: z.string().trim().min(2).max(40), emoji: z.string().max(8).optional(), bio: z.string().max(300).optional() }),
-  files: z.array(z.object({ name: z.string().max(200), text: z.string().max(200_000) })).min(1).max(30),
-  holdout: z
-    .object({
-      cases: z.array(
-        z.object({
-          question: z.string().max(300),
-          category: z.string().max(30),
-          options: z.array(z.object({ id: z.string().max(20), title: z.string().max(200), costPerPerson: z.number().nullable(), features: z.array(z.string().max(120)).max(10).default([]), endsAt: z.string().nullable().default(null) })).max(5),
-          actualOptionId: z.string().max(20),
-          note: z.string().max(500).default(''),
-        }),
-      ).max(10),
-    })
-    .optional(),
+const num = z.preprocess((v) => {
+  if (typeof v === 'number') return v;
+  if (typeof v === 'string') {
+    const n = Number(v.replace(',', '.').replace(/[^\d.]/g, ''));
+    return v.trim() && Number.isFinite(n) ? n : null;
+  }
+  return null;
+}, z.number().nullable());
+const HoldoutCase = z.object({
+  question: z.coerce.string().max(300),
+  category: z.coerce.string().max(30).catch('other'),
+  options: z
+    .array(
+      z.object({
+        id: z.coerce.string().max(20),
+        title: z.coerce.string().max(200),
+        costPerPerson: num.catch(null),
+        features: z.array(z.coerce.string().max(120)).max(10).catch([]),
+        endsAt: z.string().nullable().catch(null),
+      }),
+    )
+    .max(5),
+  actualOptionId: z.coerce.string().max(20),
+  note: z.coerce.string().max(500).catch(''),
 });
+const ImportBody = z.object({
+  persona: z.object({ name: z.string().trim().min(2).max(60), handle: z.string().trim().min(2).max(40), emoji: z.string().max(8).optional().catch(undefined), bio: z.string().max(300).optional().catch(undefined) }),
+  files: z.array(z.object({ name: z.string().max(200), text: z.string().max(200_000) })).min(1).max(30),
+  holdout: z.unknown().optional(),
+});
+/** Keep only well-formed held-out cases; a malformed case is skipped, never the whole import. */
+function parseHoldout(raw: unknown): { cases: z.infer<typeof HoldoutCase>[] } | undefined {
+  const cases = (raw as { cases?: unknown })?.cases;
+  if (!Array.isArray(cases)) return undefined;
+  return { cases: cases.slice(0, 10).flatMap((c) => { const r = HoldoutCase.safeParse(c); return r.success ? [r.data] : []; }) };
+}
 app.post(
   '/api/import',
   wrap(async (req, res) => {
-    const r = await importPackage(ImportBody.parse(req.body));
+    const body = ImportBody.parse(req.body);
+    const r = await importPackage({ ...body, holdout: parseHoldout(body.holdout) });
     res.json({ ...r, state: snapshot() });
   }),
 );

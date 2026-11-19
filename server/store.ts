@@ -5,7 +5,7 @@
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
-import { containsQuote, slug } from '../shared/text';
+import { containsQuote, repairMojibake, slug } from '../shared/text';
 import type { MemoryDraft } from '../shared/heuristics';
 import type { Approval, Decision, GroupRequest, HeldOutCase, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage } from '../shared/types';
 import { stamp } from './memory';
@@ -184,7 +184,7 @@ export const store = {
       kind,
       title: title.trim().slice(0, 120) || 'Χωρίς τίτλο',
       date: date && Number.isFinite(Date.parse(date)) ? date : nowIso(),
-      text: text.replace(/\r\n/g, '\n').trim(),
+      text: repairMojibake(text.replace(/\r\n/g, '\n')).trim(),
       fileName,
       synthetic: false,
       analyzed: false,
