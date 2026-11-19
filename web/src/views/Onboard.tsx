@@ -6,7 +6,6 @@ import { api, type AppState } from '../api';
 import { go } from '../components/Shell';
 import { Avatar } from '../components/ui';
 
-const EMOJIS = ['✨', '🎧', '📚', '🏄', '🎨', '⚽', '🍕', '🌿', '🚴', '🎮', '🏔️', '🌊'];
 const DRAFT_KEY = 'twinsync.onboard.draft';
 
 type Holdout = OnboardBody['holdouts'][number];
@@ -298,13 +297,6 @@ export function Onboard({ state, onState }: { state: AppState; onState: (s: AppS
               <div className="ob-q">
                 <label className="ob-label">Το όνομά σου</label>
                 <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="π.χ. Γρηγόρης" autoFocus />
-                <div className="emoji-pick">
-                  {EMOJIS.map((e) => (
-                    <button key={e} className={e === d.emoji ? 'on' : ''} onClick={() => setD({ ...d, emoji: e })}>
-                      {e}
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
             {section.id === 'voice' && <div className="dm-sys">Η παρέα σου γράφει στο group…</div>}

@@ -24,7 +24,7 @@ function Bubble({ p, text, kind, showHead }: { p: Persona; text: string; kind: J
     <div className={`dm-row ${showHead ? 'head' : ''}`}>
       <span className="dm-ava">{showHead && <Avatar persona={p} size={28} />}</span>
       <div className="dm-col">
-        {showHead && <span className="dm-name" style={{ color: p.colors[0] }}>{p.name}</span>}
+        {showHead && <span className="dm-name">{p.name}</span>}
         <div className={`dm-bubble ${kind}`}>
           {kind === 'think' && <span className="dm-tag">💭 σκέφτεται</span>}
           {kind === 'vote' && <span className="dm-tag">🗳️ ψηφίζει</span>}
@@ -179,7 +179,7 @@ export function TwinChatView({ chat, people }: { chat: TwinChat | undefined; peo
   return (
     <section>
       <h3 className="sec-title">
-        💬 Η συζήτηση των Twins <Badge tone={chat.mode === 'live' ? 'ai' : 'neutral'}>{chat.mode === 'live' ? 'ύφος κάθε κατόχου · AI' : 'πρότυπο'}</Badge>
+        Η συζήτηση των Twins <Badge tone={chat.mode === 'live' ? 'ai' : 'neutral'}>{chat.mode === 'live' ? 'ύφος κάθε κατόχου · AI' : 'πρότυπο'}</Badge>
       </h3>
       <div className="dm dm-static">
         <DmHead people={people} live={false} sub="ομαδική συνομιλία" />
