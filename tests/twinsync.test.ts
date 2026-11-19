@@ -136,3 +136,16 @@ describe('message grounding guard', () => {
     expect(out.status).toBe('deadlock'); // 100€ > 25€ dinner limit
   });
 });
+
+describe('onboarding interview files', () => {
+  const transcript = '**Ε:** Σου αρέσει η θάλασσα;\n**Α:** οχι ιδιαιτερα, προτιμω βουνο\n(Σύνοψη ChatGPT: προτιμά βουνό)\n**Ε:** Για φαγητό έξω;\n**Α:** Δεν θέλω να κοστίσει πάνω από 30€ για φαγητό έξω.';
+  it('learns only from the owner answers, never from the interviewer questions or summaries', () => {
+    const d = extractWithRules(transcript);
+    for (const x of d) {
+      expect(transcript).toContain(x.quote);
+      expect(x.quote).not.toMatch(/Σου αρέσει|Σύνοψη/);
+    }
+    expect(d.find((x) => x.rule?.metric === 'max_cost')?.rule?.value).toBe('30');
+    expect(d.some((x) => x.statement.includes('φαγητό') && x.polarity === 'avoids')).toBe(false);
+  });
+});

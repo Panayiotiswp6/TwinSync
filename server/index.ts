@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { aiModel, aiProvider, embeddingsEnabled } from './ai';
 import { evaluationReport, holdoutLive } from './evaluation';
 import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
+import { parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
 
 const app = express();
@@ -58,7 +59,11 @@ app.post(
   wrap(async (req, res) => {
     if (!store.persona(req.params.id)) return res.status(404).json({ error: 'Άγνωστο Twin' });
     const b = SourceBody.parse(req.body);
-    const src = store.addSource(req.params.id, b.kind, b.title || b.fileName || 'Νέα πηγή', b.text, b.fileName);
+    // Files from the onboarding interview carry front-matter (title / kind / date): honour it.
+    const { meta, body } = parseFrontMatter(b.text.replace(/\r\n/g, '\n'));
+    const kind = SourceBody.shape.kind.safeParse(meta.kind).success ? (meta.kind as typeof b.kind) : b.kind;
+    if (body.length < 5) return res.status(400).json({ error: 'Το αρχείο δεν έχει κείμενο.' });
+    const src = store.addSource(req.params.id, kind, meta.title || b.title || b.fileName || 'Νέα πηγή', body, b.fileName, meta.date);
     const r = await analyzeAndStore(src.id);
     res.json({ ...r, state: snapshot() });
   }),

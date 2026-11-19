@@ -231,7 +231,8 @@ export async function analyzeSource(persona: Persona, title: string, text: strin
       system: `You build the long-term memory of ${persona.name}'s digital twin from their own documents, notes, chats, emails and past decisions.
 Extract what would help the twin answer, write and decide like ${persona.name} in ANY situation (trips, food, going out, gifts, money, schedule, social life).
 ${MEMORY_RULES}
-- Extract only what the text supports. 0-12 items. If nothing useful, return an empty list.`,
+- Extract only what the text supports. 0-12 items. If nothing useful, return an empty list.
+- Interview transcripts: lines starting with "Ε:" are the interviewer's questions (context only) and lines "(Σύνοψη ChatGPT: …)" are someone else's summary. Quote ONLY the person's own answers ("Α:" lines) or their own messages.`,
       user: `Source title: ${title}\nText:\n"""\n${part}\n"""`,
       schema: { type: 'object', additionalProperties: false, required: ['items'], properties: { items: { type: 'array', items: DRAFT_SCHEMA } } },
       maxTokens: 5000,

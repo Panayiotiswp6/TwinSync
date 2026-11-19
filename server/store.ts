@@ -157,13 +157,13 @@ export const store = {
     return p;
   },
 
-  addSource(personaId: PersonaId | 'group', kind: SourceKind, title: string, text: string, fileName?: string): Source {
+  addSource(personaId: PersonaId | 'group', kind: SourceKind, title: string, text: string, fileName?: string, date?: string): Source {
     const s: Source = {
       id: `src-${personaId}-${randomUUID().slice(0, 8)}`,
       personaId,
       kind,
       title: title.trim().slice(0, 120) || 'Χωρίς τίτλο',
-      date: nowIso(),
+      date: date && Number.isFinite(Date.parse(date)) ? date : nowIso(),
       text: text.replace(/\r\n/g, '\n').trim(),
       fileName,
       synthetic: false,
