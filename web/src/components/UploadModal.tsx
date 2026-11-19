@@ -3,10 +3,11 @@ import { useRef, useState } from 'react';
 import type { Persona } from '../../../shared/types';
 import { api, type AnalyzeResult, type AppState } from '../api';
 import { Working } from './Composer';
+import { readTwinZip } from './ZipImport';
 import { Badge, Modal, SOURCE_KIND } from './ui';
 
 const KINDS = ['document', 'note', 'chat', 'email', 'past_decision'] as const;
-const ACCEPT = '.txt,.md,.markdown,.json,.csv,.eml,.log';
+const ACCEPT = '.txt,.md,.markdown,.json,.csv,.eml,.log,.zip';
 
 export function UploadModal({ persona, live, onClose, onState, onResult }: { persona: Persona; live: boolean; onClose: () => void; onState: (s: AppState) => void; onResult: (r: AnalyzeResult[]) => void }) {
   const [files, setFiles] = useState<{ name: string; text: string }[]>([]);
@@ -22,6 +23,22 @@ export function UploadModal({ persona, live, onClose, onState, onResult }: { per
     if (!list) return;
     const out: { name: string; text: string }[] = [];
     for (const f of Array.from(list)) {
+      if (/\.zip$/i.test(f.name)) {
+        // Questionnaire ZIP dropped on an existing twin: import everything into THIS twin.
+        setErr(null);
+        try {
+          const z = await readTwinZip(f);
+          setBusy(true);
+          const r = await api.importPackage({ persona: { name: persona.name, handle: persona.handle, emoji: persona.emoji, bio: persona.bio }, files: z.files, holdout: z.holdout });
+          onState(r.state);
+          onClose();
+        } catch (e) {
+          setErr((e as Error).message);
+        } finally {
+          setBusy(false);
+        }
+        return;
+      }
       if (f.size > 400_000) {
         setErr(`${f.name}: πολύ μεγάλο αρχείο (όριο 400KB).`);
         continue;
@@ -73,7 +90,7 @@ export function UploadModal({ persona, live, onClose, onState, onResult }: { per
           >
             <FileUp size={28} />
             <b>Σύρετε αρχεία εδώ ή πατήστε για επιλογή</b>
-            <span className="tiny muted">.txt .md .json .csv .eml — σημειώσεις, chats, emails, βιογραφικό, παλιές αποφάσεις</span>
+            <span className="tiny muted">.txt .md .json .csv .eml — ή ολόκληρο το .zip του ερωτηματολογίου</span>
             <input ref={input} type="file" multiple accept={ACCEPT} hidden onChange={(e) => readFiles(e.target.files)} />
           </div>
           {files.length > 0 && (
