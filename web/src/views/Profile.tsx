@@ -5,7 +5,7 @@ import { describeDeadline } from '../../../shared/time';
 import { api, type AnalyzeResult, type AppState } from '../api';
 import { go } from '../components/Shell';
 import { UploadModal } from '../components/UploadModal';
-import { Avatar, Badge, Cite, DOMAIN, Empty, KIND, SOURCE_KIND, Spinner, timeAgo, type OpenSource } from '../components/ui';
+import { Avatar, Badge, Cite, DOMAIN, Empty, Spinner, dom, kindLabel, srcKind, timeAgo, type OpenSource } from '../components/ui';
 
 type Tab = 'memory' | 'sources' | 'review' | 'style';
 
@@ -37,12 +37,12 @@ function MemoryCard({ m, onOpen, onState, review }: { m: MemoryItem; onOpen: Ope
   const [text, setText] = useState(m.statement);
   const run = async (p: Parameters<typeof api.updateMemory>[1]) => onState(await api.updateMemory(m.id, p));
   return (
-    <div className="mem-card" style={{ ['--dom' as string]: DOMAIN[m.domain].color }}>
+    <div className="mem-card" style={{ ['--dom' as string]: dom(m.domain).color }}>
       <div className="mem-top">
         <span className="mem-dom">
-          {DOMAIN[m.domain].emoji} {DOMAIN[m.domain].label}
+          {dom(m.domain).emoji} {dom(m.domain).label}
         </span>
-        <span className="mem-kind">{KIND[m.kind]}</span>
+        <span className="mem-kind">{kindLabel(m.kind)}</span>
       </div>
       {editing ? (
         <textarea className="input" rows={2} value={text} onChange={(e) => setText(e.target.value)} />
@@ -67,7 +67,7 @@ function MemoryCard({ m, onOpen, onState, review }: { m: MemoryItem; onOpen: Ope
         {m.origin === 'owner' && <Badge tone="brand">κάτοχος</Badge>}
       </div>
       <div className="mem-foot">
-        <Cite refs={m.refs} onOpen={onOpen} />
+        <Cite refs={m.refs ?? []} onOpen={onOpen} />
         <span className="mem-actions">
           {editing ? (
             <>
@@ -228,11 +228,11 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
             <span>Νέες πηγές</span>
           </button>
           {sources.map((s) => {
-            const n = state.memory.filter((m) => m.refs.some((r) => r.sourceId === s.id) && m.status !== 'rejected').length;
+            const n = state.memory.filter((m) => (m.refs ?? []).some((r) => r.sourceId === s.id) && m.status !== 'rejected').length;
             return (
               <div key={s.id} className="src-tile" onClick={() => onOpen({ sourceId: s.id, quote: '' })} role="button" tabIndex={0}>
                 <span className="src-kind">
-                  {SOURCE_KIND[s.kind].emoji} {SOURCE_KIND[s.kind].label}
+                  {srcKind(s.kind).emoji} {srcKind(s.kind).label}
                 </span>
                 <b className="src-title">{s.title}</b>
                 <p className="src-snippet">{s.text}</p>

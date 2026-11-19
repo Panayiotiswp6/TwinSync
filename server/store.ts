@@ -53,13 +53,62 @@ function load(): State {
   try {
     if (existsSync(STATE_FILE)) {
       const s = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as State;
-      if (s.version === STATE_VERSION) return s;
+      if (s.version === STATE_VERSION) return repairState(s);
       console.warn('[store] state file from another version — starting from the seed');
     }
   } catch (e) {
     console.warn('[store] could not read state file, starting from the seed:', (e as Error).message);
   }
   return seedState;
+}
+
+const SOURCE_KINDS = ['document', 'note', 'chat', 'email', 'past_decision', 'wish', 'correction', 'request'];
+const MEMORY_KINDS = ['preference', 'constraint', 'fact', 'decision_pattern', 'style'];
+const DOMAIN_LIST = ['travel', 'food', 'money', 'schedule', 'social', 'activities', 'comfort', 'style', 'other'];
+const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : v == null ? fallback : String(v));
+
+/** Make a saved state safe to render (fields from older versions or failed imports). Never drops user data. */
+export function repairState(s: State): State {
+  let fixed = 0;
+  const count = <T>(before: T, after: T) => (before !== after ? (fixed++, after) : after);
+  s.personas = arr<Persona>(s.personas).map((p) => ({
+    ...p,
+    id: str(p.id),
+    name: count(p.name, str(p.name, p.id)),
+    handle: count(p.handle, str(p.handle, p.id)),
+    initials: count(p.initials, str(p.initials, str(p.name, '?').slice(0, 2).toUpperCase())),
+    colors: Array.isArray(p.colors) && p.colors.length === 2 ? p.colors : (fixed++, ['#7f5af0', '#ff8a3d'] as [string, string]),
+    emoji: str(p.emoji, ''),
+    bio: str(p.bio, ''),
+    style: p.style && typeof p.style === 'object' ? { summary: str(p.style.summary), traits: arr<string>(p.style.traits), phrases: arr(p.style.phrases), usesEmoji: !!p.style.usesEmoji } : null,
+    createdAt: str(p.createdAt, nowIso()),
+  }));
+  s.sources = arr<Source>(s.sources).map((x) => ({
+    ...x,
+    kind: SOURCE_KINDS.includes(x.kind) ? x.kind : (fixed++, 'document' as SourceKind),
+    title: str(x.title, 'Χωρίς τίτλο'),
+    text: count(x.text, repairMojibake(str(x.text))),
+    date: Number.isFinite(Date.parse(str(x.date))) ? x.date : (fixed++, nowIso()),
+  }));
+  s.memory = arr<MemoryItem>(s.memory).map((m) => ({
+    ...m,
+    kind: MEMORY_KINDS.includes(m.kind) ? m.kind : (fixed++, 'fact' as MemoryItem['kind']),
+    domain: DOMAIN_LIST.includes(m.domain) ? m.domain : (fixed++, 'other' as MemoryItem['domain']),
+    statement: str(m.statement, '—'),
+    refs: arr<MemoryItem['refs'][number]>(m.refs).filter((r) => r && typeof r.sourceId === 'string').map((r) => ({ sourceId: r.sourceId, quote: str(r.quote) })),
+    keywords: arr<string>(m.keywords),
+    categories: arr(m.categories),
+    strength: typeof m.strength === 'number' ? m.strength : 0.5,
+    confidence: typeof m.confidence === 'number' ? m.confidence : 0.5,
+  }));
+  s.requests = arr(s.requests);
+  s.decisions = arr(s.decisions);
+  s.holdouts = arr(s.holdouts);
+  s.vectors = s.vectors && typeof s.vectors === 'object' ? s.vectors : {};
+  s.usage = s.usage ?? { calls: 0, inputTokens: 0, outputTokens: 0, embeddingTokens: 0 };
+  if (fixed) console.warn(`[store] repaired ${fixed} field(s) in the saved state (no data removed)`);
+  return s;
 }
 
 let state: State = load();

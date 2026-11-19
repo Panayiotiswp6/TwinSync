@@ -1,6 +1,6 @@
 import { X } from 'lucide-react';
 import type { MemoryItem, Persona, Source, SourceRef } from '../../../shared/types';
-import { Avatar, Badge, DOMAIN, KIND, SOURCE_KIND } from './ui';
+import { Avatar, Badge, dom, kindLabel, srcKind } from './ui';
 
 function highlight(text: string, quote: string) {
   const i = quote ? text.indexOf(quote) : -1;
@@ -18,7 +18,7 @@ export function SourceDrawer({ target, sources, personas, memory, onClose }: { t
   if (!target) return null;
   const src = sources.find((s) => s.id === target.sourceId);
   const owner = personas.find((p) => p.id === src?.personaId);
-  const citing = memory.filter((m) => m.refs.some((r) => r.sourceId === target.sourceId));
+  const citing = memory.filter((m) => (m.refs ?? []).some((r) => r.sourceId === target.sourceId));
   return (
     <div className="backdrop backdrop-right" onClick={onClose}>
       <aside className="drawer" role="dialog" aria-label="Πηγή" onClick={(e) => e.stopPropagation()}>
@@ -33,11 +33,11 @@ export function SourceDrawer({ target, sources, personas, memory, onClose }: { t
               {owner && <Avatar persona={owner} size={44} ring />}
               <div>
                 <p className="eyebrow">
-                  {SOURCE_KIND[src.kind].emoji} {SOURCE_KIND[src.kind].label} · {src.id}
+                  {srcKind(src.kind).emoji} {srcKind(src.kind).label} · {src.id}
                 </p>
                 <h3>{src.title}</h3>
                 <p className="muted small">
-                  {owner?.name ?? 'Παρέα'} · {new Date(src.date).toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' })}
+                  {owner?.name ?? 'Παρέα'} · {Number.isFinite(Date.parse(src.date)) ? new Date(src.date).toLocaleDateString('el-GR', { day: 'numeric', month: 'long', year: 'numeric' }) : ''}
                   {src.fileName && ` · ${src.fileName}`}
                 </p>
               </div>
@@ -48,11 +48,11 @@ export function SourceDrawer({ target, sources, personas, memory, onClose }: { t
             <ul className="plain">
               {citing.map((m) => (
                 <li key={m.id} className="drawer-mem">
-                  <span className="dot" style={{ background: DOMAIN[m.domain].color }} />
+                  <span className="dot" style={{ background: dom(m.domain).color }} />
                   <div>
                     <strong>{m.statement}</strong>
                     <div className="small muted">
-                      {KIND[m.kind]}
+                      {kindLabel(m.kind)}
                       {m.hard && ' · υποχρεωτικό'}
                       {m.scope === 'request' && ' · μόνο για ένα αίτημα'} · {m.status === 'confirmed' ? 'επιβεβαιωμένο' : m.status === 'candidate' ? 'προς έλεγχο' : 'ανενεργό'}
                     </div>
