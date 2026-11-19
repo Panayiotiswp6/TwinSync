@@ -1,12 +1,11 @@
 import { ArrowLeft, ArrowRight, Check, Lock, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { answerText, DM_SENDERS, NONE, SECTIONS, WEEKDAY_NAMES, type Answer, type Answers, type DeadlineAnswer, type MoneyAnswer, type OnboardBody, type Question } from '../../../shared/onboarding';
+import { answerText, DM_SENDERS, NONE, SECTIONS, type Answer, type Answers, type MoneyAnswer, type OnboardBody, type Question } from '../../../shared/onboarding';
 import type { JobEvent, Persona } from '../../../shared/types';
 import { api, type AppState } from '../api';
 import { go } from '../components/Shell';
 import { Avatar } from '../components/ui';
 
-const EMOJIS = ['✨', '🎧', '📚', '🏄', '🎨', '⚽', '🍕', '🌿', '🚴', '🎮', '🏔️', '🌊'];
 const DRAFT_KEY = 'twinsync.onboard.draft';
 
 type Holdout = OnboardBody['holdouts'][number];
@@ -58,7 +57,6 @@ function QuestionField({ q, value, onChange, index }: { q: Question; value: Answ
       {q.help && <p className="tiny muted">{q.help}</p>}
       {q.type === 'text' && <textarea rows={2} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={q.placeholder} />}
       {q.type === 'money' && <MoneyField value={value as MoneyAnswer | undefined} onChange={onChange} />}
-      {q.type === 'deadline' && <DeadlineField value={value as DeadlineAnswer | undefined} onChange={onChange} />}
       {(q.type === 'chips' || q.type === 'multi') && (
         <div className="ob-chips">
           {q.options!.map((o) => {
@@ -90,28 +88,6 @@ function MoneyField({ value, onChange }: { value: MoneyAnswer | undefined; onCha
         <input type="number" min={0} inputMode="numeric" value={v.amount ?? ''} onChange={(e) => onChange({ ...v, amount: e.target.value === '' ? null : Number(e.target.value) })} placeholder="—" />€
       </span>
       <Toggle on={v.strict} onChange={(strict) => onChange({ ...v, strict })} label={v.strict ? 'Αυστηρό όριο' : 'Ενδεικτικό'} />
-    </div>
-  );
-}
-
-function DeadlineField({ value, onChange }: { value: DeadlineAnswer | undefined; onChange: (a: DeadlineAnswer) => void }) {
-  const v = value ?? { day: null, time: '21:00', strict: true };
-  return (
-    <div className="ob-money">
-      <select value={v.day ?? ''} onChange={(e) => onChange({ ...v, day: e.target.value === '' ? null : Number(e.target.value) })} aria-label="Μέρα">
-        <option value="">Δεν έχω τέτοιο όριο</option>
-        {[0, 1, 5, 6].map((d) => (
-          <option key={d} value={d}>
-            {WEEKDAY_NAMES[d]}
-          </option>
-        ))}
-      </select>
-      {v.day !== null && (
-        <>
-          <input type="time" value={v.time} onChange={(e) => onChange({ ...v, time: e.target.value })} aria-label="Ώρα" />
-          <Toggle on={v.strict} onChange={(strict) => onChange({ ...v, strict })} label={v.strict ? 'Αυστηρό' : 'Κατά προτίμηση'} />
-        </>
-      )}
     </div>
   );
 }
@@ -321,13 +297,6 @@ export function Onboard({ state, onState }: { state: AppState; onState: (s: AppS
               <div className="ob-q">
                 <label className="ob-label">Το όνομά σου</label>
                 <input value={d.name} onChange={(e) => setD({ ...d, name: e.target.value })} placeholder="π.χ. Γρηγόρης" autoFocus />
-                <div className="emoji-pick">
-                  {EMOJIS.map((e) => (
-                    <button key={e} className={e === d.emoji ? 'on' : ''} onClick={() => setD({ ...d, emoji: e })}>
-                      {e}
-                    </button>
-                  ))}
-                </div>
               </div>
             )}
             {section.id === 'voice' && <div className="dm-sys">Η παρέα σου γράφει στο group…</div>}

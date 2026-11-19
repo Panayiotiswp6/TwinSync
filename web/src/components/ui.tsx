@@ -57,15 +57,23 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('el-GR', { day: 'numeric', month: 'short' });
 }
 
+/** Calm, consistent avatar colours (by id), whatever colours a persona was stored with. */
+const AVATAR = ['#4f46e5', '#0f766e', '#b45309', '#be185d', '#1d4ed8', '#7c3aed', '#047857', '#9a3412'];
+export function avatarColor(id: string): string {
+  let h = 0;
+  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  return AVATAR[h % AVATAR.length];
+}
+
 export function Avatar({ persona, size = 40, ring = false, onClick }: { persona: Persona; size?: number; ring?: boolean; onClick?: () => void }) {
   const inner = (
     <span
       className="avatar"
-      style={{ width: size, height: size, fontSize: size * 0.42, background: `linear-gradient(135deg, ${persona.colors[0]}, ${persona.colors[1]})` }}
+      style={{ width: size, height: size, fontSize: size * 0.38, background: avatarColor(persona.id) }}
       aria-label={persona.name}
       title={persona.name}
     >
-      {persona.emoji || persona.initials}
+      {persona.initials || persona.emoji}
     </span>
   );
   const body = ring ? <span className="ring" style={{ padding: Math.max(2, size * 0.06) }}>{inner}</span> : inner;

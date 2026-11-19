@@ -96,7 +96,7 @@ export function Home({ state, onState }: { state: AppState; onState: (s: AppStat
                   </div>
                 </div>
               </header>
-              <div className="post-cover" style={{ background: CATEGORY[r.category].grad }}>
+              <div className={`post-cover ${d?.outcome.status === 'compromise' ? 'compromise' : ''}`}>
                 <span className="post-emoji">{chosen?.emoji ?? (!chosen && d ? '🤔' : CATEGORY[r.category].emoji)}</span>
                 <div className="post-cover-text">
                   {d && !chosen ? (

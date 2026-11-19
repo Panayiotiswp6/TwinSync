@@ -167,7 +167,7 @@ function Messages({ d, people, state, onState, onOpen }: { d: Decision; people: 
   return (
     <section className="card chat">
       <header className="chat-head">
-        <h3>💬 Τα Twins γράφουν στο group</h3>
+        <h3>Τα Twins γράφουν στο group</h3>
         {d.messages && state.status.aiMode === 'live' && (
           <button className="btn btn-sm" disabled={busy} onClick={() => run(() => api.messages(d.id, true))}>
             <RefreshCw size={14} /> Ξαναγράψε
@@ -198,7 +198,7 @@ function Messages({ d, people, state, onState, onOpen }: { d: Decision; people: 
                     {editing ? (
                       <textarea className="input" rows={2} value={edit[m.personaId]} onChange={(e) => setEdit({ ...edit, [m.personaId]: e.target.value })} />
                     ) : (
-                      <p className="bubble" style={{ ['--b1' as string]: p.colors[0], ['--b2' as string]: p.colors[1] }}>
+                      <p className="bubble">
                         {m.text}
                       </p>
                     )}
@@ -276,7 +276,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
   return (
     <div className="thread">
       <header className="thread-head card">
-        <span className="thread-cat" style={{ background: CATEGORY[req.category].grad }}>
+        <span className="thread-cat">
           {CATEGORY[req.category].emoji}
         </span>
         <div>
@@ -332,7 +332,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
         )
       ) : chosen ? (
         <section className={`hero card ${d.outcome.status === 'compromise' ? 'compromise' : ''}`}>
-          <div className="hero-cover" style={{ background: d.outcome.status === 'compromise' ? 'linear-gradient(135deg,#f7971e,#e44fc4)' : CATEGORY[req.category].grad }}>
+          <div className="hero-cover">
             <span className="hero-emoji">{chosen.emoji}</span>
             <div>
               <span className="eyebrow light">{d.outcome.status === 'compromise' ? 'Συμβιβασμός — η πιο κοντινή επιλογή σε όλους' : 'Η κοινή πρόταση των Twins'}</span>
@@ -417,7 +417,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
         </section>
       ) : (
         <section className="hero card deadlock">
-          <div className="hero-cover" style={{ background: 'linear-gradient(135deg,#ff512f,#dd2476)' }}>
+          <div className="hero-cover">
             <span className="hero-emoji">🤔</span>
             <div>
               <span className="eyebrow light">Χωρίς επιλογές</span>
@@ -449,7 +449,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
       </div>
 
       <section>
-        <h3 className="sec-title">🗳️ Τι ψηφίζει κάθε Twin</h3>
+        <h3 className="sec-title">Τι ψηφίζει κάθε Twin</h3>
         <div className="votes">
           {d.outcome.votes.map((v) => {
             const p = people.find((x) => x.id === v.personaId)!;
@@ -499,7 +499,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
       </section>
 
       <section>
-        <h3 className="sec-title">🧭 Υποψήφιες επιλογές ({d.options.length})</h3>
+        <h3 className="sec-title">Υποψήφιες επιλογές ({d.options.length})</h3>
         <div className="carousel">
           {d.options.map((o) => (
             <OptionCard key={o.id} o={o} d={d} people={people} onOpen={onOpen} memory={d.inputs} />
