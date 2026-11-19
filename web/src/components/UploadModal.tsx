@@ -4,6 +4,7 @@ import type { Persona } from '../../../shared/types';
 import { api, type AnalyzeResult, type AppState } from '../api';
 import { Working } from './Composer';
 import { readTwinZip } from './ZipImport';
+import { repairMojibake } from '../../../shared/text';
 import { Badge, Modal, SOURCE_KIND } from './ui';
 
 const KINDS = ['document', 'note', 'chat', 'email', 'past_decision'] as const;
@@ -43,7 +44,7 @@ export function UploadModal({ persona, live, onClose, onState, onResult }: { per
         setErr(`${f.name}: πολύ μεγάλο αρχείο (όριο 400KB).`);
         continue;
       }
-      out.push({ name: f.name, text: await f.text() });
+      out.push({ name: f.name, text: repairMojibake(await f.text()) });
     }
     setFiles((x) => [...x, ...out]);
   };
@@ -53,7 +54,7 @@ export function UploadModal({ persona, live, onClose, onState, onResult }: { per
     setErr(null);
     try {
       const results: AnalyzeResult[] = [];
-      const jobs = [...files.map((f) => ({ title: f.name.replace(/\.[^.]+$/, ''), text: f.text, fileName: f.name })), ...(text.trim() ? [{ title: title || 'Σημείωση', text, fileName: undefined }] : [])];
+      const jobs = [...files.map((f) => ({ title: f.name.replace(/\.[^.]+$/, ''), text: f.text, fileName: f.name })), ...(text.trim() ? [{ title: title || 'Σημείωση', text: repairMojibake(text), fileName: undefined }] : [])];
       for (const j of jobs) {
         const r = await api.addSource(persona.id, { title: j.title, text: j.text, kind, fileName: j.fileName });
         results.push(r);

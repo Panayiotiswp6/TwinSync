@@ -5,6 +5,7 @@ import { api, type AppState, type ImportPackage } from '../api';
 import { Working } from './Composer';
 import { go } from './Shell';
 import { Badge } from './ui';
+import { repairMojibake } from '../../../shared/text';
 
 export interface ZipContents {
   persona: Partial<ImportPackage['persona']> | null;
@@ -49,7 +50,7 @@ export async function readTwinZip(file: File): Promise<ZipContents> {
   for (const [path, data] of Object.entries(entries)) {
     const name = path.split('/').pop() ?? path;
     if (!name || name.startsWith('.') || path.includes('__MACOSX')) continue;
-    const text = strFromU8(data).replace(BOM, '');
+    const text = repairMojibake(strFromU8(data).replace(BOM, ''));
     const lower = name.toLowerCase();
     if (lower.endsWith('.json') && lower.includes('persona')) persona = parseJson(text, name, warnings) as ZipContents['persona'];
     else if (lower.endsWith('.json') && lower.includes('holdout')) holdout = parseJson(text, name, warnings) as ImportPackage['holdout'];

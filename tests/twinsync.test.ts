@@ -188,3 +188,23 @@ describe('questionnaire ZIP import', () => {
     expect(store.personas.filter((p) => p.handle === 'test.nikos')).toHaveLength(1);
   });
 });
+
+describe('encoding repair (mojibake)', async () => {
+  const { repairMojibake } = await import('../shared/text');
+  const greek = '**Ε:** Bio σε μία γραμμή (σπουδές/δουλειά + 2–3 πράγματα που αγαπάς)\n**Α:** ΗΜΜΥ 3ο εξαμηνο μπασκετ «αθλητισμος» αυτοκίνητα 😊';
+  // What a browser/editor shows when it reads UTF-8 as Windows-1252.
+  const broken = new TextDecoder('windows-1252').decode(new TextEncoder().encode(greek));
+  it('repairs UTF-8 Greek that was read as Windows-1252', () => {
+    expect(broken).toMatch(/Î/);
+    expect(repairMojibake(broken)).toBe(greek);
+  });
+  it('also repairs the lossy variant where undefined Windows-1252 bytes were dropped (ρ, Ν)', () => {
+    const lossy = [...broken].filter((ch) => ![0x81, 0x8d, 0x8f, 0x90, 0x9d].includes(ch.codePointAt(0)!)).join('');
+    expect(lossy).not.toBe(broken);
+    expect(repairMojibake(lossy)).toBe(greek);
+  });
+  it('never touches correct text', () => {
+    expect(repairMojibake(greek)).toBe(greek);
+    expect(repairMojibake('Café Ïsland – plain Latin text')).toBe('Café Ïsland – plain Latin text');
+  });
+});
