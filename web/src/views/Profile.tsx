@@ -9,6 +9,29 @@ import { Avatar, Badge, Cite, DOMAIN, Empty, KIND, SOURCE_KIND, Spinner, timeAgo
 
 type Tab = 'memory' | 'sources' | 'review' | 'style';
 
+/** Asks for confirmation, then deletes the twin and everything that belongs to it. */
+export async function deleteTwin(state: AppState, id: string, onState: (s: AppState) => void) {
+  const p = state.personas.find((x) => x.id === id);
+  if (!p) return;
+  const sources = state.sources.filter((s) => s.personaId === id).length;
+  const memories = state.memory.filter((m) => m.personaId === id && m.scope === 'profile').length;
+  const requests = state.requests.filter((r) => r.participants.includes(id)).length;
+  const ok = window.confirm(
+    `Οριστική διαγραφή του Twin «${p.name}» (@${p.handle});\n\n` +
+      `Θα σβηστούν: ${sources} πηγές, ${memories} αναμνήσεις, το ύφος, οι αποφάσεις-τεστ` +
+      (requests ? ` και ${requests} αιτήματα της παρέας στα οποία συμμετείχε.` : '.') +
+      `\n\nΔεν αναιρείται (το «Reset demo» επαναφέρει μόνο τα αρχικά συνθετικά Twins).`,
+  );
+  if (!ok) return;
+  try {
+    const r = await api.deletePersona(id);
+    onState(r.state);
+    go('/');
+  } catch (e) {
+    window.alert(`Η διαγραφή απέτυχε: ${(e as Error).message}`);
+  }
+}
+
 function MemoryCard({ m, onOpen, onState, review }: { m: MemoryItem; onOpen: OpenSource; onState: (s: AppState) => void; review?: boolean }) {
   const [editing, setEditing] = useState(false);
   const [text, setText] = useState(m.statement);
@@ -119,6 +142,9 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
             </button>
             <button className="btn" onClick={() => go('/new')}>
               Νέο αίτημα
+            </button>
+            <button className="btn btn-danger" onClick={() => deleteTwin(state, persona.id, onState)} title="Οριστική διαγραφή του Twin">
+              <Trash2 size={16} /> Διαγραφή Twin
             </button>
           </div>
           <ul className="stats">
@@ -303,7 +329,7 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
   );
 }
 
-export function TwinsList({ state }: { state: AppState }) {
+export function TwinsList({ state, onState }: { state: AppState; onState: (s: AppState) => void }) {
   return (
     <div className="twins-list">
       <h2>Τα Twins της παρέας</h2>
@@ -312,7 +338,18 @@ export function TwinsList({ state }: { state: AppState }) {
           const n = state.memory.filter((m) => m.personaId === p.id && m.scope === 'profile' && m.status === 'confirmed').length;
           const s = state.sources.filter((x) => x.personaId === p.id).length;
           return (
-            <button key={p.id} className="card twin-card" onClick={() => go(`/twin/${p.id}`)}>
+            <div key={p.id} className="card twin-card" role="button" tabIndex={0} onClick={() => go(`/twin/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`/twin/${p.id}`)}>
+              <button
+                className="icon-btn twin-del"
+                title={`Διαγραφή του Twin «${p.name}»`}
+                aria-label={`Διαγραφή του Twin ${p.name}`}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  deleteTwin(state, p.id, onState);
+                }}
+              >
+                <Trash2 size={16} />
+              </button>
               <Avatar persona={p} size={72} ring />
               <b>{p.name}</b>
               <span className="tiny muted">@{p.handle}</span>
@@ -320,7 +357,7 @@ export function TwinsList({ state }: { state: AppState }) {
               <span className="tiny muted">
                 {s} πηγές · {n} αναμνήσεις
               </span>
-            </button>
+            </div>
           );
         })}
       </div>

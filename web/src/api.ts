@@ -42,6 +42,7 @@ export const api = {
   addSource: (personaId: string, body: { title: string; text: string; kind: string; fileName?: string }) => call<AnalyzeResult>('POST', `/api/personas/${personaId}/sources`, body),
   analyze: (sourceId: string) => call<AnalyzeResult>('POST', `/api/sources/${sourceId}/analyze`),
   deleteSource: (id: string) => call<AppState>('DELETE', `/api/sources/${id}`),
+  deletePersona: (id: string) => call<{ removed: { sources: number; memories: number; requests: number }; state: AppState }>('DELETE', `/api/personas/${id}`),
   updateMemory: (id: string, patch: Partial<Pick<MemoryItem, 'statement' | 'status' | 'hard' | 'strength'>>) => call<AppState>('POST', `/api/memory/${id}`, patch),
   confirmAll: (personaId: string) => call<AppState>('POST', `/api/personas/${personaId}/confirm-all`),
   refreshStyle: (personaId: string) => call<{ style: StyleCard; mode: string; state: AppState }>('POST', `/api/personas/${personaId}/style`),

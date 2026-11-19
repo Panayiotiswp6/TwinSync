@@ -208,3 +208,22 @@ describe('encoding repair (mojibake)', async () => {
     expect(repairMojibake('Café Ïsland – plain Latin text')).toBe('Café Ïsland – plain Latin text');
   });
 });
+
+describe('delete a twin', () => {
+  beforeEach(() => store.reset());
+  it('removes the twin with its sources, memory and the requests it took part in; others keep working', async () => {
+    const { request } = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'geo'], { geo: 'Θέλω να γνωρίσουμε νέα άτομα.' });
+    const other = await createRequest('Έξοδος για ποτό', ['pant', 'pan'], {});
+    const removed = store.deletePersona('geo');
+    expect(removed.requests).toBe(1);
+    expect(store.persona('geo')).toBeUndefined();
+    expect(store.sources.some((s) => s.personaId === 'geo')).toBe(false);
+    expect(store.memory.some((m) => m.personaId === 'geo' || m.requestId === request.id)).toBe(false);
+    expect(store.request(request.id)).toBeUndefined();
+    expect(store.decisions.some((d) => d.requestId === request.id)).toBe(false);
+    expect(store.request(other.request.id)).toBeDefined(); // requests without geo survive
+    const again = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'pant'], {});
+    expect(again.decision.outcome.votes).toHaveLength(2);
+    expect(evaluationReport().heuristic.rows.some((r) => r.personaId === 'geo')).toBe(false);
+  });
+});

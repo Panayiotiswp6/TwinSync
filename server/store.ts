@@ -194,6 +194,32 @@ export const store = {
     return s;
   },
 
+  /**
+   * Delete a twin and everything that belongs to it: profile, sources, memory, embeddings,
+   * held-out tests, and the group requests it took part in (their decisions hold its votes).
+   */
+  deletePersona(id: PersonaId) {
+    if (!store.persona(id)) throw new Error('not found');
+    const requestIds = new Set(state.requests.filter((r) => r.participants.includes(id)).map((r) => r.id));
+    const memoryIds = new Set(state.memory.filter((m) => m.personaId === id || (m.requestId && requestIds.has(m.requestId))).map((m) => m.id));
+    const removed = {
+      sources: state.sources.filter((s) => s.personaId === id).length,
+      memories: state.memory.filter((m) => m.personaId === id).length,
+      requests: requestIds.size,
+    };
+    state.personas = state.personas.filter((p) => p.id !== id);
+    state.sources = state.sources.filter((s) => s.personaId !== id);
+    state.memory = state.memory.filter((m) => !memoryIds.has(m.id));
+    for (const mid of memoryIds) delete state.vectors[mid];
+    state.holdouts = (state.holdouts ?? []).filter((c) => c.personaId !== id);
+    state.requests = state.requests.filter((r) => !requestIds.has(r.id));
+    state.decisions = state.decisions.filter((d) => !requestIds.has(d.requestId));
+    const live = state.liveEval as { rows?: { personaId: string }[] } | undefined;
+    if (live?.rows) live.rows = live.rows.filter((r) => r.personaId !== id);
+    persist();
+    return removed;
+  },
+
   deleteSource(id: string) {
     state.sources = state.sources.filter((s) => s.id !== id);
     for (const m of state.memory) if (m.refs.some((r) => r.sourceId === id) && m.status !== 'rejected') m.status = 'superseded';
