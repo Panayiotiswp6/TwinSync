@@ -427,3 +427,8 @@ textarea { resize: vertical; }
   .src-grid { grid-template-columns: repeat(2, 1fr); }
   .hero-cover { flex-direction: column; align-items: flex-start; }
 }
+
+/* ZIP import */
+.zip-import { display: flex; flex-direction: column; gap: 10px; }
+.zip-import .drop { width: 100%; font: inherit; }
+.zip-preview { background: var(--surface-2); border-radius: 14px; padding: 12px 14px; }

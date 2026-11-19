@@ -64,9 +64,18 @@ function categoriesFor(n: string): Category[] {
 }
 
 /** Extract generic memory drafts from free text (owner sources, or a one-off wish). */
+/** Only the owner's own words: drop interviewer questions (Ε:) and summaries written by someone else. */
+export function ownerText(text: string): string {
+  return text
+    .split('\n')
+    .filter((l) => !/^\s*(\*\*)?\s*(Ε|Q)\s*:/.test(l) && !/^\s*\(?\s*Σύνοψη/i.test(l))
+    .map((l) => l.replace(/^\s*(\*\*)?\s*(Α|A)\s*:\s*(\*\*)?\s*/, ''))
+    .join('\n');
+}
+
 export function extractWithRules(text: string): MemoryDraft[] {
   const out: MemoryDraft[] = [];
-  for (const s of sentences(text)) {
+  for (const s of sentences(ownerText(text))) {
     const n = normalizeGreek(s);
     const neg = NEG.test(n);
     const quote = s.replace(/[.!;;]+$/, '');
@@ -75,6 +84,7 @@ export function extractWithRules(text: string): MemoryDraft[] {
       n.match(/(οριο|μεχρι|εωσ|το πολυ|max|budget)\D{0,15}?(\d{2,4})(?:\s*-\s*(\d{2,4}))?\s*(€|ευρω)/) ??
       (neg ? n.match(/(πανω απο|παραπανω απο)\D{0,5}?(\d{2,4})()\s*(€|ευρω)/) : null);
     if (budget) {
+      // A sentence about a money limit is not a statement about the topic itself ("όχι πάνω από 30€ για φαγητό").
       const v = Number(budget[3] || budget[2]);
       out.push({ kind: 'constraint', statement: `Όριο κόστους ${v}€ ανά άτομο`, domain: 'money', polarity: 'neutral', strength: 1, hard: true, rule: { metric: 'max_cost', value: String(v) }, categories: categoriesFor(n), keywords: [], quote, confidence: 0.7 });
     }
@@ -103,7 +113,7 @@ export function extractWithRules(text: string): MemoryDraft[] {
     }
 
     for (const t of TOPICS) {
-      if (!t.re.test(n)) continue;
+      if (budget || !t.re.test(n)) continue;
       out.push({ kind: 'preference', statement: neg ? t.statement[1] : t.statement[0], domain: t.domain, polarity: neg ? 'avoids' : 'likes', strength: t.strength ?? 0.6, hard: false, categories: t.categories ?? [], keywords: t.keywords, quote, confidence: 0.6 });
     }
   }

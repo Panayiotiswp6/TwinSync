@@ -19,4 +19,4 @@ reviewers can verify it.
 
 ## npm dependencies
 
-Runtime: `express` (MIT), `zod` (MIT), `openai` (Apache-2.0), `@anthropic-ai/sdk` (MIT). UI: `react`, `react-dom` (MIT), `lucide-react` icons (ISC). Build and dev: `vite`, `@vitejs/plugin-react`, `esbuild`, `typescript`, `tsx`, `vitest`, all under MIT or Apache-2.0. See `package-lock.json` for the full tree.
+Runtime: `express` (MIT), `zod` (MIT), `openai` (Apache-2.0), `@anthropic-ai/sdk` (MIT). UI: `react`, `react-dom` (MIT), `lucide-react` icons (ISC), `fflate` for reading the questionnaire ZIP in the browser (MIT). Build and dev: `vite`, `@vitejs/plugin-react`, `esbuild`, `typescript`, `tsx`, `vitest`, all under MIT or Apache-2.0. See `package-lock.json` for the full tree.

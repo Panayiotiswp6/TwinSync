@@ -23,7 +23,12 @@ interface HoldoutCase {
   note: string;
   options: CandidateOption[];
 }
-const CASES = (holdout as { cases: HoldoutCase[] }).cases;
+const CASES = (holdout as { cases: HoldoutCase[] }).cases.map((c) => ({ ...c, origin: 'synthetic' as const }));
+
+/** Synthetic demo cases + the owners' own imported cases (only for twins that exist). */
+function allCases(personaIds: string[]): (HoldoutCase & { origin: 'synthetic' | 'imported' })[] {
+  return [...CASES, ...store.holdouts].filter((c) => personaIds.includes(c.personaId));
+}
 const UNCERTAIN_MARGIN = 3;
 
 export interface HoldoutRow {
@@ -36,6 +41,7 @@ export interface HoldoutRow {
   margin: number;
   note: string;
   why: string;
+  origin: 'synthetic' | 'imported';
 }
 export interface HoldoutReport {
   method: 'heuristic' | 'live';
@@ -49,7 +55,7 @@ export interface HoldoutReport {
   error?: string;
 }
 
-function predict(c: HoldoutCase, persona: Persona, items: MemoryItem[], evals: Evaluation[]): HoldoutRow {
+function predict(c: HoldoutCase & { origin: 'synthetic' | 'imported' }, persona: Persona, items: MemoryItem[], evals: Evaluation[]): HoldoutRow {
   const out = decide([persona], items, c.options, evals, c.category);
   const ok = out.results.filter((r) => r.feasible).sort((a, b) => b.scores[persona.id] - a.scores[persona.id]);
   const margin = ok.length >= 2 ? ok[0].scores[persona.id] - ok[1].scores[persona.id] : ok.length ? 100 : 0;
@@ -57,7 +63,7 @@ function predict(c: HoldoutCase, persona: Persona, items: MemoryItem[], evals: E
   const outcome: HoldoutRow['outcome'] = !predicted || margin < UNCERTAIN_MARGIN ? 'uncertain' : predicted === c.actualOptionId ? 'correct' : 'wrong';
   const ev = evals.find((e) => e.optionId === predicted);
   const blocked = out.results.find((r) => !r.feasible)?.violations[0]?.text;
-  return { id: c.id, personaId: c.personaId, question: c.question, predicted, actual: c.actualOptionId, outcome, margin, note: c.note, why: blocked ? `αποκλείστηκε το άλλο: ${blocked}` : ev?.reasons[0]?.text ?? '' };
+  return { id: c.id, personaId: c.personaId, question: c.question, predicted, actual: c.actualOptionId, outcome, margin, note: c.note, why: blocked ? `αποκλείστηκε το άλλο: ${blocked}` : ev?.reasons[0]?.text ?? '', origin: c.origin };
 }
 
 function summarize(method: HoldoutReport['method'], rows: HoldoutRow[], error?: string): HoldoutReport {
@@ -77,7 +83,7 @@ function summarize(method: HoldoutReport['method'], rows: HoldoutRow[], error?: 
 export function holdoutHeuristic(profileOf: (id: string) => MemoryItem[], personas: Persona[]): HoldoutReport {
   return summarize(
     'heuristic',
-    CASES.map((c) => {
+    allCases(personas.map((p) => p.id)).map((c) => {
       const p = personas.find((x) => x.id === c.personaId)!;
       const items = profileOf(p.id);
       return predict(c, p, items, evaluateWithRules(p.id, items, c.options));
@@ -89,7 +95,7 @@ export async function holdoutLive(): Promise<HoldoutReport> {
   if (!liveAi()) return summarize('live', [], 'Χρειάζεται κλειδί AI (OPENAI_API_KEY).');
   const rows: HoldoutRow[] = [];
   try {
-    for (const c of CASES) {
+    for (const c of allCases(store.personas.map((p) => p.id))) {
       const p = store.persona(c.personaId)!;
       const items = store.profile(p.id);
       const evals = await evaluateOptions(c.options, [{ persona: p, items }]);

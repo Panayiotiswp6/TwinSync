@@ -136,3 +136,55 @@ describe('message grounding guard', () => {
     expect(out.status).toBe('deadlock'); // 100€ > 25€ dinner limit
   });
 });
+
+describe('onboarding interview files', () => {
+  const transcript = '**Ε:** Σου αρέσει η θάλασσα;\n**Α:** οχι ιδιαιτερα, προτιμω βουνο\n(Σύνοψη ChatGPT: προτιμά βουνό)\n**Ε:** Για φαγητό έξω;\n**Α:** Δεν θέλω να κοστίσει πάνω από 30€ για φαγητό έξω.';
+  it('learns only from the owner answers, never from the interviewer questions or summaries', () => {
+    const d = extractWithRules(transcript);
+    for (const x of d) {
+      expect(transcript).toContain(x.quote);
+      expect(x.quote).not.toMatch(/Σου αρέσει|Σύνοψη/);
+    }
+    expect(d.find((x) => x.rule?.metric === 'max_cost')?.rule?.value).toBe('30');
+    expect(d.some((x) => x.statement.includes('φαγητό') && x.polarity === 'avoids')).toBe(false);
+  });
+});
+
+describe('questionnaire ZIP import', () => {
+  const md = (n: number, kind: string, body: string) => `---\nid: src-t-${n}\nkind: ${kind}\ntitle: Τίτλος ${n}\ndate: 2026-11-19\nsynthetic: false\n---\n${body}\n`;
+  const pkg = {
+    persona: { name: 'Νίκος Δοκιμαστικός', handle: 'test.nikos', emoji: '🎸', bio: 'test' },
+    files: [
+      { name: '02-money-time.md', text: md(2, 'note', '**Ε:** Μέχρι πόσα για ένα διήμερο;\n**Α:** 120€ max, δεν μπορω πανω απο 120€\n**Ε:** Από ταξίδι πρέπει να έχεις γυρίσει το αργότερο;\n**Α:** Κυριακη 23:00 να ειμαι πισω στην Αθηνα') },
+      { name: '07-messages.md', text: md(7, 'chat', 'μεσα ρε!! 🤘\nοχι ρε σορυ δεν παιζει') },
+    ],
+    holdout: { cases: [{ question: 'Live bar ή σινεμά;', category: 'entertainment', actualOptionId: 'a', note: 'live μουσικη', options: [{ id: 'a', title: 'Live bar', costPerPerson: 15, features: ['live μουσική'], endsAt: null }, { id: 'b', title: 'Σινεμά', costPerPerson: 10, features: ['ταινία'], endsAt: null }] }] },
+  };
+  beforeEach(() => store.reset());
+
+  it('creates the twin, keeps front-matter metadata, extracts quoted memory and stores held-out cases apart', async () => {
+    const { importPackage } = await import('../server/pipeline');
+    const r = await importPackage(pkg);
+    expect(r.persona.handle).toBe('test.nikos');
+    const srcs = store.sources.filter((s) => s.personaId === r.persona.id);
+    expect(srcs.map((s) => s.kind).sort()).toEqual(['chat', 'note']);
+    expect(srcs.every((s) => !s.text.startsWith('---'))).toBe(true);
+    const mem = store.memory.filter((m) => m.personaId === r.persona.id);
+    expect(mem.find((m) => m.rule?.metric === 'max_cost')?.rule?.value).toBe('120');
+    expect(mem.find((m) => m.rule?.metric === 'latest_end')?.rule?.value).toBe('weekly:0:23:00');
+    for (const m of mem) expect(srcs.find((s) => s.id === m.refs[0].sourceId)?.text).toContain(m.refs[0].quote);
+    expect(store.holdouts.filter((c) => c.personaId === r.persona.id)).toHaveLength(1);
+    expect(store.sources.some((s) => s.text.includes('live μουσικη'))).toBe(false); // held-out never becomes a source
+    const report = evaluationReport();
+    expect(report.heuristic.rows.some((x) => x.origin === 'imported')).toBe(true);
+  });
+
+  it('re-importing the same ZIP updates the twin without duplicating sources', async () => {
+    const { importPackage } = await import('../server/pipeline');
+    const a = await importPackage(pkg);
+    const b = await importPackage(pkg);
+    expect(b.persona.id).toBe(a.persona.id);
+    expect(store.sources.filter((s) => s.personaId === a.persona.id)).toHaveLength(2);
+    expect(store.personas.filter((p) => p.handle === 'test.nikos')).toHaveLength(1);
+  });
+});

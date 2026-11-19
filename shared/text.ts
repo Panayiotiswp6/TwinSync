@@ -5,8 +5,10 @@ export function normalizeGreek(s: string): string {
 
 /** Split into sentences, keeping the original text (Greek question mark is ";"). */
 export function sentences(text: string): string[] {
+  // Lines first (chat exports and interview answers have one message per line), then sentences.
   return text
-    .split(/(?<=[.!;;\n])\s+/)
+    .split(/\n+/)
+    .flatMap((line) => line.split(/(?<=[.!;;])\s+/))
     .map((s) => s.trim())
     .filter((s) => s.length > 2);
 }

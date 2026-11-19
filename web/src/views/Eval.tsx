@@ -29,6 +29,7 @@ function HoldoutTable({ r, state }: { r: HoldoutReport; state: AppState }) {
                   <b className="small">{row.question}</b>
                   <div className="tiny muted">{row.why}</div>
                   <div className="tiny muted">Πραγματικά: {row.note}</div>
+                  {row.origin === 'imported' && <Badge tone="brand">πραγματική απόφαση κατόχου</Badge>}
                 </td>
                 <td>
                   <Badge tone={OUT[row.outcome].tone}>{OUT[row.outcome].label}</Badge>
