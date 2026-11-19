@@ -75,6 +75,13 @@ app.post(
     res.json({ ...r, state: snapshot() });
   }),
 );
+app.delete(
+  '/api/personas/:id',
+  wrap((req, res) => {
+    const removed = store.deletePersona(req.params.id);
+    res.json({ removed, state: snapshot() });
+  }),
+);
 app.delete('/api/sources/:id', (req, res) => {
   store.deleteSource(req.params.id);
   res.json(snapshot());

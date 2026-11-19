@@ -55,7 +55,7 @@ export function App() {
           <Composer state={state} onState={setState} />
         </div>
       )}
-      {route.name === 'twins' && <TwinsList state={state} />}
+      {route.name === 'twins' && <TwinsList state={state} onState={setState} />}
       {route.name === 'twin' && <Profile key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'request' && <Thread key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'eval' && <Eval state={state} onState={refresh} />}
