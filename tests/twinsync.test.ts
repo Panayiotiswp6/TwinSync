@@ -74,7 +74,7 @@ describe('context-aware memory', () => {
 });
 
 describe('in-app onboarding', () => {
-  beforeEach(() => store.reset(true));
+  beforeEach(() => store.reset('empty'));
   const answers = {
     me_friend: 'Πάντα μέσα για όλα αλλά αργεί',
     money_evening: { amount: 25, strict: false },
@@ -311,5 +311,21 @@ describe('always a proposal', () => {
     expect(out.status).toBe('agreement');
     expect(out.chosenOptionId).toBe('b');
     expect(out.results[0].warnings.join(' ')).toMatch(/όλες τις επιλογές/);
+  });
+});
+
+describe('team demo group export', () => {
+  it('exports twins with their own sources, profile memory and held-out tests — never request data', async () => {
+    store.reset('empty');
+    const { onboard } = await import('../server/onboarding');
+    const r = await onboard({ name: 'Ομάδα Τεστ', emoji: '✨', answers: { money_weekend: { amount: 200, strict: false }, dm_weekend: 'μεσα!' }, holdouts: [{ question: 'Α ή Β;', options: [{ title: 'Α', cost: 10 }, { title: 'Β', cost: 20 }], chosen: 1, why: '' }] }, () => {});
+    store.addSource('group', 'request', 'Αίτημα', 'κάτι');
+    const g = store.exportGroup();
+    expect(g.format).toBe('twinsync-group');
+    expect(g.personas.map((p) => p.id)).toEqual([r.personaId]);
+    expect(g.sources.every((s) => s.personaId === r.personaId && !['wish', 'request'].includes(s.kind))).toBe(true);
+    for (const m of g.memory) expect(g.sources.find((s) => s.id === m.refs[0].sourceId)?.text).toContain(m.refs[0].quote);
+    expect(g.holdouts).toHaveLength(1);
+    expect(g.personas[0].synthetic).toBe(false);
   });
 });

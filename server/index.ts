@@ -8,7 +8,7 @@ import { evaluationReport, holdoutLive } from './evaluation';
 import { getJob, startJob } from './jobs';
 import { onboard } from './onboarding';
 import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, learnFromDecision, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
-import { parseFrontMatter } from './seed';
+import { hasTeamSeed, parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
 
 const app = express();
@@ -21,6 +21,7 @@ const status = () => ({
   embeddings: embeddingsEnabled(),
   dataset: 'synthetic' as const,
   usage: store.usage,
+  teamSeed: hasTeamSeed(),
 });
 
 const snapshot = () => ({
@@ -278,9 +279,14 @@ app.post(
   }),
 );
 app.post('/api/reset', (req, res) => {
-  // ?empty=1 starts from scratch (no twins); otherwise the synthetic demo group is restored.
-  store.reset(req.query.empty === '1');
+  // ?empty=1: no twins · ?seed=team: the team's own group (if committed) · otherwise the synthetic group.
+  store.reset(req.query.empty === '1' ? 'empty' : req.query.seed === 'team' ? 'team' : 'synthetic');
   res.json(snapshot());
+});
+// The twins as a file, to commit as server/data/team/group.json (the team demo group).
+app.get('/api/export', (_req, res) => {
+  res.setHeader('Content-Disposition', 'attachment; filename="group.json"');
+  res.json(store.exportGroup());
 });
 
 app.use((err: unknown, _req: Request, res: Response, _next: NextFunction) => {

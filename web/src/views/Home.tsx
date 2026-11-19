@@ -50,8 +50,8 @@ function Welcome({ state, onState }: { state: AppState; onState: (s: AppState) =
           <Plus size={17} /> Φτιάξε το πρώτο Twin
         </button>
         {state.personas.length === 0 && (
-          <button className="btn" onClick={async () => onState(await api.reset(false))}>
-            Δοκίμασε με συνθετική παρέα
+          <button className="btn" onClick={async () => onState(await api.reset(state.status.teamSeed ? 'team' : 'synthetic'))}>
+            {state.status.teamSeed ? 'Δοκίμασε με την παρέα μας' : 'Δοκίμασε με συνθετική παρέα'}
           </button>
         )}
       </div>

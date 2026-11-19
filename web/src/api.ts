@@ -1,6 +1,8 @@
 import type { OnboardBody } from '../../shared/onboarding';
 import type { Decision, GroupRequest, Job, MemoryItem, Persona, Source, StyleCard, Usage } from '../../shared/types';
 
+export type StartGroup = 'team' | 'synthetic' | 'empty';
+
 export interface AppStatus {
   aiMode: 'live' | 'demo';
   provider: 'openai' | 'anthropic' | 'demo';
@@ -8,6 +10,8 @@ export interface AppStatus {
   embeddings: boolean;
   dataset: 'synthetic';
   usage: Usage;
+  /** The team's own group is committed (server/data/team/group.json). */
+  teamSeed?: boolean;
 }
 
 export interface AppState {
@@ -38,7 +42,7 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export const api = {
   state: () => call<AppState>('GET', '/api/state'),
-  reset: (empty = false) => call<AppState>('POST', `/api/reset${empty ? '?empty=1' : ''}`),
+  reset: (kind: StartGroup) => call<AppState>('POST', `/api/reset${kind === 'empty' ? '?empty=1' : kind === 'team' ? '?seed=team' : ''}`),
   createRequestAsync: (text: string, participants: string[], wishes: Record<string, string>) => call<{ jobId: string }>('POST', '/api/requests?async=1', { text, participants, wishes }),
   job: (id: string, since: number) => call<Job & { total: number; state?: AppState }>('GET', `/api/jobs/${id}?since=${since}`),
   onboard: (body: OnboardBody) => call<{ jobId: string }>('POST', '/api/onboard', body),

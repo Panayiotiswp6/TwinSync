@@ -1,6 +1,6 @@
-import { BarChart3, Eraser, Home, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
+import { BarChart3, Download, Eraser, Home, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
-import type { AppState } from '../api';
+import type { AppState, StartGroup } from '../api';
 import { Avatar } from './ui';
 
 export type Route = { name: 'home' } | { name: 'new' } | { name: 'onboard' } | { name: 'twin'; id: string } | { name: 'request'; id: string } | { name: 'eval' } | { name: 'twins' };
@@ -53,7 +53,7 @@ export function AiPill({ state }: { state: AppState }) {
   );
 }
 
-export function Shell({ route, state, children, onReset }: { route: Route; state: AppState; children: ReactNode; onReset: (empty: boolean) => void }) {
+export function Shell({ route, state, children, onReset }: { route: Route; state: AppState; children: ReactNode; onReset: (kind: StartGroup) => void }) {
   const nav = [
     { key: 'home', path: '/', label: 'Αρχική', icon: <Home size={22} /> },
     { key: 'new', path: '/new', label: 'Νέο αίτημα', icon: <PlusSquare size={22} /> },
@@ -99,10 +99,18 @@ export function Shell({ route, state, children, onReset }: { route: Route; state
             </p>
           )}
           <p className="tiny muted">{state.personas.every((p) => p.synthetic) ? 'Όλα τα δεδομένα είναι συνθετικά.' : 'Δικά σας δεδομένα, με συναίνεση.'}</p>
-          <button className="link-btn tiny" onClick={() => onReset(true)}>
+          <a className="link-btn tiny" href="/api/export" download="group.json" title="Αρχείο με τα Twins (προφίλ, πηγές, κρυφά τεστ) για να μπει στο repo ως η παρέα της ομάδας">
+            <Download size={12} /> Εξαγωγή παρέας
+          </a>
+          {state.status.teamSeed && (
+            <button className="link-btn tiny" onClick={() => onReset('team')}>
+              <RotateCcw size={12} /> Η παρέα της ομάδας
+            </button>
+          )}
+          <button className="link-btn tiny" onClick={() => onReset('empty')}>
             <Eraser size={12} /> Ξεκίνα από το μηδέν
           </button>
-          <button className="link-btn tiny" onClick={() => onReset(false)}>
+          <button className="link-btn tiny" onClick={() => onReset('synthetic')}>
             <RotateCcw size={12} /> Συνθετική demo παρέα
           </button>
         </div>

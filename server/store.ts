@@ -9,7 +9,7 @@ import { containsQuote, repairMojibake, slug } from '../shared/text';
 import type { MemoryDraft } from '../shared/heuristics';
 import type { Approval, Decision, GroupRequest, HeldOutCase, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage } from '../shared/types';
 import { stamp } from './memory';
-import { loadSeed, type CatalogEntry } from './seed';
+import { hasTeamSeed, loadSeed, loadTeamSeed, type CatalogEntry, type GroupExport } from './seed';
 
 export const DATA_DIR = path.resolve(process.env.DATA_DIR || path.join(process.cwd(), 'data'));
 const STATE_FILE = path.join(DATA_DIR, 'state.json');
@@ -41,12 +41,18 @@ const PALETTE: [string, string][] = [
 
 let catalog: CatalogEntry[] = [];
 
-function fresh(empty = false): State {
+export type StartGroup = 'team' | 'synthetic' | 'empty';
+
+/** A fresh state: the team's own group (if committed), the synthetic demo group, or nothing. */
+function fresh(kind: StartGroup = hasTeamSeed() ? 'team' : 'synthetic'): State {
   const seed = loadSeed();
   catalog = seed.catalog;
   const usage = { calls: 0, inputTokens: 0, outputTokens: 0, embeddingTokens: 0 };
-  if (empty) return { version: STATE_VERSION, personas: [], sources: [], memory: [], requests: [], decisions: [], usage, vectors: {}, holdouts: [] };
-  return { version: STATE_VERSION, personas: seed.personas, sources: seed.sources, memory: seed.memory, requests: [], decisions: [], usage, vectors: {} };
+  const base = { version: STATE_VERSION, requests: [], decisions: [], usage, vectors: {} };
+  if (kind === 'empty') return { ...base, personas: [], sources: [], memory: [], holdouts: [] };
+  const team = kind === 'team' ? loadTeamSeed() : null;
+  if (team) return repairState({ ...base, personas: team.personas, sources: team.sources, memory: team.memory, holdouts: team.holdouts });
+  return { ...base, personas: seed.personas, sources: seed.sources, memory: seed.memory };
 }
 
 function load(): State {
@@ -185,11 +191,29 @@ export const store = {
   save: persist,
 
   /** Back to the synthetic demo group, or (empty) to no twins at all. AI usage counters are kept. */
-  reset(empty = false) {
+  reset(kind: StartGroup = 'synthetic') {
     const usage = state.usage;
-    state = fresh(empty);
+    state = fresh(kind);
     state.usage = usage;
     persist();
+  },
+
+  /** The twins (profile memory, own sources, held-out tests) as a file to commit as the team demo group. */
+  exportGroup(): GroupExport {
+    const ids = new Set(state.personas.map((p) => p.id));
+    const keepSource = (k: SourceKind) => !['wish', 'request', 'correction'].includes(k);
+    const sources = state.sources.filter((x) => x.personaId !== 'group' && ids.has(x.personaId) && keepSource(x.kind));
+    const srcIds = new Set(sources.map((x) => x.id));
+    const memory = state.memory.filter((m) => m.scope === 'profile' && m.status !== 'rejected' && m.status !== 'superseded' && m.refs.every((r) => srcIds.has(r.sourceId)));
+    return {
+      format: 'twinsync-group',
+      version: 1,
+      exportedAt: nowIso(),
+      personas: state.personas.map((p) => ({ ...p, synthetic: false })),
+      sources: sources.map((x) => ({ ...x, synthetic: false })),
+      memory,
+      holdouts: (state.holdouts ?? []).filter((c) => ids.has(c.personaId)),
+    };
   },
 
   persona(id: PersonaId) {
