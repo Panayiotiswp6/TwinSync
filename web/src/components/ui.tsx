@@ -44,7 +44,12 @@ export const SOURCE_KIND: Record<SourceKind, { label: string; emoji: string }> =
   request: { label: 'Αίτημα', emoji: '📣' },
 };
 
+export const srcKind = (k: string) => SOURCE_KIND[k as SourceKind] ?? { label: 'Πηγή', emoji: '📄' };
+export const dom = (d: string) => DOMAIN[d as Domain] ?? DOMAIN.other;
+export const kindLabel = (k: string) => KIND[k as MemoryKind] ?? 'Ανάμνηση';
+
 export function timeAgo(iso: string): string {
+  if (!Number.isFinite(Date.parse(iso))) return '';
   const s = Math.max(0, (Date.now() - new Date(iso).getTime()) / 1000);
   if (s < 60) return 'μόλις τώρα';
   if (s < 3600) return `πριν ${Math.round(s / 60)} λ.`;

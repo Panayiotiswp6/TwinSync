@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { SourceRef } from '../../shared/types';
 import { api, type AppState } from './api';
 import { Composer } from './components/Composer';
+import { ErrorBoundary } from './components/ErrorBoundary';
 import { Shell, parseRoute, type Route } from './components/Shell';
 import { SourceDrawer } from './components/SourceDrawer';
 import { Eval } from './views/Eval';
@@ -48,6 +49,7 @@ export function App() {
 
   return (
     <Shell route={route} state={state} onReset={reset}>
+      <ErrorBoundary resetKey={JSON.stringify(route)}>
       {route.name === 'home' && <Home state={state} onState={setState} />}
       {route.name === 'new' && (
         <div className="narrow">
@@ -59,7 +61,10 @@ export function App() {
       {route.name === 'twin' && <Profile key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'request' && <Thread key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'eval' && <Eval state={state} onState={refresh} />}
-      <SourceDrawer target={source} sources={state.sources} personas={state.personas} memory={state.memory} onClose={() => setSource(null)} />
+      </ErrorBoundary>
+      <ErrorBoundary resetKey={source?.sourceId ?? ''}>
+        <SourceDrawer target={source} sources={state.sources} personas={state.personas} memory={state.memory} onClose={() => setSource(null)} />
+      </ErrorBoundary>
     </Shell>
   );
 }
