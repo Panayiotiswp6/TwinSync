@@ -18,6 +18,19 @@ export function App() {
   const refresh = useCallback(() => {
     api.state().then(setState).catch((e) => setError(e.message));
   }, []);
+  // A file dropped outside a drop zone must never make the browser open/download it and leave the app.
+  useEffect(() => {
+    const stop = (e: DragEvent) => {
+      if (e.dataTransfer?.types?.includes('Files')) e.preventDefault();
+    };
+    window.addEventListener('dragover', stop);
+    window.addEventListener('drop', stop);
+    return () => {
+      window.removeEventListener('dragover', stop);
+      window.removeEventListener('drop', stop);
+    };
+  }, []);
+
   useEffect(() => {
     refresh();
     const onHash = () => setRoute(parseRoute(window.location.hash));
