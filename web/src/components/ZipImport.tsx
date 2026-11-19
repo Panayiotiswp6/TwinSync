@@ -76,6 +76,7 @@ export function ZipImport({ live, onState, onDone }: { live: boolean; onState: (
   const [name, setName] = useState('');
   const [handle, setHandle] = useState('');
   const [busy, setBusy] = useState(false);
+  const [drag, setDrag] = useState(false);
   const [err, setErr] = useState<string | null>(null);
 
   const pick = async (f: File | undefined) => {
@@ -115,9 +116,23 @@ export function ZipImport({ live, onState, onDone }: { live: boolean; onState: (
   const cases = Array.isArray(pkg?.holdout?.cases) ? pkg!.holdout!.cases.length : 0;
   return (
     <div className="zip-import">
-      <button className="drop" onClick={() => input.current?.click()}>
+      <button
+        className={`drop ${drag ? 'drag' : ''}`}
+        onClick={() => input.current?.click()}
+        onDragOver={(e) => {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = 'copy';
+          setDrag(true);
+        }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={(e) => {
+          e.preventDefault();
+          setDrag(false);
+          pick(e.dataTransfer.files?.[0]);
+        }}
+      >
         <FileArchive size={28} />
-        <b>Εισαγωγή από ZIP ερωτηματολογίου</b>
+        <b>Σύρετε εδώ το ZIP ή πατήστε για επιλογή</b>
         <span className="tiny muted">twinsync-&lt;handle&gt;.zip από το docs/persona-questionnaire.md</span>
       </button>
       <input ref={input} type="file" accept=".zip,application/zip,application/x-zip-compressed" hidden onChange={(e) => pick(e.target.files?.[0])} />
