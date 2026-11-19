@@ -58,8 +58,21 @@ export function timeAgo(iso: string): string {
 }
 
 /** Calm, consistent avatar colours (by id), whatever colours a persona was stored with. */
-const AVATAR = ['#4f46e5', '#0f766e', '#b45309', '#be185d', '#1d4ed8', '#7c3aed', '#047857', '#9a3412'];
+const AVATAR = [
+  ['#7c3aed', '#6366f1'],
+  ['#0891b2', '#2563eb'],
+  ['#db2777', '#9333ea'],
+  ['#0d9488', '#0891b2'],
+  ['#ea580c', '#db2777'],
+  ['#4f46e5', '#0ea5e9'],
+  ['#059669', '#0d9488'],
+  ['#9333ea', '#c026d3'],
+];
 export function avatarColor(id: string): string {
+  const [a, b] = avatarPair(id);
+  return `linear-gradient(135deg, ${a}, ${b})`;
+}
+function avatarPair(id: string): string[] {
   let h = 0;
   for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
   return AVATAR[h % AVATAR.length];

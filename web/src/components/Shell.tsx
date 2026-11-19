@@ -33,7 +33,9 @@ export function Logo() {
         <span />
         <span />
       </span>
-      <span className="logo-word">TwinSync</span>
+      <span className="logo-word">
+        Twin<b>Sync</b>
+      </span>
     </span>
   );
 }
