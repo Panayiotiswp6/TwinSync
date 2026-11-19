@@ -1,4 +1,5 @@
-import type { Decision, GroupRequest, MemoryItem, Persona, Source, StyleCard, Usage } from '../../shared/types';
+import type { OnboardBody } from '../../shared/onboarding';
+import type { Decision, GroupRequest, Job, MemoryItem, Persona, Source, StyleCard, Usage } from '../../shared/types';
 
 export interface AppStatus {
   aiMode: 'live' | 'demo';
@@ -37,7 +38,10 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export const api = {
   state: () => call<AppState>('GET', '/api/state'),
-  reset: () => call<AppState>('POST', '/api/reset'),
+  reset: (empty = false) => call<AppState>('POST', `/api/reset${empty ? '?empty=1' : ''}`),
+  createRequestAsync: (text: string, participants: string[], wishes: Record<string, string>) => call<{ jobId: string }>('POST', '/api/requests?async=1', { text, participants, wishes }),
+  job: (id: string, since: number) => call<Job & { total: number; state?: AppState }>('GET', `/api/jobs/${id}?since=${since}`),
+  onboard: (body: OnboardBody) => call<{ jobId: string }>('POST', '/api/onboard', body),
   createPersona: (name: string, bio: string, emoji?: string) => call<{ persona: Persona; state: AppState }>('POST', '/api/personas', { name, bio, emoji }),
   addSource: (personaId: string, body: { title: string; text: string; kind: string; fileName?: string }) => call<AnalyzeResult>('POST', `/api/personas/${personaId}/sources`, body),
   analyze: (sourceId: string) => call<AnalyzeResult>('POST', `/api/sources/${sourceId}/analyze`),
@@ -52,6 +56,7 @@ export const api = {
     call<{ decisionId: string; created: number; state: AppState }>('POST', `/api/requests/${requestId}/wishes`, { personaId, text, scope }),
   setLimit: (requestId: string, personaId: string, value: number) => call<{ decisionId: string; state: AppState }>('POST', `/api/requests/${requestId}/limit`, { personaId, value }),
   removeItem: (requestId: string, memoryId: string) => call<{ decisionId: string; state: AppState }>('DELETE', `/api/requests/${requestId}/items/${memoryId}`),
+  rerunAsync: (requestId: string, regenerateOptions: boolean) => call<{ jobId: string }>('POST', `/api/requests/${requestId}/rerun?async=1`, { regenerateOptions }),
   rerun: (requestId: string, regenerateOptions: boolean) => call<{ decisionId: string; state: AppState }>('POST', `/api/requests/${requestId}/rerun`, { regenerateOptions }),
   approve: (decisionId: string, personaId: string, approve: boolean) => call<AppState>('POST', `/api/decisions/${decisionId}/approval`, { personaId, approve }),
   messages: (decisionId: string, regenerate = false) => call<AppState>('POST', `/api/decisions/${decisionId}/messages${regenerate ? '?regenerate=1' : ''}`),

@@ -3,10 +3,14 @@
 //   - checks every numeric hard rule (cost per person, latest end) itself,
 //   - accepts a qualitative hard-constraint breach only if it cites a real hard memory item,
 //   - picks the shared option by max-min fairness (then average, then price),
-//   - derives concessions, stances and minimal relaxations for a deadlock.
+//   - applies profile limits only in the context they were said in (shared/context.ts) and lets
+//     request-only wishes override the profile,
+//   - ALWAYS returns a proposal: if nothing passes every limit, the closest option is proposed
+//     as a compromise, with what each person would have to accept.
 // Stance thresholds and "budget ceiling = strictest limit" are adapted from agent_mesh's
 // group negotiation rules (re-implemented, no code copied — see THIRD_PARTY_NOTICES.md).
 
+import { bindingHard, costLimit, softReferences, type Fit, type RequestContext } from './context';
 import { deadlineFor, describeDeadline, formatWhen, parseIso } from './time';
 import type {
   CandidateOption,
@@ -36,12 +40,12 @@ export function activeHard(items: MemoryItem[], category: Category): MemoryItem[
 }
 
 /** Code check of a numeric rule. Returns a violation text, or null if satisfied / not checkable. */
-export function checkRule(item: MemoryItem, o: CandidateOption): string | null {
+export function checkRule(item: MemoryItem, o: CandidateOption, fit?: Fit): string | null {
   if (!item.rule) return null;
   if (item.rule.metric === 'max_cost') {
-    const max = Number(item.rule.value);
-    if (o.costPerPerson === null || !Number.isFinite(max)) return null;
-    return o.costPerPerson > max ? `κοστίζει ${o.costPerPerson}€/άτομο, πάνω από το όριο ${max}€` : null;
+    const max = fit ? costLimit(item, fit) : Number(item.rule.value);
+    if (o.costPerPerson === null || max === null || !Number.isFinite(max)) return null;
+    return o.costPerPerson > max ? `κοστίζει ${o.costPerPerson}€/άτομο, πάνω από το όριο ${max}€${fit?.note ? ` (${fit.note})` : ''}` : null;
   }
   const end = parseIso(o.endsAt);
   if (!end) return null;
@@ -69,18 +73,20 @@ export function decide(
   options: CandidateOption[],
   evaluations: Evaluation[],
   category: Category,
+  ctx?: RequestContext | null,
 ): Outcome {
   const name = (id: PersonaId) => personas.find((p) => p.id === id)?.name ?? id;
   const optName = (id: string) => options.find((o) => o.id === id)?.title ?? id;
-  const hard = activeHard(inputs, category).filter((m) => personas.some((p) => p.id === m.personaId));
+  const binding = bindingHard(inputs, category, ctx).filter((r) => personas.some((p) => p.id === r.item.personaId));
+  const soft = softReferences(inputs, category, ctx).filter((r) => personas.some((p) => p.id === r.item.personaId));
   const evalOf = (pid: PersonaId, oid: string) => evaluations.find((e) => e.personaId === pid && e.optionId === oid);
 
   const results: OptionResult[] = options.map((o) => {
     const violations: Violation[] = [];
     const warnings: string[] = [];
-    for (const m of hard) {
+    for (const { item: m, fit } of binding) {
       if (m.rule) {
-        const v = checkRule(m, o);
+        const v = checkRule(m, o, fit);
         if (v) violations.push({ personaId: m.personaId, memoryId: m.id, text: v, checkedBy: 'code', scope: m.scope });
         const u = ruleUnknown(m, o);
         if (u) warnings.push(`${name(m.personaId)}: ${u} — δεν μπορεί να ελεγχθεί το «${m.statement}»`);
@@ -88,6 +94,10 @@ export function decide(
         const judged = evalOf(m.personaId, o.id)?.violations.find((v) => v.memoryId === m.id);
         if (judged) violations.push({ personaId: m.personaId, memoryId: m.id, text: judged.text, checkedBy: 'judged', scope: m.scope });
       }
+    }
+    for (const { item: m, fit } of soft) {
+      const v = checkRule(m, o, fit);
+      if (v) warnings.push(`${name(m.personaId)}: ${v.replace('πάνω από το όριο', 'πάνω από το συνηθισμένο')} — ενδεικτικό, δεν αποκλείει`);
     }
     const scores: Record<PersonaId, number> = {};
     for (const p of personas) scores[p.id] = evalOf(p.id, o.id)?.score ?? NEUTRAL;
@@ -102,6 +112,21 @@ export function decide(
       avg: Math.round(vals.reduce((a, b) => a + b, 0) / Math.max(vals.length, 1)),
     };
   });
+
+  // A judged breach the evaluator reports for EVERY option is about the request (dates, the plan itself),
+  // not about any option: it cannot help choose, so it is shown as a warning instead of excluding everything.
+  if (options.length >= 3) {
+    const judgedIds = new Set(results.flatMap((r) => r.violations.filter((v) => v.checkedBy === 'judged').map((v) => v.memoryId)));
+    for (const id of judgedIds) {
+      if (!results.every((r) => r.violations.some((v) => v.memoryId === id))) continue;
+      for (const r of results) {
+        const v = r.violations.find((x) => x.memoryId === id)!;
+        r.violations = r.violations.filter((x) => x.memoryId !== id);
+        r.warnings.push(`${name(v.personaId)}: ${v.text} (ισχύει για όλες τις επιλογές — θέμα του αιτήματος, όχι της επιλογής)`);
+        r.feasible = r.violations.length === 0;
+      }
+    }
+  }
 
   const price = (id: string) => options.find((o) => o.id === id)?.costPerPerson ?? Number.MAX_SAFE_INTEGER;
 
@@ -131,23 +156,36 @@ export function decide(
   }
 
   const feasible = results.filter((r) => r.feasible);
-  if (!feasible.length) {
-    rationale.push('Καμία επιλογή δεν περνά όλους τους υποχρεωτικούς περιορισμούς.');
-    return { status: 'deadlock', chosenOptionId: null, results, votes, concessions: [], relaxations: relaxationsFor(results, options, inputs, name), rationale };
+  if (!options.length) {
+    rationale.push('Δεν βρέθηκαν υποψήφιες επιλογές.');
+    return { status: 'deadlock', chosenOptionId: null, results, votes, concessions: [], relaxations: [], rationale };
   }
 
-  const ranked = [...feasible].sort((a, b) => b.min - a.min || b.avg - a.avg || price(a.optionId) - price(b.optionId));
-  const chosen = ranked[0];
-  if (ranked.length > 1) {
-    const second = ranked[1];
-    const lowest = Object.entries(second.scores).sort((a, b) => a[1] - b[1])[0];
-    rationale.push(
-      `Επιλέγεται «${optName(chosen.optionId)}»: ο λιγότερο ικανοποιημένος φτάνει ${chosen.min}/100. Με «${optName(second.optionId)}» θα έπεφτε στο ${lowest[1]}/100 (${name(lowest[0])}).`,
-    );
+  let status: Outcome['status'] = 'agreement';
+  let chosen: OptionResult;
+  if (feasible.length) {
+    const ranked = [...feasible].sort((a, b) => b.min - a.min || b.avg - a.avg || price(a.optionId) - price(b.optionId));
+    chosen = ranked[0];
+    if (ranked.length > 1) {
+      const second = ranked[1];
+      const lowest = Object.entries(second.scores).sort((a, b) => a[1] - b[1])[0];
+      rationale.push(
+        `Επιλέγεται «${optName(chosen.optionId)}»: ο λιγότερο ικανοποιημένος φτάνει ${chosen.min}/100. Με «${optName(second.optionId)}» θα έπεφτε στο ${lowest[1]}/100 (${name(lowest[0])}).`,
+      );
+    } else {
+      rationale.push(`Επιλέγεται «${optName(chosen.optionId)}», η μόνη επιλογή που περνά όλους τους περιορισμούς.`);
+    }
   } else {
-    rationale.push(`Επιλέγεται «${optName(chosen.optionId)}», η μόνη επιλογή που περνά όλους τους περιορισμούς.`);
+    // Never leave the group empty-handed: propose the option closest to everyone's limits.
+    status = 'compromise';
+    const sev = (r: OptionResult) => r.violations.reduce((a, v) => a + severity(v, options.find((o) => o.id === r.optionId)!, binding), 0);
+    const people = (r: OptionResult) => new Set(r.violations.map((v) => v.personaId)).size;
+    const ranked = [...results].sort((a, b) => people(a) - people(b) || a.violations.length - b.violations.length || sev(a) - sev(b) || b.min - a.min || b.avg - a.avg || price(a.optionId) - price(b.optionId));
+    chosen = ranked[0];
+    rationale.push(
+      `Καμία επιλογή δεν περνά όλα τα όρια — προτείνεται η πιο κοντινή σε όλους: «${optName(chosen.optionId)}». Χρειάζεται να δεχτεί: ${chosen.violations.map((v) => `${name(v.personaId)} — ${v.text}`).join(' · ')}.`,
+    );
   }
-
   const chosenOpt = options.find((o) => o.id === chosen.optionId)!;
   const concessions: Concession[] = votes.map((v) => {
     const finalScore = chosen.scores[v.personaId];
@@ -167,12 +205,29 @@ export function decide(
       const against = evalOf(v.personaId, chosen.optionId)?.reasons.filter((r) => r.effect === 'against') ?? [];
       for (const r of against.slice(0, 2)) items.push(r.text);
     }
-    return { personaId: v.personaId, stance: stanceFor(finalScore), finalScore, voteScore: v.score, items };
+    const mustAccept = chosen.violations.filter((x) => x.personaId === v.personaId);
+    for (const x of mustAccept) items.unshift(`Πρέπει να δεχτεί: ${x.text}`);
+    const stance = mustAccept.length && stanceFor(finalScore) === 'agree' ? 'agree_with_concession' : stanceFor(finalScore);
+    return { personaId: v.personaId, stance, finalScore, voteScore: v.score, items };
   });
   const objecting = concessions.filter((c) => c.stance === 'object');
   if (objecting.length) rationale.push(`Προσοχή: ${objecting.map((c) => name(c.personaId)).join(', ')} κάτω από ${STANCE_THRESHOLDS.concede}/100 — χρειάζεται ανθρώπινη συζήτηση.`);
 
-  return { status: 'agreement', chosenOptionId: chosen.optionId, results, votes, concessions, relaxations: [], rationale };
+  const relaxations = status === 'compromise' ? relaxationsFor(results, options, inputs, name) : [];
+  return { status, chosenOptionId: chosen.optionId, results, votes, concessions, relaxations, rationale };
+}
+
+/** How far an option is from a limit: cost overshoot ratio, hours late / 24, judged = 1. */
+function severity(v: Violation, o: CandidateOption, binding: { item: MemoryItem; fit: Fit }[]): number {
+  const b = binding.find((r) => r.item.id === v.memoryId);
+  if (!b?.item.rule) return 1;
+  if (b.item.rule.metric === 'max_cost') {
+    const max = costLimit(b.item, b.fit);
+    return max && o.costPerPerson !== null ? Math.max(0, (o.costPerPerson - max) / max) : 1;
+  }
+  const end = parseIso(o.endsAt);
+  const deadline = deadlineFor(b.item.rule.value, parseIso(o.startsAt));
+  return end && deadline ? Math.max(0, (end.getTime() - deadline.getTime()) / 86400000) : 1;
 }
 
 function relaxationsFor(results: OptionResult[], options: CandidateOption[], inputs: MemoryItem[], name: (id: string) => string): Relaxation[] {

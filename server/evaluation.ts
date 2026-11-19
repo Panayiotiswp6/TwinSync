@@ -1,7 +1,7 @@
 // Evaluation on SYNTHETIC data only.
 //  1. Held-out decisions: a twin, using only its confirmed profile, predicts a past choice
 //     it was never given as a source. Offline = demo heuristic; live = the AI evaluator.
-//  2. Scenario checks of the group logic (agreement, budget change, deadlock, vegetarian, no data).
+//  2. Scenario checks of the group logic (agreement, budget change, compromise, vegetarian, no data).
 //  3. Seed integrity: every memory quote is an exact span of its source.
 
 import holdout from './data/holdout.json';
@@ -161,7 +161,11 @@ export function runScenarios() {
     detail: `${title(trip)} → ${title(changed)}`,
   });
   const stuck = run([...base, limit('geo', 80)], 'trip');
-  results.push({ name: 'Όριο 80€: αδιέξοδο με εξήγηση και πρόταση χαλάρωσης', pass: stuck.out.status === 'deadlock' && stuck.out.relaxations.length > 0, detail: stuck.out.relaxations.map((r) => r.text).join(' | ') });
+  results.push({
+    name: 'Όριο 80€: τίποτα δεν χωράει — προτείνεται πάντα η πιο κοντινή επιλογή, με τι πρέπει να δεχτεί ο καθένας',
+    pass: stuck.out.status === 'compromise' && !!stuck.out.chosenOptionId && stuck.out.relaxations.length > 0,
+    detail: `${title(stuck)} · ${stuck.out.relaxations.map((r) => r.text).join(' | ')}`,
+  });
   const food = run(base, 'food');
   const steak = food.out.results.find((r) => r.optionId === 'cat-steak')!;
   results.push({ name: 'Φαγητό: χορτοφάγος + όριο 25€ αποκλείουν το steakhouse', pass: !steak.feasible && food.out.status === 'agreement', detail: `${title(food)} · steakhouse: ${steak.violations.map((v) => v.text).join(' | ')}` });
@@ -188,7 +192,7 @@ export function evaluationReport() {
     measures: [
       'Held-out: η ψήφος του Twin συγκρίνεται με την πραγματική (συνθετική) επιλογή του κατόχου, σε 8 αποφάσεις που δεν δόθηκαν ποτέ ως πηγή. Διαφορά βαθμολογίας < 3 μετρά ως «αβέβαιο», όχι ως σωστό.',
       'Live: το ίδιο με τον AI αξιολογητή (κοστίζει 8 μικρές κλήσεις, τρέχει μόνο όταν το ζητήσετε). Heuristic: ο κανόνας του demo mode, για σύγκριση.',
-      'Σενάρια: ελέγχουν τη λογική της ομάδας — περιορισμοί σε κώδικα, αλλαγή μετά από διόρθωση, αδιέξοδο, απουσία δεδομένων.',
+      'Σενάρια: ελέγχουν τη λογική της ομάδας — περιορισμοί σε κώδικα, αλλαγή μετά από διόρθωση, συμβιβασμός όταν τίποτα δεν χωράει, απουσία δεδομένων.',
       'Όλα τα δεδομένα είναι συνθετικά και λίγα — δείχνουν ότι ο μηχανισμός λειτουργεί, όχι στατιστική ακρίβεια σε πραγματικούς ανθρώπους.',
     ],
   };

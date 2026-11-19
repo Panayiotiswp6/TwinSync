@@ -1,13 +1,22 @@
 // Facts, templates and a grounding guard for each twin's group-chat draft.
 // A model draft may only restate facts derived from the decision; anything else is rejected.
 
+import { ownerText } from './heuristics';
 import { normalizeGreek } from './text';
 import { formatWhen } from './time';
-import type { CandidateOption, Decision, GroupRequest, Persona, PersonaId, Source } from './types';
+import type { CandidateOption, ChatLine, Decision, GroupRequest, Persona, PersonaId, Source } from './types';
 
-/** Sources containing the persona's own words — the style reference. */
+const STYLE_PRIORITY = ['chat', 'email', 'note', 'document', 'past_decision'];
+
+/** Sources containing the persona's own words — the style reference. Chats first; interviewer questions removed. */
 export function styleSamples(sources: Source[], personaId: PersonaId): Source[] {
-  return sources.filter((s) => s.personaId === personaId && ['note', 'chat', 'email', 'past_decision', 'document'].includes(s.kind)).slice(-8);
+  return sources
+    .filter((s) => s.personaId === personaId && STYLE_PRIORITY.includes(s.kind) && !(s.kind === 'past_decision' && s.title.startsWith('Απόφαση: ')))
+    .map((s, i) => ({ s, i }))
+    .sort((a, b) => STYLE_PRIORITY.indexOf(a.s.kind) - STYLE_PRIORITY.indexOf(b.s.kind) || b.i - a.i)
+    .slice(0, 8)
+    .map(({ s }) => ({ ...s, text: ownerText(s.text).trim() }))
+    .filter((s) => s.text.length > 0);
 }
 
 export function messageFacts(d: Decision, req: GroupRequest, personaId: PersonaId, personas: Persona[]): string[] {
@@ -18,8 +27,8 @@ export function messageFacts(d: Decision, req: GroupRequest, personaId: PersonaI
   const mine = opt(vote?.optionId ?? null);
   if (mine) facts.push(`Η δική μου πρώτη επιλογή ήταν: ${mine.title}.`);
   const chosen = opt(d.outcome.chosenOptionId);
-  if (d.outcome.status === 'agreement' && chosen) {
-    facts.push(`Κοινή πρόταση: ${chosen.title}${chosen.location ? `, ${chosen.location}` : ''}.`);
+  if (chosen) {
+    facts.push(`${d.outcome.status === 'compromise' ? 'Πρόταση-συμβιβασμός (καμία επιλογή δεν περνούσε όλα τα όρια)' : 'Κοινή πρόταση'}: ${chosen.title}${chosen.location ? `, ${chosen.location}` : ''}.`);
     if (chosen.costPerPerson !== null) facts.push(`Κόστος περίπου ${chosen.costPerPerson}€ το άτομο.`);
     if (chosen.endsAt) facts.push(`Τελειώνει ${formatWhen(chosen.endsAt)}.`);
     if (chosen.features.length) facts.push(`Περιλαμβάνει: ${chosen.features.slice(0, 4).join(', ')}.`);
@@ -39,7 +48,7 @@ export function messageFacts(d: Decision, req: GroupRequest, personaId: PersonaI
 
 export function templateMessage(d: Decision, personaId: PersonaId): string {
   const chosen = d.options.find((o) => o.id === d.outcome.chosenOptionId);
-  if (d.outcome.status !== 'agreement' || !chosen) {
+  if (!chosen) {
     const mine = d.outcome.relaxations.find((r) => r.personaId === personaId);
     return mine ? `Δεν βγαίνει κάτι με τα τωρινά όρια. Από μένα θα βοηθούσε: ${mine.text.split(': ').slice(1).join(': ')}` : 'Δεν βγαίνει κάτι με τα τωρινά όρια όλων. Να το ξαναδούμε;';
   }
@@ -69,4 +78,53 @@ export function ungroundedReason(text: string, facts: string[], options: Candida
     if (head.length >= 6 && norm.includes(head) && !factText.includes(head)) return `ανέφερε «${o.title}», που δεν είναι στα δεδομένα του`;
   }
   return text.length > 300 ? 'πολύ μεγάλο μήνυμα' : null;
+}
+
+/** Facts the negotiation chat may use: shared ones, and each person's own (vote, reasons, wishes, concessions). */
+export function chatFacts(d: Decision, req: GroupRequest, personas: Persona[]): { shared: string[]; perPerson: Record<PersonaId, string[]> } {
+  const opt = (id: string | null) => d.options.find((o) => o.id === id);
+  const chosen = opt(d.outcome.chosenOptionId);
+  const shared = [`Αίτημα: ${req.title}.`, ...d.options.map((o) => `Επιλογή: ${o.title}${o.location ? ` (${o.location})` : ''}${o.costPerPerson !== null ? `, ~${o.costPerPerson}€/άτομο` : ''}${o.endsAt ? `, επιστροφή ${formatWhen(o.endsAt)}` : ''}.`)];
+  if (chosen) shared.push(d.outcome.status === 'compromise' ? `Τελική πρόταση (συμβιβασμός, κανένα δεν περνούσε όλα τα όρια): ${chosen.title}.` : `Τελική κοινή πρόταση: ${chosen.title}.`);
+  const perPerson: Record<PersonaId, string[]> = {};
+  for (const p of personas) {
+    const f: string[] = [];
+    const vote = d.outcome.votes.find((v) => v.personaId === p.id);
+    const mine = opt(vote?.optionId ?? null);
+    if (mine) f.push(`Η πρώτη μου επιλογή: ${mine.title}${vote?.verdict ? ` — «${vote.verdict}»` : ''}.`);
+    for (const r of vote?.reasons.slice(0, 3) ?? []) f.push(`${r.effect === 'for' ? 'Υπέρ' : 'Κατά'}: ${r.text}`);
+    for (const m of d.inputs.filter((x) => x.personaId === p.id && x.scope === 'request').slice(0, 3)) f.push(`Ζήτησα για αυτό: ${m.statement}`);
+    if (chosen && chosen.id !== mine?.id) {
+      const ev = d.evaluations.find((e) => e.personaId === p.id && e.optionId === chosen.id);
+      for (const r of ev?.reasons.slice(0, 2) ?? []) f.push(`Για την τελική πρόταση — ${r.effect === 'for' ? 'υπέρ' : 'κατά'}: ${r.text}`);
+    }
+    const c = d.outcome.concessions.find((x) => x.personaId === p.id);
+    for (const item of c?.items.slice(0, 3) ?? []) f.push(`Παραχώρηση: ${item}`);
+    if (c) f.push(c.stance === 'agree' ? 'Συμφωνώ με την τελική πρόταση.' : c.stance === 'agree_with_concession' ? 'Τη δέχομαι με παραχώρηση.' : 'Δεν με βολεύει η τελική πρόταση, θέλω να το συζητήσουμε.');
+    perPerson[p.id] = f;
+  }
+  return { shared, perPerson };
+}
+
+/** Demo / fallback chat built from the decision, no style imitation. */
+export function templateChat(d: Decision, personas: Persona[]): ChatLine[] {
+  const opt = (id: string | null) => d.options.find((o) => o.id === id);
+  const chosen = opt(d.outcome.chosenOptionId);
+  const lines: ChatLine[] = [];
+  for (const p of personas) {
+    const v = d.outcome.votes.find((x) => x.personaId === p.id);
+    const mine = opt(v?.optionId ?? null);
+    const why = v?.reasons.find((r) => r.effect === 'for');
+    lines.push({ personaId: p.id, text: mine ? `Εγώ λέω ${mine.title}${why ? ` — ${why.text.replace(/\s*\(«.*»\)$/, '')}` : ''}` : 'Δεν μου κάθεται καμία επιλογή τελείως...' });
+  }
+  if (!chosen) return lines;
+  for (const p of personas) {
+    const v = d.outcome.votes.find((x) => x.personaId === p.id);
+    const c = d.outcome.concessions.find((x) => x.personaId === p.id);
+    if (v?.optionId === chosen.id) continue;
+    const must = c?.items.find((i) => i.startsWith('Πρέπει να δεχτεί'));
+    lines.push({ personaId: p.id, text: must ? `Οκ, πάμε ${chosen.title}. ${must.replace('Πρέπει να δεχτεί: ', 'Δέχομαι ότι ')}` : c?.stance === 'object' ? `Για ${chosen.title} δεν είμαι σίγουρος, να το δούμε λίγο ακόμα` : `Οκ, πάω με ${chosen.title}` });
+  }
+  lines.push({ personaId: personas[0]?.id ?? '', text: `Κλείνουμε ${chosen.title}${chosen.costPerPerson !== null ? `, ${chosen.costPerPerson}€ το άτομο` : ''};` });
+  return lines.filter((l) => l.personaId);
 }

@@ -41,10 +41,12 @@ const PALETTE: [string, string][] = [
 
 let catalog: CatalogEntry[] = [];
 
-function fresh(): State {
+function fresh(empty = false): State {
   const seed = loadSeed();
   catalog = seed.catalog;
-  return { version: STATE_VERSION, personas: seed.personas, sources: seed.sources, memory: seed.memory, requests: [], decisions: [], usage: { calls: 0, inputTokens: 0, outputTokens: 0, embeddingTokens: 0 }, vectors: {} };
+  const usage = { calls: 0, inputTokens: 0, outputTokens: 0, embeddingTokens: 0 };
+  if (empty) return { version: STATE_VERSION, personas: [], sources: [], memory: [], requests: [], decisions: [], usage, vectors: {}, holdouts: [] };
+  return { version: STATE_VERSION, personas: seed.personas, sources: seed.sources, memory: seed.memory, requests: [], decisions: [], usage, vectors: {} };
 }
 
 function load(): State {
@@ -182,8 +184,11 @@ export const store = {
   },
   save: persist,
 
-  reset() {
-    state = fresh();
+  /** Back to the synthetic demo group, or (empty) to no twins at all. AI usage counters are kept. */
+  reset(empty = false) {
+    const usage = state.usage;
+    state = fresh(empty);
+    state.usage = usage;
     persist();
   },
 
@@ -299,6 +304,7 @@ export const store = {
         strength: d.strength,
         hard: d.hard,
         rule: d.rule,
+        ...(d.context ? { context: d.context } : {}),
         categories: d.categories,
         keywords: d.keywords,
         refs: [{ sourceId: source.id, quote: d.quote }],

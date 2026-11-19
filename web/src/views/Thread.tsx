@@ -5,6 +5,7 @@ import { describeDeadline, formatWhen } from '../../../shared/time';
 import { STANCE_THRESHOLDS } from '../../../shared/decide';
 import { api, type AppState } from '../api';
 import { Working } from '../components/Composer';
+import { LiveTwinChat, TwinChatView } from '../components/TwinChat';
 import { Avatar, AvatarStack, Badge, CATEGORY, Cite, Empty, ScoreRing, Spinner, timeAgo, type OpenSource } from '../components/ui';
 
 const STANCE = {
@@ -131,7 +132,7 @@ function Wishes({ req, d, people, state, onState, onOpen }: { req: AppState['req
       <div className="wish-form limit">
         <span className="small">Γρήγορο όριο κόστους για {people.find((p) => p.id === who)?.name}:</span>
         <input type="number" min={1} value={limit} onChange={(e) => setLimit(e.target.value)} placeholder="€ / άτομο" />
-        <button className="btn" disabled={!!busy || !Number(limit)} onClick={() => run('limit', () => api.setLimit(req.id, who, Number(limit)))} title="Υπολογίζεται σε κώδικα, χωρίς νέα κλήση AI">
+        <button className="btn" disabled={!!busy || !Number(limit)} onClick={() => run('limit', () => api.setLimit(req.id, who, Number(limit)))} title="Ελέγχεται σε κώδικα — οι αξιολογήσεις των Twins δεν ξαναγίνονται">
           {busy === 'limit' ? <Spinner /> : 'Εφαρμογή'}
         </button>
         <span className="tiny muted">αριθμητικά όρια → άμεσος επανυπολογισμός σε κώδικα</span>
@@ -253,6 +254,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
   const decisions = state.decisions.filter((d) => d.requestId === id);
   const d = decisions.at(-1);
   const [busy, setBusy] = useState<string | null>(null);
+  const [job, setJob] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   if (!req || !d) return <Empty emoji="🔎" title="Το αίτημα δεν βρέθηκε" />;
   const people = req.participants.map((pid) => state.personas.find((p) => p.id === pid)!).filter(Boolean);
@@ -264,10 +266,9 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
     setBusy(regenerate ? 'regen' : 'rerun');
     setErr(null);
     try {
-      onState((await api.rerun(req.id, regenerate)).state);
+      setJob((await api.rerunAsync(req.id, regenerate)).jobId);
     } catch (e) {
       setErr((e as Error).message);
-    } finally {
       setBusy(null);
     }
   };
@@ -286,6 +287,12 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           <p className="small muted">
             «{req.text}» {req.periodStart && `· ${formatWhen(req.periodStart)} → ${formatWhen(req.periodEnd)}`}
           </p>
+          {req.days && (
+            <p className="tiny muted">
+              Πλαίσιο: {req.days} {req.days === 1 ? 'μέρα' : 'μέρες'} · {req.where === 'abroad' ? 'εξωτερικό' : req.where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}
+              {req.place ? ` · ${req.place}` : ''} — τα όρια του προφίλ εφαρμόζονται μόνο όπου ταιριάζει το πλαίσιο.
+            </p>
+          )}
         </div>
         <AvatarStack personas={people} size={30} />
       </header>
@@ -303,15 +310,32 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
       </section>
 
       {busy ? (
-        <div className="card">
-          <Working live={live && busy === 'regen'} />
-        </div>
-      ) : d.outcome.status === 'agreement' && chosen ? (
-        <section className="hero card">
-          <div className="hero-cover" style={{ background: CATEGORY[req.category].grad }}>
+        job ? (
+          <LiveTwinChat
+            jobId={job}
+            people={people}
+            onDone={(st) => {
+              onState(st);
+              setBusy(null);
+              setJob(null);
+            }}
+            onError={(m) => {
+              setErr(m);
+              setBusy(null);
+              setJob(null);
+            }}
+          />
+        ) : (
+          <div className="card">
+            <Spinner label="Ξεκινάει…" />
+          </div>
+        )
+      ) : chosen ? (
+        <section className={`hero card ${d.outcome.status === 'compromise' ? 'compromise' : ''}`}>
+          <div className="hero-cover" style={{ background: d.outcome.status === 'compromise' ? 'linear-gradient(135deg,#f7971e,#e44fc4)' : CATEGORY[req.category].grad }}>
             <span className="hero-emoji">{chosen.emoji}</span>
             <div>
-              <span className="eyebrow light">Η κοινή πρόταση των Twins</span>
+              <span className="eyebrow light">{d.outcome.status === 'compromise' ? 'Συμβιβασμός — η πιο κοντινή επιλογή σε όλους' : 'Η κοινή πρόταση των Twins'}</span>
               <h2>{chosen.title}</h2>
               <span className="cover-chips">
                 {chosen.costPerPerson !== null && <span>{chosen.costPerPerson}€/άτομο</span>}
@@ -326,6 +350,16 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                 <li key={r}>{r}</li>
               ))}
             </ul>
+            {d.outcome.status === 'compromise' && d.outcome.relaxations.length > 0 && (
+              <details className="more">
+                <summary>Εναλλακτικά: τι θα έκανε εφικτή άλλη επιλογή</summary>
+                <ul className="plain relax small">
+                  {d.outcome.relaxations.map((r) => (
+                    <li key={r.memoryId + r.optionId}>→ {r.text}</li>
+                  ))}
+                </ul>
+              </details>
+            )}
             <div className="concessions">
               {d.outcome.concessions.map((c) => {
                 const p = people.find((x) => x.id === c.personaId)!;
@@ -386,12 +420,12 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           <div className="hero-cover" style={{ background: 'linear-gradient(135deg,#ff512f,#dd2476)' }}>
             <span className="hero-emoji">🤔</span>
             <div>
-              <span className="eyebrow light">Αδιέξοδο</span>
-              <h2>Καμία επιλογή δεν περνά όλους τους υποχρεωτικούς περιορισμούς</h2>
+              <span className="eyebrow light">Χωρίς επιλογές</span>
+              <h2>Δεν βρέθηκαν υποψήφιες επιλογές — ζητήστε νέες</h2>
             </div>
           </div>
           <div className="hero-body">
-            <p className="small">Τα Twins δεν διαλέγουν κάτι που παραβιάζει όριο κατόχου. Τι θα το ξεμπλόκαρε:</p>
+            <p className="small">Δοκιμάστε «Νέες επιλογές». Τι θα βοηθούσε:</p>
             <ul className="plain relax">
               {d.outcome.relaxations.map((r) => (
                 <li key={r.memoryId + r.optionId}>→ {r.text}</li>
@@ -401,6 +435,8 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           </div>
         </section>
       )}
+
+      {!busy && <TwinChatView chat={d.chat} people={people} />}
 
       <div className="thread-actions">
         <button className="btn" disabled={!!busy} onClick={() => rerun(false)}>

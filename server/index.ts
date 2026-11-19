@@ -5,7 +5,9 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { aiModel, aiProvider, embeddingsEnabled } from './ai';
 import { evaluationReport, holdoutLive } from './evaluation';
-import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
+import { getJob, startJob } from './jobs';
+import { onboard } from './onboarding';
+import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, learnFromDecision, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
 import { parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
 
@@ -162,8 +164,42 @@ app.post(
     const b = z.object({ text: z.string().trim().min(3).max(1000), participants: z.array(z.string()).min(2), wishes: z.record(z.string(), z.string().max(1000)).default({}) }).parse(req.body);
     const participants = b.participants.filter((id) => store.persona(id));
     if (participants.length < 2) return res.status(400).json({ error: 'Χρειάζονται τουλάχιστον δύο Twins' });
+    if (req.query.async === '1') {
+      // Long AI run: return a job id at once; the browser shows the twins' chat while it works.
+      const job = startJob('request', async (emit) => {
+        const r = await createRequest(b.text, participants, b.wishes, emit);
+        return { requestId: r.request.id, decisionId: r.decision.id };
+      });
+      return res.json({ jobId: job.id });
+    }
     const r = await createRequest(b.text, participants, b.wishes);
     res.json({ requestId: r.request.id, decisionId: r.decision.id, state: snapshot() });
+  }),
+);
+app.get('/api/jobs/:id', (req, res) => {
+  const j = getJob(req.params.id, Number(req.query.since) || 0);
+  if (!j) return res.status(404).json({ error: 'not found' });
+  res.json(j.status === 'done' ? { ...j, state: snapshot() } : j);
+});
+
+// ---- In-app onboarding interview -> new twin ----
+const Money = z.object({ amount: z.number().nullable(), strict: z.boolean() });
+const Deadline = z.object({ day: z.number().int().min(0).max(6).nullable(), time: z.string().max(5), strict: z.boolean() });
+const OnboardBody = z.object({
+  name: z.string().trim().min(2).max(40),
+  emoji: z.string().max(8).default('✨'),
+  answers: z.record(z.string().max(40), z.union([z.string().max(4000), z.array(z.string().max(80)).max(12), Money, Deadline])),
+  holdouts: z
+    .array(z.object({ question: z.string().max(200), options: z.array(z.object({ title: z.string().max(100), cost: z.number().nullable() })).max(4), chosen: z.number().int().min(0).max(3), why: z.string().max(300).default('') }))
+    .max(3)
+    .default([]),
+});
+app.post(
+  '/api/onboard',
+  wrap((req, res) => {
+    const body = OnboardBody.parse(req.body);
+    const job = startJob('onboard', (emit) => onboard(body, emit));
+    res.json({ jobId: job.id });
   }),
 );
 app.post(
@@ -193,6 +229,14 @@ app.post(
   '/api/requests/:id/rerun',
   wrap(async (req, res) => {
     const b = z.object({ regenerateOptions: z.boolean().default(false) }).parse(req.body ?? {});
+    if (!store.request(req.params.id)) return res.status(404).json({ error: 'not found' });
+    if (req.query.async === '1') {
+      const job = startJob('request', async (emit) => {
+        const d = await runDecision(req.params.id, { ...b, emit });
+        return { requestId: d.requestId, decisionId: d.id };
+      });
+      return res.json({ jobId: job.id });
+    }
     const d = await runDecision(req.params.id, b);
     res.json({ decisionId: d.id, state: snapshot() });
   }),
@@ -204,6 +248,8 @@ app.post(
   wrap((req, res) => {
     const b = z.object({ personaId: z.string(), approve: z.boolean() }).parse(req.body);
     store.approve(req.params.id, b.personaId, b.approve ? 'approved' : 'rejected');
+    // Learning loop: what the owner approved becomes one of their past decisions (in the background).
+    if (b.approve) learnFromDecision(req.params.id, b.personaId).catch((e) => console.warn('[learn]', (e as Error).message));
     res.json(snapshot());
   }),
 );
@@ -231,8 +277,9 @@ app.post(
     res.json({ ...evaluationReport(), live });
   }),
 );
-app.post('/api/reset', (_req, res) => {
-  store.reset();
+app.post('/api/reset', (req, res) => {
+  // ?empty=1 starts from scratch (no twins); otherwise the synthetic demo group is restored.
+  store.reset(req.query.empty === '1');
   res.json(snapshot());
 });
 
