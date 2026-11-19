@@ -72,9 +72,8 @@ export const SECTIONS: Section[] = [
     id: 'time',
     title: 'Χρόνος',
     emoji: '⏰',
-    intro: 'Τα όρια χρόνου είναι από τα πιο συχνά «όχι». Σημείωσε ποια είναι αυστηρά.',
+    intro: 'Πώς σου ταιριάζει να κυλάει ο χρόνος σε εκδρομές και εξόδους.',
     questions: [
-      { id: 'time_back', q: 'Υπάρχει μέρα και ώρα που πρέπει να έχεις γυρίσει από ταξίδι;', type: 'deadline', optional: true, help: 'π.χ. Κυριακή 21:00 γιατί δουλεύεις Δευτέρα πρωί' },
       { id: 'time_early', q: 'Αναχώρηση για εκδρομή στις 7 το πρωί;', type: 'chips', options: ['Κανένα πρόβλημα', 'Αν πρέπει…', 'Όχι πριν τις 9–10'] },
       { id: 'time_night', q: 'Μέχρι τι ώρα σου αρέσει να κρατάει μια βραδινή έξοδος;', type: 'chips', options: ['Ως τις 12', 'Γύρω στις 2', 'Μέχρι να ξημερώσει'] },
       { id: 'time_fixed', q: 'Σταθερές υποχρεώσεις που πρέπει να ξέρει το Twin σου; (μέρες, ώρες, γιατί)', type: 'text', optional: true, placeholder: 'π.χ. προπόνηση Τρίτη & Πέμπτη 19:00, Σάββατο πρωί δουλεύω' },
@@ -259,26 +258,6 @@ export function structuredDrafts(answers: Answers): MemoryDraft[] {
         }),
       );
     }
-  }
-
-  const back = answers.time_back as DeadlineAnswer | undefined;
-  const backQuote = text('time_back');
-  if (back && backQuote) {
-    const [hh, mm] = back.time.split(':').map(Number);
-    const value = `weekly:${back.day}:${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
-    out.push(
-      draft({
-        kind: back.strict ? 'constraint' : 'preference',
-        statement: `Επιστροφή από ταξίδι το αργότερο ${WEEKDAY_NAMES[back.day!]} ${back.time}${back.strict ? '' : ' (κατά προτίμηση)'}`,
-        domain: 'schedule',
-        polarity: 'neutral',
-        strength: back.strict ? 1 : 0.6,
-        hard: back.strict,
-        rule: { metric: 'latest_end', value },
-        categories: ['trip'],
-        quote: backQuote,
-      }),
-    );
   }
 
   const early = text('time_early');

@@ -80,7 +80,6 @@ describe('in-app onboarding', () => {
     money_evening: { amount: 25, strict: false },
     money_weekend: { amount: 200, strict: false },
     money_abroad: { amount: 700, strict: true },
-    time_back: { day: 0, time: '22:00', strict: true },
     time_early: 'Όχι πριν τις 9–10',
     food_no: ['Κρέας (χορτοφάγος)'],
     travel_stay_no: ['Σκηνή / κάμπινγκ'],
@@ -98,7 +97,7 @@ describe('in-app onboarding', () => {
     expect(weekend.hard).toBe(false);
     expect(weekend.context).toEqual({ where: 'domestic', days: 2 });
     expect(mem.find((m) => m.rule?.value === '700')?.hard).toBe(true);
-    expect(mem.find((m) => m.rule?.metric === 'latest_end')?.rule?.value).toBe('weekly:0:22:00');
+    expect(mem.some((m) => m.rule?.metric === 'latest_end')).toBe(false); // no return-time question any more
     expect(mem.some((m) => m.hard && m.statement.includes('Χορτοφάγος'))).toBe(true);
     for (const m of mem) expect(store.source(m.refs[0].sourceId)?.text).toContain(m.refs[0].quote);
     expect(store.sources.some((s) => s.personaId === r.personaId && s.kind === 'chat' && s.text.includes('ακριβουλι'))).toBe(true);
