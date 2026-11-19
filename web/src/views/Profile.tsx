@@ -54,7 +54,12 @@ function MemoryCard({ m, onOpen, onState, review }: { m: MemoryItem; onOpen: Ope
       )}
       <div className="mem-tags">
         {m.hard && <Badge tone="bad">Υποχρεωτικό</Badge>}
-        {m.rule && <Badge tone="info">{m.rule.metric === 'max_cost' ? `≤ ${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</Badge>}
+        {m.rule && <Badge tone="info">{m.rule.metric === 'max_cost' ? `${m.hard ? '≤' : '~'} ${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</Badge>}
+        {m.context && (m.context.where !== 'any' || m.context.days > 0) && (
+          <Badge tone="neutral" title="Ισχύει μόνο σε αυτό το πλαίσιο· αλλού μόνο ως ένδειξη">
+            {[{ local: '📍 πόλη', domestic: '🇬🇷 Ελλάδα', abroad: '✈️ εξωτερικό', any: '' }[m.context.where], m.context.days ? `${m.context.days} ${m.context.days === 1 ? 'μέρα' : 'μέρες'}` : ''].filter(Boolean).join(' · ')}
+          </Badge>
+        )}
         {!m.hard && (
           <span className="strength" title="Σημασία">
             {[0.3, 0.6, 0.9].map((t) => (
@@ -360,6 +365,11 @@ export function TwinsList({ state, onState }: { state: AppState; onState: (s: Ap
             </div>
           );
         })}
+        <div className="card twin-card twin-new" role="button" tabIndex={0} onClick={() => go('/onboard')} onKeyDown={(e) => e.key === 'Enter' && go('/onboard')}>
+          <span className="story-add big">+</span>
+          <b>Νέο Twin</b>
+          <span className="small muted">Σύντομη συνέντευξη μέσα στην εφαρμογή</span>
+        </div>
       </div>
     </div>
   );

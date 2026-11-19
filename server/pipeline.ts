@@ -2,12 +2,15 @@
 // Live AI does the reasoning (understanding, options, per-twin judgement, style);
 // code does the guarantees (quotes, ids, numeric limits, fairness, approvals).
 
+import { contextFit, requestContext, spanDays, type RequestContext } from '../shared/context';
 import { decide } from '../shared/decide';
-import { evaluateWithRules, extractWithRules, parseRequestWithRules, type MemoryDraft } from '../shared/heuristics';
-import { messageFacts, styleSamples, templateMessage, ungroundedReason } from '../shared/messages';
+import { contextOf, evaluateWithRules, extractWithRules, parseRequestWithRules, type MemoryDraft } from '../shared/heuristics';
+import { chatFacts, messageFacts, styleSamples, templateChat, templateMessage, ungroundedReason } from '../shared/messages';
+import { normalizeGreek } from '../shared/text';
 import { athensIso, localParts, parseIso } from '../shared/time';
-import type { CandidateOption, Category, Decision, Evaluation, MemoryItem, PersonaId, PipelineStep, StyleCard, TwinMessage } from '../shared/types';
-import { aiErrorReason, aiModel, analyzeSource, buildStyle, draftMessages, evaluateOptions, generateOptions, liveAi, parseRequest, type TwinContext } from './ai';
+import type { CandidateOption, Category, Decision, Evaluation, MemoryItem, Persona, PersonaId, PipelineStep, StyleCard, TwinChat, TwinMessage } from '../shared/types';
+import { aiErrorReason, aiModel, analyzeSource, buildStyle, draftMessages, evaluateOptions, generateOptions, liveAi, negotiationChat, parseRequest, type TwinContext } from './ai';
+import { noEmit, type Emit } from './jobs';
 import { retrieve } from './retrieval';
 import { store } from './store';
 
@@ -78,10 +81,14 @@ export async function refreshStyle(personaId: PersonaId): Promise<{ style: Style
 // Request + one-off wishes
 // ---------------------------------------------------------------------------
 
-export async function createRequest(text: string, participants: PersonaId[], wishes: Record<PersonaId, string>) {
+type Parsed = { title: string; category: Category; periodStart: string | null; periodEnd: string | null; where: 'local' | 'domestic' | 'abroad' | null; place: string; groupDrafts: MemoryDraft[]; wishDrafts: Record<string, MemoryDraft[]> };
+
+export async function createRequest(text: string, participants: PersonaId[], wishes: Record<PersonaId, string>, emit: Emit = noEmit) {
   const now = new Date();
   const wishList = participants.filter((id) => wishes[id]?.trim()).map((id) => ({ personaId: id, name: store.persona(id)!.name, text: wishes[id].trim() }));
-  let parsed: { title: string; category: Category; periodStart: string | null; periodEnd: string | null; groupDrafts: MemoryDraft[]; wishDrafts: Record<string, MemoryDraft[]> };
+  emit({ who: 'system', kind: 'info', text: `Νέο αίτημα: «${text.trim().slice(0, 120)}»` });
+  for (const id of participants) emit({ who: id, kind: 'join', text: `Το Twin ${store.persona(id)?.name ?? id} μπήκε στη συζήτηση` });
+  let parsed: Parsed;
   let mode: 'ai' | 'demo' = 'demo';
   let note: string | undefined;
   const t = timer();
@@ -96,7 +103,10 @@ export async function createRequest(text: string, participants: PersonaId[], wis
   } else {
     parsed = rulesParse(text, now, wishList);
   }
-  const req = store.addRequest({ text, title: parsed.title, category: parsed.category, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd, participants });
+  const days = spanDays(parsed.periodStart, parsed.periodEnd);
+  const where = parsed.where ?? (parsed.category === 'trip' ? 'domestic' : 'local');
+  const req = store.addRequest({ text, title: parsed.title, category: parsed.category, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd, participants, days, where, place: parsed.place });
+  emit({ who: 'system', kind: 'info', text: `${labelCategory(parsed.category)} · ${days} ${days === 1 ? 'μέρα' : 'μέρες'} · ${where === 'abroad' ? 'εξωτερικό' : where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}${parsed.place ? ` · ${parsed.place}` : ''}` });
   const reqSource = store.addSource('group', 'request', `Αίτημα: ${parsed.title}`, text);
   reqSource.analyzed = true;
   for (const pid of participants) {
@@ -108,16 +118,18 @@ export async function createRequest(text: string, participants: PersonaId[], wis
     store.addMemory(w.personaId, src, parsed.wishDrafts[w.personaId] ?? [], { origin: mode === 'ai' ? 'ai' : 'rules', status: 'confirmed', scope: 'request', requestId: req.id });
   }
   const parseStep: PipelineStep = { key: 'parse', label: 'Κατανόηση αιτήματος & επιθυμιών', detail: `${labelCategory(parsed.category)} · ${wishList.length} προσωρινές επιθυμίες${note ? ` · ${note}` : ''}`, mode, ms: t() };
-  const decision = await runDecision(req.id, { parseStep });
+  const decision = await runDecision(req.id, { parseStep, emit });
   return { request: req, decision };
 }
 
-function rulesParse(text: string, now: Date, wishes: { personaId: string; text: string }[]) {
+function rulesParse(text: string, now: Date, wishes: { personaId: string; text: string }[]): Parsed {
   const r = parseRequestWithRules(text, now);
+  const c = contextOf(normalizeGreek(text));
+  const where = c.where === 'abroad' ? 'abroad' : r.category === 'trip' ? 'domestic' : 'local';
   const wishDrafts: Record<string, MemoryDraft[]> = {};
   for (const w of wishes) wishDrafts[w.personaId] = extractWithRules(w.text).map((d) => ({ ...d, categories: [] }));
   const groupDrafts = extractWithRules(text).filter((d) => d.hard).map((d) => ({ ...d, categories: [] }));
-  return { ...r, groupDrafts, wishDrafts };
+  return { ...r, where, place: '', groupDrafts, wishDrafts };
 }
 
 /** Add a one-off wish (or save it to the profile) for one person, then re-decide. */
@@ -218,9 +230,11 @@ function catalogOptions(category: Category, start: string | null, end: string | 
     }));
 }
 
-export async function runDecision(requestId: string, opts: { regenerateOptions?: boolean; parseStep?: PipelineStep }): Promise<Decision> {
+export async function runDecision(requestId: string, opts: { regenerateOptions?: boolean; parseStep?: PipelineStep; emit?: Emit }): Promise<Decision> {
   const req = store.request(requestId);
   if (!req) throw new Error('not found');
+  const emit = opts.emit ?? noEmit;
+  const ctx = requestContext(req);
   const personas = req.participants.map((id) => store.persona(id)!).filter(Boolean);
   const previous = store.decisionsFor(requestId).at(-1);
   const steps: PipelineStep[] = opts.parseStep ? [opts.parseStep] : [];
@@ -233,7 +247,8 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
   for (const p of personas) {
     const r = await retrieve(`${req.title}. ${req.text}`, store.profile(p.id), store.requestItems(requestId, p.id));
     methods.add(r.method);
-    twins.push({ persona: p, items: r.items });
+    twins.push({ persona: p, items: r.items, learned: learnedIds(r.items) });
+    for (const line of recall(r.items, ctx)) emit({ who: p.id, kind: 'think', text: line });
   }
   const inputs = twins.flatMap((x) => x.items);
   steps.push({ key: 'retrieve', label: 'Ανάκτηση μνήμης', detail: `${inputs.length} αναμνήσεις από ${personas.length} Twins (${[...methods].map((m) => (m === 'embeddings' ? 'embeddings' : m === 'keywords' ? 'λέξεις-κλειδιά' : 'όλες')).join(', ')})`, mode: methods.has('embeddings') ? 'ai' : 'code', ms: t() });
@@ -249,7 +264,8 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     optDetail = 'ίδιες επιλογές με την προηγούμενη εκτέλεση';
   } else if (live) {
     try {
-      options = await generateOptions(req, twins);
+      emit({ who: 'system', kind: 'info', text: 'Ψάχνουμε επιλογές που ταιριάζουν σε όλους…' });
+      options = await generateOptions(req, twins, ctx);
       optMode = 'ai';
       optDetail = `${options.length} επιλογές από το ${aiModel()}`;
     } catch (e) {
@@ -261,6 +277,7 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     optDetail = `${options.length} επιλογές από τον συνθετικό κατάλογο (demo)`;
   }
   steps.push({ key: 'options', label: 'Υποψήφιες επιλογές', detail: optDetail, mode: optMode, ms: t() });
+  emit({ who: 'system', kind: 'options', text: options.map((o) => `${o.emoji} ${o.title}${o.costPerPerson !== null ? ` · ~${o.costPerPerson}€` : ''}`).join('\n') });
 
   // 3. Each twin evaluates each option (reuse when only numeric rules changed).
   t = timer();
@@ -274,7 +291,7 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     evDetail = 'άλλαξαν μόνο αριθμητικά όρια — επαναχρησιμοποίηση αξιολογήσεων, χωρίς νέα κλήση AI';
   } else if (live && options.length) {
     try {
-      evaluations = await evaluateOptions(options, twins);
+      evaluations = await evaluateOptions(options, twins, ctx, `${req.title}. ${req.text}`);
       evMode = 'ai';
       evDetail = `${evaluations.length} αξιολογήσεις (${personas.length} Twins × ${options.length} επιλογές)`;
     } catch (e) {
@@ -289,8 +306,18 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
 
   // 4. Group decision in code.
   t = timer();
-  const outcome = decide(personas, inputs, options, evaluations, req.category);
-  steps.push({ key: 'decide', label: 'Κοινή απόφαση', detail: outcome.status === 'agreement' ? 'περιορισμοί σε κώδικα · max-min δικαιοσύνη' : 'αδιέξοδο — προτάσεις χαλάρωσης', mode: 'code', ms: t() });
+  const outcome = decide(personas, inputs, options, evaluations, req.category, ctx);
+  steps.push({
+    key: 'decide',
+    label: 'Κοινή απόφαση',
+    detail: outcome.status === 'agreement' ? 'περιορισμοί σε κώδικα · max-min δικαιοσύνη' : outcome.status === 'compromise' ? 'καμία επιλογή δεν περνά όλα τα όρια — η πιο κοντινή σε όλους' : 'καμία επιλογή',
+    mode: 'code',
+    ms: t(),
+  });
+  for (const v of outcome.votes) {
+    const o = options.find((x) => x.id === v.optionId);
+    emit({ who: v.personaId, kind: 'vote', text: o ? `${o.emoji} ${o.title} — ${v.verdict || 'η πρώτη μου επιλογή'}` : 'Καμία επιλογή δεν μου ταιριάζει πλήρως' });
+  }
 
   const decision = store.addDecision({
     requestId,
@@ -304,8 +331,61 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     aiModel: live ? aiModel() : null,
   });
   if (previous) decision.diff = { previousId: previous.id, changes: diffChanges(previous, decision) };
+  emit({ who: 'system', kind: 'info', text: 'Τα Twins συζητούν…' });
+  decision.chat = await twinChat(decision, personas);
+  for (const l of decision.chat.lines) emit({ who: l.personaId, kind: 'say', text: l.text });
   store.save();
   return decision;
+}
+
+/** Memory learned from the person's own past decisions (approved requests, past_decision sources). */
+function learnedIds(items: MemoryItem[]): Set<string> {
+  return new Set(items.filter((m) => m.refs.some((r) => store.source(r.sourceId)?.kind === 'past_decision')).map((m) => m.id));
+}
+
+/** What a twin "remembers" first for this request — shown in the live chat. */
+function recall(items: MemoryItem[], ctx: RequestContext): string[] {
+  const out: string[] = [];
+  for (const m of items.filter((x) => x.scope === 'request').slice(0, 2)) {
+    const fromGroup = m.refs.some((r) => store.source(r.sourceId)?.personaId === 'group');
+    out.push(`${fromGroup ? 'Το αίτημα λέει' : 'Για αυτό ζήτησα'}: ${m.statement}`);
+  }
+  for (const m of items.filter((x) => x.scope === 'profile' && x.rule)) {
+    const fit = contextFit(m, ctx);
+    if (fit.note) out.push(`«${m.statement}» — ${fit.note}${fit.applies ? '' : ', το κρατάω μόνο ως ένδειξη'}`);
+  }
+  const rest = items.filter((x) => x.scope === 'profile' && !x.rule).sort((a, b) => Number(b.hard) - Number(a.hard) || b.strength - a.strength);
+  for (const m of rest) {
+    if (out.length >= 3) break;
+    out.push(`Θυμάμαι: ${m.statement}`);
+  }
+  return out.slice(0, 3);
+}
+
+/** The twins' negotiation as a group DM, in each owner's voice (live) or from templates (demo). */
+async function twinChat(d: Decision, personas: Persona[]): Promise<TwinChat> {
+  const req = store.request(d.requestId)!;
+  if (!d.outcome.chosenOptionId) return { lines: templateChat(d, personas), mode: 'template' };
+  if (!liveAi()) return { lines: templateChat(d, personas), mode: 'template', note: 'Demo mode: πρότυπη συζήτηση, χωρίς μίμηση ύφους.' };
+  const { shared, perPerson } = chatFacts(d, req, personas);
+  try {
+    const raw = await negotiationChat(
+      personas.map((p) => ({ personaId: p.id, name: p.name, style: p.style, samples: styleSamples(store.sources, p.id).map((s) => s.text.slice(0, 300)).slice(0, 6), facts: perPerson[p.id] ?? [] })),
+      shared,
+    );
+    let dropped = 0;
+    const lines = raw.filter((l) => {
+      const bad = ungroundedReason(l.text, [...shared, ...(perPerson[l.personaId] ?? [])], d.options);
+      if (bad) dropped++;
+      return !bad;
+    });
+    if (lines.length >= 3 && new Set(lines.map((l) => l.personaId)).size >= Math.min(2, personas.length)) {
+      return { lines, mode: 'live', note: dropped ? `${dropped} μήνυμα(τα) απορρίφθηκαν από τον έλεγχο γεγονότων.` : undefined };
+    }
+    return { lines: templateChat(d, personas), mode: 'template', note: 'Το AI έγραψε μηνύματα με στοιχεία εκτός απόφασης — μπήκε πρότυπο.' };
+  } catch (e) {
+    return { lines: templateChat(d, personas), mode: 'template', note: `Live AI απέτυχε (${aiErrorReason(e)}) — πρότυπη συζήτηση.` };
+  }
 }
 
 function diffChanges(prev: Decision, next: Decision): string[] {
@@ -482,4 +562,36 @@ function parseFrontMatterText(raw: string): { meta: Record<string, string>; body
     if (i > 0) meta[line.slice(0, i).trim()] = line.slice(i + 1).trim();
   }
   return { meta, body: m[2].trim() };
+}
+
+// ---------------------------------------------------------------------------
+// Learning loop: an approved plan becomes a past decision of each owner who approved it
+// ---------------------------------------------------------------------------
+
+/** After an owner approves, record what they asked for and what they accepted, and learn from it. */
+export async function learnFromDecision(decisionId: string, personaId: PersonaId) {
+  const d = store.decision(decisionId);
+  const req = d && store.request(d.requestId);
+  const chosen = d?.options.find((o) => o.id === d.outcome.chosenOptionId);
+  if (!d || !req || !chosen) return null;
+  const title = `Απόφαση: ${req.title}`;
+  if (store.sources.some((s) => s.personaId === personaId && s.kind === 'past_decision' && s.title === title)) return null;
+  const wishes = store.sources.filter((s) => s.personaId === personaId && s.kind === 'wish' && s.title.includes(req.title)).map((s) => s.text);
+  const vote = d.outcome.votes.find((v) => v.personaId === personaId);
+  const voted = d.options.find((o) => o.id === vote?.optionId);
+  const c = d.outcome.concessions.find((x) => x.personaId === personaId);
+  const ctx = requestContext(req);
+  const lines = [
+    `Αίτημα της παρέας: ${req.text}`,
+    `Πλαίσιο: ${ctx.days} ${ctx.days === 1 ? 'μέρα' : 'μέρες'}, ${ctx.where === 'abroad' ? 'εξωτερικό' : ctx.where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}${req.place ? `, ${req.place}` : ''}.`,
+    ...wishes.map((w) => `Τι ζήτησα εγώ για αυτό: ${w}`),
+    voted ? `Πρώτη μου επιλογή: ${voted.title}${voted.costPerPerson !== null ? ` (~${voted.costPerPerson}€/άτομο)` : ''}.` : '',
+    `Ενέκρινα: ${chosen.title}${chosen.costPerPerson !== null ? ` (~${chosen.costPerPerson}€/άτομο)` : ''} — ${chosen.features.slice(0, 4).join(', ')}.`,
+    ...(c?.items ?? []).map((i) => `Δέχτηκα: ${i}`),
+  ].filter(Boolean);
+  const src = store.addSource(personaId, 'past_decision', title, lines.join('\n'));
+  const r = await analyzeAndStore(src.id);
+  // The owner approved this plan themselves, so what it teaches is confirmed (and stays editable in the profile).
+  for (const m of r.created) store.updateMemory(m.id, { status: 'confirmed' });
+  return r;
 }

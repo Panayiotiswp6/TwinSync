@@ -12,6 +12,7 @@ import OpenAI from 'openai';
 import { z } from 'zod';
 import type { MemoryDraft } from '../shared/heuristics';
 import { CATEGORIES, DOMAINS, type CandidateOption, type Category, type Evaluation, type MemoryItem, type Persona, type StyleCard } from '../shared/types';
+import { contextHint, type RequestContext, WHERE_LABEL } from '../shared/context';
 import { containsQuote, clamp } from '../shared/text';
 import { parseIso } from '../shared/time';
 import { store } from './store';
@@ -132,16 +133,18 @@ export function clean(s: string): string {
 const DRAFT_SCHEMA = {
   type: 'object',
   additionalProperties: false,
-  required: ['kind', 'statement', 'domain', 'polarity', 'strength', 'hard', 'metric', 'value', 'categories', 'keywords', 'quote', 'confidence'],
+  required: ['kind', 'statement', 'domain', 'polarity', 'strength', 'hard', 'metric', 'value', 'where', 'days', 'categories', 'keywords', 'quote', 'confidence'],
   properties: {
     kind: { type: 'string', enum: ['preference', 'constraint', 'fact', 'decision_pattern', 'style'] },
     statement: { type: 'string', description: 'short Greek statement about the person, third person' },
     domain: { type: 'string', enum: DOMAINS },
     polarity: { type: 'string', enum: ['likes', 'avoids', 'neutral'] },
     strength: { type: 'string', enum: ['low', 'medium', 'high'] },
-    hard: { type: 'boolean', description: 'true only for things the person will not accept / must have' },
+    hard: { type: 'boolean', description: 'true ONLY for explicit absolutes (never / cannot / must / allergy / fixed obligation). Habits ("συνήθως", "περίπου", "μέχρι" said casually) are false.' },
     metric: { type: 'string', enum: ['none', 'max_cost', 'latest_end'], description: 'machine-checkable part of a hard constraint' },
     value: { type: 'string', description: 'max_cost: euros per person as a number. latest_end: "weekly:<0-6, Sunday=0>:HH:MM" for a recurring limit, or an ISO datetime with +02:00 for a one-off. "" if metric is none.' },
+    where: { type: 'string', enum: ['any', 'local', 'domestic', 'abroad'], description: 'situation the statement was said for: local = evenings/outings in the home city, domestic = trips in Greece, abroad = trips abroad, any = general' },
+    days: { type: 'integer', description: 'duration in days the statement refers to ("διήμερο" = 2, "τριήμερο" = 3, "βράδυ" = 1); 0 if not said' },
     categories: { type: 'array', items: { type: 'string', enum: CATEGORIES }, description: 'request types this applies to; empty = all' },
     keywords: { type: 'array', items: { type: 'string' }, description: '1-5 short Greek keywords an option description would contain' },
     quote: { type: 'string', description: 'exact verbatim span copied from the text that supports the statement' },
@@ -158,6 +161,8 @@ const RawDraft = z.object({
   hard: z.boolean(),
   metric: z.enum(['none', 'max_cost', 'latest_end']),
   value: z.string(),
+  where: z.enum(['any', 'local', 'domestic', 'abroad']).catch('any'),
+  days: z.number().catch(0),
   categories: z.array(z.string()),
   keywords: z.array(z.string()),
   quote: z.string(),
@@ -182,6 +187,7 @@ function toDraft(r: z.infer<typeof RawDraft>): MemoryDraft | null {
     strength: r.hard ? 1 : STRENGTH[r.strength],
     hard: r.hard,
     rule,
+    context: { where: r.where, days: Math.max(0, Math.min(60, Math.round(r.days || 0))) },
     categories: r.categories.filter((c): c is Category => (CATEGORIES as string[]).includes(c)),
     keywords: r.keywords.map((k) => k.trim()).filter(Boolean).slice(0, 6),
     quote: r.quote.trim(),
@@ -191,8 +197,9 @@ function toDraft(r: z.infer<typeof RawDraft>): MemoryDraft | null {
 
 const MEMORY_RULES = `Memory item rules:
 - kind: preference (likes/avoids), constraint (cannot / will not accept, or must have), fact (about the person), decision_pattern (how they tend to choose, from past decisions), style (how they write).
-- hard=true only when the person clearly states a limit or a must. Everything else is soft.
-- For money limits use metric max_cost with the number; for "must be back by …" use metric latest_end. Never invent numbers or times.
+- hard=true ONLY for explicit absolutes: "ποτέ", "σε καμία περίπτωση", "δεν μπορώ", "οπωσδήποτε", allergies/diet, or an answer to "what do you never compromise on". Routines and obligations (works on Saturdays, has classes) are facts (hard=false) unless the person says they cannot miss them. Habits and typical amounts ("συνήθως δίνω μέχρι 200€", "περίπου", "κατά κανόνα") are SOFT (hard=false) — keep the number in metric/value as a reference only.
+- Every statement is said in a context. Record it in where/days (e.g. "συνήθως δίνω μέχρι 200€ για ένα διήμερο" → where=domestic, days=2, hard=false). Write the context into the statement too ("Για διήμερο στην Ελλάδα δίνει συνήθως έως ~200€"). Do not generalise a statement beyond the situation it was said for.
+- For money use metric max_cost (euros per person for the whole stated duration); for "must be back by …" use metric latest_end. Never invent numbers or times.
 - categories: the request types the item applies to (trip, food, entertainment, activity, gift, other); empty if general.
 - quote: copy the exact words from the text (same accents), as short as possible while still supporting the statement.
 - Statements in Greek, third person, short. Do not repeat the same idea twice.`;
@@ -289,6 +296,8 @@ export interface ParsedRequest {
   category: Category;
   periodStart: string | null;
   periodEnd: string | null;
+  where: 'local' | 'domestic' | 'abroad' | null;
+  place: string;
   groupDrafts: MemoryDraft[];
   wishDrafts: Record<string, MemoryDraft[]>;
 }
@@ -299,19 +308,23 @@ export async function parseRequest(text: string, now: Date, wishes: { personaId:
     system: `You read a Greek group request from friends in Athens, plus each person's one-off wishes for THIS request only.
 Today is ${now.toISOString()} (Europe/Athens, UTC+02:00).
 - category: trip, food, entertainment, activity, gift or other.
+- where: local (in Athens), domestic (elsewhere in Greece) or abroad; place: the destination if named, else "".
 - period: the concrete start and end (ISO with +02:00) the request implies; if vague, choose the nearest sensible window (e.g. "αυτό το ΣΚ" = coming Saturday 09:00 to Sunday 21:00, "τριήμερο" = Friday evening to Sunday night unless a day is named).
 - groupItems: limits stated in the request text itself that apply to everyone (e.g. "μέχρι 100€").
 - wishes: for each person, turn their one-off wish text into memory items (scope: this request). Quotes must come from THAT person's wish text.
 ${MEMORY_RULES}
-- For one-off deadlines use latest_end with an ISO datetime inside or right after the period.`,
+- For one-off deadlines use latest_end with an ISO datetime inside or right after the period.
+- Wishes are what the person wants for THIS plan: a budget written in a wish is the person's limit for the whole plan (hard=true if stated as a limit).`,
     user: `Request: """${text}"""\n\n${wishes.map((w) => `Wish of ${w.name} (personaId ${w.personaId}): """${w.text}"""`).join('\n') || 'No one-off wishes.'}`,
     schema: {
       type: 'object',
       additionalProperties: false,
-      required: ['title', 'category', 'periodStart', 'periodEnd', 'groupItems', 'wishes'],
+      required: ['title', 'category', 'where', 'place', 'periodStart', 'periodEnd', 'groupItems', 'wishes'],
       properties: {
         title: { type: 'string', description: 'short Greek title, max 60 chars' },
         category: { type: 'string', enum: CATEGORIES },
+        where: { type: 'string', enum: ['local', 'domestic', 'abroad'] },
+        place: { type: 'string' },
         periodStart: { type: 'string' },
         periodEnd: { type: 'string' },
         groupItems: { type: 'array', items: DRAFT_SCHEMA },
@@ -327,6 +340,8 @@ ${MEMORY_RULES}
     .object({
       title: z.string(),
       category: z.string(),
+      where: z.enum(['local', 'domestic', 'abroad']).catch('local'),
+      place: z.string().catch(''),
       periodStart: z.string(),
       periodEnd: z.string(),
       groupItems: z.array(RawDraft),
@@ -343,6 +358,8 @@ ${MEMORY_RULES}
     category: (CATEGORIES as string[]).includes(p.category) ? (p.category as Category) : 'other',
     periodStart: parseIso(p.periodStart) ? p.periodStart : null,
     periodEnd: parseIso(p.periodEnd) ? p.periodEnd : null,
+    where: p.where,
+    place: clean(p.place).slice(0, 60),
     groupDrafts: p.groupItems.map(toDraft).filter((d): d is MemoryDraft => !!d && containsQuote(text, d.quote)),
     wishDrafts,
   };
@@ -355,24 +372,44 @@ ${MEMORY_RULES}
 export interface TwinContext {
   persona: Persona;
   items: MemoryItem[];
+  /** Memory ids learned from the person's earlier decisions. */
+  learned?: Set<string>;
 }
 
-function describeItems(items: MemoryItem[]): string {
-  return items
-    .map((m) => `  - ${m.id} [${m.scope === 'request' ? 'ΜΟΝΟ ΓΙΑ ΑΥΤΟ' : m.kind}${m.hard ? ', HARD' : ''}${m.rule ? `, ${m.rule.metric}=${m.rule.value}` : ''}] ${m.statement}`)
+function describeItems(items: MemoryItem[], ctx?: RequestContext | null, learned?: Set<string>): string {
+  // Request-only wishes first: they are what the person asked for THIS plan.
+  const order = [...items].sort((a, b) => (a.scope === b.scope ? 0 : a.scope === 'request' ? -1 : 1));
+  return order
+    .map((m) => {
+      const hint = contextHint(m, ctx);
+      const from = learned?.has(m.id) ? ', από προηγούμενη απόφαση' : '';
+      return `  - ${m.id} [${m.scope === 'request' ? 'ΑΙΤΗΜΑ' : m.kind}${m.hard ? ', HARD' : ''}${m.rule ? `, ${m.rule.metric}=${m.rule.value}` : ''}${from}] ${m.statement}${hint ? ` (${hint})` : ''}`;
+    })
     .join('\n');
 }
 
-export async function generateOptions(req: { title: string; text: string; category: Category; periodStart: string | null; periodEnd: string | null }, twins: TwinContext[]): Promise<CandidateOption[]> {
+function describeContext(ctx?: RequestContext | null): string {
+  return ctx ? `${ctx.days} ${ctx.days === 1 ? 'μέρα' : 'μέρες'}, ${ctx.where ? WHERE_LABEL[ctx.where] : '?'}` : '?';
+}
+
+/** How a twin should read its memory. Shared by option generation and evaluation. */
+const READING_RULES = `How to read each person's memory:
+- Items marked ΑΙΤΗΜΑ are what the person asked for THIS plan. They override any profile item on the same topic.
+- Profile items are general tendencies from what the person told us, each said in a specific context (duration, Greece vs abroad, evening vs trip). Apply an item only as far as its context matches this plan. Typical amounts are references, not limits: scale them to the plan (e.g. "~200€ for 2 days in Greece" says little about 4 days abroad; extrapolate per day and allow for higher prices abroad, flights included).
+- Items "από προηγούμενη απόφαση" come from how the person actually decided before — they are better evidence than general statements.
+- If nothing in the memory covers an aspect, do not penalise it: infer cautiously from similar items, or stay neutral and mention it in unknowns.`;
+
+export async function generateOptions(req: { title: string; text: string; category: Category; periodStart: string | null; periodEnd: string | null; place?: string }, twins: TwinContext[], ctx?: RequestContext | null): Promise<CandidateOption[]> {
   const data = await completeJSON({
     name: 'candidate_options',
     system: `You propose concrete options for a group of friends based in Athens, Greece.
-Use what each person's twin memory says; make the options DIFFERENT from each other so the group has a real choice, and try to include at least one option that satisfies every HARD item.
+Use what each person's twin memory says; make the options DIFFERENT from each other so the group has a real choice, and try to include at least one option that satisfies every HARD item that applies and is as close as possible to everyone's wishes.
+${READING_RULES}
 - 5 options, realistic for Greece (real places are fine), with an honest estimated cost per person in euros (include transport/stay/food for trips; use -1 if you cannot estimate).
 - startsAt / endsAt: ISO datetimes with +02:00 inside the requested period; endsAt = when they are back / the plan ends.
 - features: 3-6 short Greek phrases that let each twin judge the option (e.g. accommodation type, private bathroom, vegetarian dishes, sea, hiking hours, music volume, crowd).
 - These are suggestions with estimated prices, not bookings. Write every text field in Greek only (place names may be in Latin script).`,
-    user: `Request (${req.category}): ${req.title}\nOriginal text: """${req.text}"""\nPeriod: ${req.periodStart ?? '?'} → ${req.periodEnd ?? '?'}\n\n${twins.map((t) => `${t.persona.name} (${t.persona.id}):\n${describeItems(t.items) || '  (no memory)'}`).join('\n\n')}`,
+    user: `Request (${req.category}): ${req.title}\nOriginal text: """${req.text}"""\nPeriod: ${req.periodStart ?? '?'} → ${req.periodEnd ?? '?'} (${describeContext(ctx)}${req.place ? `, ${req.place}` : ''})\n\n${twins.map((t) => `${t.persona.name} (${t.persona.id}):\n${describeItems(t.items, ctx, t.learned) || '  (no memory)'}`).join('\n\n')}`,
     schema: {
       type: 'object',
       additionalProperties: false,
@@ -421,20 +458,21 @@ Use what each person's twin memory says; make the options DIFFERENT from each ot
 // 5. Each twin evaluates each option
 // ---------------------------------------------------------------------------
 
-export async function evaluateOptions(options: CandidateOption[], twins: TwinContext[]): Promise<Evaluation[]> {
+export async function evaluateOptions(options: CandidateOption[], twins: TwinContext[], ctx?: RequestContext | null, request?: string): Promise<Evaluation[]> {
   // One call per twin, in parallel: lower latency, and each twin only sees its own memory.
-  if (twins.length > 1) return (await Promise.all(twins.map((t) => evaluateOptions(options, [t])))).flat();
+  if (twins.length > 1) return (await Promise.all(twins.map((t) => evaluateOptions(options, [t], ctx, request)))).flat();
   const data = await completeJSON({
     name: 'twin_evaluations',
     system: `You are the digital twin of a person (or of several friends). For EACH person and EACH option, judge the option the way that person would, using ONLY their memory items below.
 - score 0-100 (50 = neutral / no relevant memory). Be decisive where the memory is clear.
+${READING_RULES}
 - reasons: 1-3 short Greek reasons, each citing the memoryId it comes from, with effect for/against.
-- violations: ONLY for HARD items without a numeric rule (e.g. vegetarian, no tent) that the option clearly breaks; cite the memoryId. Numeric limits (cost, time) are checked by code — do not list them.
+- violations: ONLY for HARD items without a numeric rule (e.g. vegetarian, no tent) whose context applies to this plan and that the option itself clearly breaks; cite the memoryId. Something true of every option because of the requested dates (e.g. "works on Saturdays") is not a violation of an option — mention it in unknowns. Numeric limits (cost, time) are checked by code — do not list them.
 - unknowns: what you cannot judge because the memory or the option lacks information. Never invent facts about the person.
 - verdict: a few Greek words in the person's voice.`,
-    user: `OPTIONS:\n${options
+    user: `PLAN: ${request ?? ''} (${describeContext(ctx)})\n\nOPTIONS:\n${options
       .map((o) => `- ${o.id}: ${o.title} | ${o.location} | ${o.costPerPerson ?? '?'}€/άτομο | ${o.startsAt ?? '?'} → ${o.endsAt ?? '?'} | ${o.features.join('; ')} | ${o.summary}`)
-      .join('\n')}\n\nPEOPLE:\n${twins.map((t) => `${t.persona.name} (personaId ${t.persona.id}):\n${describeItems(t.items) || '  (no memory)'}`).join('\n\n')}`,
+      .join('\n')}\n\nPEOPLE:\n${twins.map((t) => `${t.persona.name} (personaId ${t.persona.id}):\n${describeItems(t.items, ctx, t.learned) || '  (no memory)'}`).join('\n\n')}`,
     schema: {
       type: 'object',
       additionalProperties: false,
@@ -532,4 +570,39 @@ The friends should not be able to tell the twin from the real person. Style matt
   const out: Record<string, string> = {};
   for (const m of p.messages) if (briefs.some((b) => b.personaId === m.personaId)) out[m.personaId] = clean(m.text).slice(0, 300);
   return out;
+}
+
+// ---------------------------------------------------------------------------
+// 7. The twins' negotiation as a group DM, in each owner's voice
+// ---------------------------------------------------------------------------
+
+export interface ChatBrief {
+  personaId: string;
+  name: string;
+  style: StyleCard | null;
+  samples: string[];
+  facts: string[];
+}
+
+export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Promise<{ personaId: string; text: string }[]> {
+  const data = await completeJSON({
+    name: 'twin_negotiation_chat',
+    system: `You write the Instagram group DM in which the digital twins of a group of Greek friends negotiate a plan. Each twin writes EXACTLY like its owner, so the friends would believe it is a real chat between them.
+- Learn each voice only from that person's WRITING SAMPLES and style notes: length, slang, accents or not, punctuation, emoji, typical words. The voices must be clearly different.
+- Show how each person thinks: what they want first (their vote), why (their facts), what bothers them, what they are willing to give up. Disagree where the votes differ, then converge to the SHARED outcome (if it is a compromise, the person who gives something up says so in their own way).
+- 6-10 messages in total, each person at least once, natural order (not strictly round-robin). Each message max 160 characters, casual Greek chat, first person. No "Twin", "AI", "memory", "score" or numbers out of 100.
+- Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.`,
+    user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
+      .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${b.style ? `${b.style.summary} | ${b.style.traits.join('; ')}` : 'unknown — write plainly'}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
+      .join('\n\n')}`,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['messages'],
+      properties: { messages: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['personaId', 'text'], properties: { personaId: { type: 'string' }, text: { type: 'string' } } } } },
+    },
+    maxTokens: 4000,
+  });
+  const p = z.object({ messages: z.array(z.object({ personaId: z.string(), text: z.string() })) }).parse(data);
+  return p.messages.filter((m) => briefs.some((b) => b.personaId === m.personaId)).map((m) => ({ personaId: m.personaId, text: clean(m.text).slice(0, 220) })).filter((m) => m.text);
 }

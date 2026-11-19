@@ -93,7 +93,8 @@ export function formatWhen(iso: string | null): string {
 export function upcomingWeekend(now: Date, days = 2): { start: string; end: string } {
   const p = localParts(now);
   const offset = (6 - p.weekday + 7) % 7 || 7; // next Saturday
-  const startOffset = days >= 3 ? offset - 1 : offset; // 3 days: Friday
+  let startOffset = days >= 3 ? offset - (days - 2) : offset; // 3 days: Friday, 4 days: Thursday…
+  if (startOffset < 1) startOffset += 7;
   const sat = new Date(Date.UTC(p.y, p.m - 1, p.d + startOffset));
   const start = athensIso(sat.getUTCFullYear(), sat.getUTCMonth() + 1, sat.getUTCDate(), days >= 3 ? 18 : 9, 0);
   return { start, end: addDays(start, Math.max(days - 1, 0) + (days >= 3 ? 0 : 0), 21, 0) };

@@ -3,7 +3,7 @@
 
 import { clamp, normalizeGreek, sentences } from './text';
 import { upcomingWeekend } from './time';
-import type { CandidateOption, Category, Domain, Evaluation, MemoryItem, MemoryKind, NumericRule, Polarity } from './types';
+import type { CandidateOption, Category, Domain, Evaluation, MemoryContext, MemoryItem, MemoryKind, NumericRule, Polarity } from './types';
 
 export interface MemoryDraft {
   kind: MemoryKind;
@@ -13,11 +13,31 @@ export interface MemoryDraft {
   strength: number;
   hard: boolean;
   rule?: NumericRule;
+  context?: MemoryContext;
   categories: Category[];
   keywords: string[];
   quote: string;
   confidence: number;
 }
+
+/** Context a sentence was said in: "για ένα διήμερο" = 2 days in Greece, "στο εξωτερικό" = abroad. */
+export function contextOf(n: string): MemoryContext {
+  const where: MemoryContext['where'] = /(εξωτερικ|ευρωπ|abroad|πτησ|αεροπλαν)/.test(n)
+    ? 'abroad'
+    : /(ελλαδα|εκδρομ|διημερ|τριημερ|σαββατοκυριακ|νησι)/.test(n)
+      ? 'domestic'
+      : /(εξοδο|βραδυ|φαγητ|ποτο|μπαρ|ταβερν)/.test(n)
+        ? 'local'
+        : 'any';
+  const num = n.match(/(\d)\s*(μερ|ημερ|νυχτ|βραδι)/);
+  const digitDays = n.match(/(\d)\s*-?\s*ημερ/);
+  const days = /διημερ|σαββατοκυριακ/.test(n) ? 2 : /τριημερ/.test(n) ? 3 : /τετραημερ/.test(n) ? 4 : /πενθημερ/.test(n) ? 5 : digitDays ? Number(digitDays[1]) : num ? Number(num[1]) : 0;
+  return { where, days };
+}
+
+/** "Συνήθως / περίπου" = a habit, not a limit. Only explicit absolutes become hard. */
+const HABITUAL = /(συνηθωσ|συνηθισμεν|περιπου|γυρω στα|κατα μεσο|αναλογα|ενδεικτικ|συχνα)/;
+const ABSOLUTE = /(οριο|το πολυ|δεν μπορω|δεν δινω|δεν βγαινω|σε καμια περιπτωση|αυστηρ|οπωσδηποτε|max)/;
 
 const NEG = /(^|\s)(δεν|οχι|ουτε|ποτε|καθολου|βαριεμαι|μισω)(\s|$|,)/;
 const WEEKDAY_RE: [number, RegExp][] = [
@@ -86,7 +106,15 @@ export function extractWithRules(text: string): MemoryDraft[] {
     if (budget) {
       // A sentence about a money limit is not a statement about the topic itself ("όχι πάνω από 30€ για φαγητό").
       const v = Number(budget[3] || budget[2]);
-      out.push({ kind: 'constraint', statement: `Όριο κόστους ${v}€ ανά άτομο`, domain: 'money', polarity: 'neutral', strength: 1, hard: true, rule: { metric: 'max_cost', value: String(v) }, categories: categoriesFor(n), keywords: [], quote, confidence: 0.7 });
+      const hard = !HABITUAL.test(n) && (ABSOLUTE.test(n) || (neg && /(πανω απο|παραπανω)/.test(n)));
+      const context = contextOf(n);
+      const where = context.where === 'abroad' ? ' (εξωτερικό)' : context.where === 'domestic' ? ' (Ελλάδα)' : '';
+      const span = context.days ? ` για ${context.days} μέρες` : '';
+      out.push({
+        kind: hard ? 'constraint' : 'preference',
+        statement: hard ? `Όριο κόστους ${v}€ ανά άτομο${span}${where}` : `Συνήθως ξοδεύει έως ~${v}€ ανά άτομο${span}${where} — ενδεικτικά`,
+        domain: 'money', polarity: 'neutral', strength: hard ? 1 : 0.6, hard, rule: { metric: 'max_cost', value: String(v) }, context, categories: categoriesFor(n), keywords: [], quote, confidence: 0.7,
+      });
     }
     if (/(φθην|φτην|οικονομικ|χαμηλο κοστοσ|δεν τ[οα] δινω|να μη σκασουμε)/.test(n)) {
       out.push({ kind: 'preference', statement: 'Προτιμά χαμηλό κόστος', domain: 'money', polarity: 'likes', strength: 0.6, hard: false, categories: [], keywords: ['φθηνό', 'οικονομικό'], quote, confidence: 0.6 });
@@ -99,7 +127,8 @@ export function extractWithRules(text: string): MemoryDraft[] {
         const hh = t ? Number(t[1]) : 23;
         const mm = t ? Number(t[2]) : 59;
         const label = t ? `${['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'][wd]} ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` : ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'][wd];
-        out.push({ kind: 'constraint', statement: `Επιστροφή το αργότερο ${label}`, domain: 'schedule', polarity: 'neutral', strength: 1, hard: true, rule: { metric: 'latest_end', value: `weekly:${wd}:${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` }, categories: [], keywords: [], quote, confidence: 0.7 });
+        const hard = !HABITUAL.test(n);
+        out.push({ kind: hard ? 'constraint' : 'preference', statement: `Επιστροφή το αργότερο ${label}${hard ? '' : ' (συνήθως)'}`, domain: 'schedule', polarity: 'neutral', strength: hard ? 1 : 0.6, hard, rule: { metric: 'latest_end', value: `weekly:${wd}:${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}` }, categories: [], keywords: [], quote, confidence: 0.7 });
       }
     }
 
@@ -125,12 +154,10 @@ export function extractWithRules(text: string): MemoryDraft[] {
 export function parseRequestWithRules(text: string, now: Date): { title: string; category: Category; periodStart: string; periodEnd: string } {
   const n = normalizeGreek(text);
   const title = text.trim().replace(/\s+/g, ' ').slice(0, 70);
-  if (/(τριημερ|τριημερο)/.test(n)) {
-    const w = upcomingWeekend(now, 3);
-    return { title, category: 'trip', periodStart: w.start, periodEnd: w.end };
-  }
-  if (/(διημερ|ταξιδ|εκδρομ|σαββατοκυριακ|σκ\b|διακοπ)/.test(n)) {
-    const w = upcomingWeekend(now, 2);
+  const c = contextOf(n);
+  if (c.days >= 2 || /(ταξιδ|εκδρομ|σαββατοκυριακ|σκ\b|διακοπ|εξωτερικ)/.test(n)) {
+    const days = c.days >= 2 ? Math.min(c.days, 7) : c.where === 'abroad' ? 4 : 2;
+    const w = upcomingWeekend(now, days);
     return { title, category: 'trip', periodStart: w.start, periodEnd: w.end };
   }
   const fri = upcomingWeekend(now, 3).start.replace('T18:00', 'T21:00');

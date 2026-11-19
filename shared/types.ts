@@ -74,6 +74,14 @@ export interface MemoryStamp {
   scope: string;
 }
 
+/** Where / for how long a statement was meant. A budget said for "a weekend in Greece" is not a rule for "4 days abroad". */
+export type Where = 'any' | 'local' | 'domestic' | 'abroad';
+export interface MemoryContext {
+  where: Where;
+  /** Duration in days the statement refers to (e.g. 2 for "διήμερο"); 0 = not specified. */
+  days: number;
+}
+
 export interface MemoryItem {
   id: string;
   personaId: PersonaId;
@@ -85,6 +93,8 @@ export interface MemoryItem {
   strength: number;
   hard: boolean;
   rule?: NumericRule;
+  /** Context the statement was said in (optional; missing = general). */
+  context?: MemoryContext;
   /** Request categories this applies to; empty = all. */
   categories: Category[];
   keywords: string[];
@@ -107,6 +117,11 @@ export interface GroupRequest {
   periodStart: string | null;
   periodEnd: string | null;
   participants: PersonaId[];
+  /** Calendar days the plan spans (1 for an evening). */
+  days?: number;
+  /** local = in the home city, domestic = elsewhere in Greece, abroad. */
+  where?: Exclude<Where, 'any'>;
+  place?: string;
   createdAt: string;
 }
 
@@ -190,7 +205,8 @@ export interface Relaxation {
 }
 
 export interface Outcome {
-  status: 'agreement' | 'deadlock';
+  /** agreement = every hard limit passes; compromise = none passes, the closest option is proposed. deadlock = legacy / no options. */
+  status: 'agreement' | 'compromise' | 'deadlock';
   chosenOptionId: string | null;
   results: OptionResult[];
   votes: TwinVote[];
@@ -234,7 +250,35 @@ export interface Decision {
   diff?: { previousId: string; changes: string[] };
   messages?: TwinMessage[];
   messagesNote?: string;
+  /** The twins' negotiation, as a group DM in each owner's style. */
+  chat?: TwinChat;
   aiModel: string | null;
+}
+
+export interface ChatLine {
+  personaId: PersonaId;
+  text: string;
+}
+export interface TwinChat {
+  lines: ChatLine[];
+  mode: 'live' | 'template';
+  note?: string;
+}
+
+/** Progress of a long-running job (request generation, onboarding), shown live as a chat. */
+export interface JobEvent {
+  at: number;
+  who: PersonaId | 'system';
+  kind: 'join' | 'think' | 'options' | 'vote' | 'say' | 'info' | 'error';
+  text: string;
+}
+export interface Job {
+  id: string;
+  kind: 'request' | 'onboard';
+  status: 'running' | 'done' | 'error';
+  events: JobEvent[];
+  result?: Record<string, string>;
+  error?: string;
 }
 
 export interface Usage {

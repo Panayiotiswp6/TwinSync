@@ -2,6 +2,7 @@ import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, type AppState } from '../api';
 import { go } from './Shell';
+import { LiveTwinChat } from './TwinChat';
 import { Avatar } from './ui';
 
 const IDEAS = [
@@ -41,26 +42,53 @@ export function Working({ live, steps = PIPELINE }: { live: boolean; steps?: str
 
 export function Composer({ state, onState, compact }: { state: AppState; onState: (s: AppState) => void; compact?: boolean }) {
   const [text, setText] = useState('');
-  const [participants, setParticipants] = useState<string[]>(state.personas.slice(0, 3).map((p) => p.id));
+  const [participants, setParticipants] = useState<string[]>(state.personas.slice(0, 4).map((p) => p.id));
   const [wishes, setWishes] = useState<Record<string, string>>({});
   const [showWishes, setShowWishes] = useState(!compact);
   const [busy, setBusy] = useState(false);
+  const [jobId, setJobId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
   const submit = async () => {
     setBusy(true);
     setErr(null);
     try {
-      const r = await api.createRequest(text, participants, wishes);
-      onState(r.state);
-      go(`/req/${r.requestId}`);
+      setJobId((await api.createRequestAsync(text, participants, wishes)).jobId);
     } catch (e) {
       setErr((e as Error).message);
-    } finally {
       setBusy(false);
     }
   };
 
+  if (state.personas.length < 2) {
+    return (
+      <div className="card composer">
+        <p className="muted small">Χρειάζονται τουλάχιστον δύο Twins για ένα αίτημα της παρέας.</p>
+        <button className="btn btn-brand" onClick={() => go('/onboard')}>
+          <Sparkles size={16} /> Φτιάξε Twin
+        </button>
+      </div>
+    );
+  }
+
+  if (busy && jobId) {
+    const people = participants.map((id) => state.personas.find((p) => p.id === id)!).filter(Boolean);
+    return (
+      <LiveTwinChat
+        jobId={jobId}
+        people={people}
+        onDone={(s, r) => {
+          onState(s);
+          go(`/req/${r.requestId}`);
+        }}
+        onError={(m) => {
+          setErr(m);
+          setBusy(false);
+          setJobId(null);
+        }}
+      />
+    );
+  }
   if (busy) return <div className="card composer">{<Working live={state.status.aiMode === 'live'} />}</div>;
 
   return (
@@ -103,14 +131,14 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
                 <input
                   value={wishes[p.id] ?? ''}
                   onChange={(e) => setWishes({ ...wishes, [p.id]: e.target.value })}
-                  placeholder={`${p.name}: μόνο για αυτό, π.χ. «όχι πάνω από 150€», «μέχρι Δευτέρα να έχουμε γυρίσει», «να γνωρίσουμε νέα άτομα»`}
+                  placeholder={`${p.name}: μόνο για αυτό (μετράει πάνω από το προφίλ), π.χ. «ως 500€ όλα μαζί», «Δευτέρα πρωί πίσω», «θέλω θάλασσα»`}
                 />
               </label>
             ))}
         </div>
       )}
       <div className="composer-foot">
-        <span className="tiny muted">Τα Twins χρησιμοποιούν τη μόνιμη μνήμη κάθε ατόμου + τις προσωρινές επιθυμίες. Τίποτα δεν κλείνεται χωρίς έγκριση.</span>
+        <span className="tiny muted">Οι επιθυμίες για αυτό το αίτημα μετράνε πάνω από το μόνιμο προφίλ. Τίποτα δεν κλείνεται χωρίς έγκριση.</span>
         <button className="btn btn-brand" disabled={text.trim().length < 3 || participants.length < 2} onClick={submit}>
           <Sparkles size={16} /> Ρώτα τα Twins
         </button>

@@ -1,5 +1,6 @@
 // Offline tests (no network, ephemeral store — see vitest.config.ts).
 import { beforeEach, describe, expect, it } from 'vitest';
+import { contextFit } from '../shared/context';
 import { checkRule, decide } from '../shared/decide';
 import { evaluateWithRules, extractWithRules, parseRequestWithRules } from '../shared/heuristics';
 import { messageFacts, templateMessage, ungroundedReason } from '../shared/messages';
@@ -40,6 +41,72 @@ describe('numeric hard rules are checked in code', () => {
   });
 });
 
+describe('context-aware memory', () => {
+  const ctxItem = (o: Partial<MemoryItem>): MemoryItem => ({ ...rule('max_cost', '200'), id: 'c', scope: 'profile', ...o });
+  const trip4 = { days: 4, where: 'abroad' as const };
+  it('a habit ("συνήθως 200€ για διήμερο") is soft and never blocks', () => {
+    const d = extractWithRules('Συνήθως δίνω μέχρι 200€ για ένα διήμερο.');
+    const m = d.find((x) => x.rule?.metric === 'max_cost')!;
+    expect(m.hard).toBe(false);
+    expect(m.context).toEqual({ where: 'domestic', days: 2 });
+    const item = ctxItem({ hard: false, context: m.context });
+    const out = decide([{ id: 'geo', name: 'Γ' } as never], [item], [opt({ id: 'x', costPerPerson: 650 })], [], 'trip', trip4);
+    expect(out.status).toBe('agreement');
+  });
+  it('a hard limit said for 2 days in Greece does not bind 4 days abroad', () => {
+    const item = ctxItem({ hard: true, context: { where: 'domestic', days: 2 } });
+    const out = decide([{ id: 'geo', name: 'Γ' } as never], [item], [opt({ id: 'x', costPerPerson: 650 })], [], 'trip', trip4);
+    expect(out.status).toBe('agreement');
+    expect(contextFit(item, trip4).applies).toBe(false);
+  });
+  it('a hard limit scales with the duration (150€ / 2 days -> 300€ for 4 days)', () => {
+    const item = ctxItem({ hard: true, rule: { metric: 'max_cost', value: '150' }, context: { where: 'domestic', days: 2 } });
+    const ctx = { days: 4, where: 'domestic' as const };
+    expect(decide([{ id: 'geo', name: 'Γ' } as never], [item], [opt({ id: 'x', costPerPerson: 280 })], [], 'trip', ctx).status).toBe('agreement');
+    expect(decide([{ id: 'geo', name: 'Γ' } as never], [item], [opt({ id: 'x', costPerPerson: 320 })], [], 'trip', ctx).status).toBe('compromise');
+  });
+  it('what a person asks for this request overrides the profile on the same metric', () => {
+    const profile = ctxItem({ id: 'p', hard: true, rule: { metric: 'max_cost', value: '150' } });
+    const wish = rule('max_cost', '400'); // scope: request
+    const out = decide([{ id: 'geo', name: 'Γ' } as never], [profile, wish], [opt({ id: 'x', costPerPerson: 300 })], [], 'trip');
+    expect(out.status).toBe('agreement');
+  });
+});
+
+describe('in-app onboarding', () => {
+  beforeEach(() => store.reset(true));
+  const answers = {
+    me_friend: 'Πάντα μέσα για όλα αλλά αργεί',
+    money_evening: { amount: 25, strict: false },
+    money_weekend: { amount: 200, strict: false },
+    money_abroad: { amount: 700, strict: true },
+    time_back: { day: 0, time: '22:00', strict: true },
+    time_early: 'Όχι πριν τις 9–10',
+    food_no: ['Κρέας (χορτοφάγος)'],
+    travel_stay_no: ['Σκηνή / κάμπινγκ'],
+    travel_like: ['Θάλασσα & παραλίες'],
+    decide_style: 'Φέρνω επιχειρήματα μέχρι να πείσω',
+    decide_never: 'Δεν κοιμάμαι ποτέ σε σκηνή.',
+    dm_weekend: 'ναιιι παμε καπου 🏝️',
+    dm_airbnb: 'μπα ακριβουλι ρε',
+  };
+  it('turns answers into context-aware memory with exact quotes, a style source and holdouts', async () => {
+    const { onboard } = await import('../server/onboarding');
+    const r = await onboard({ name: 'Ελένη Δοκιμή', emoji: '🌊', answers, holdouts: [{ question: 'Νάξος ή Πήλιο;', options: [{ title: 'Νάξος', cost: 300 }, { title: 'Πήλιο', cost: 200 }], chosen: 0, why: 'θάλασσα' }] }, () => {});
+    const mem = store.memory.filter((m) => m.personaId === r.personaId);
+    const weekend = mem.find((m) => m.rule?.value === '200')!;
+    expect(weekend.hard).toBe(false);
+    expect(weekend.context).toEqual({ where: 'domestic', days: 2 });
+    expect(mem.find((m) => m.rule?.value === '700')?.hard).toBe(true);
+    expect(mem.find((m) => m.rule?.metric === 'latest_end')?.rule?.value).toBe('weekly:0:22:00');
+    expect(mem.some((m) => m.hard && m.statement.includes('Χορτοφάγος'))).toBe(true);
+    for (const m of mem) expect(store.source(m.refs[0].sourceId)?.text).toContain(m.refs[0].quote);
+    expect(store.sources.some((s) => s.personaId === r.personaId && s.kind === 'chat' && s.text.includes('ακριβουλι'))).toBe(true);
+    expect(store.holdouts.filter((h) => h.personaId === r.personaId)).toHaveLength(1);
+    expect(store.persona(r.personaId)?.style).not.toBeNull();
+  });
+});
+
 describe('demo-mode understanding (rules)', () => {
   it('turns one-off wishes into hard rules and soft preferences with quotes', () => {
     const d = extractWithRules('Δεν θέλω να κοστίσει πάνω από 150€. Μέχρι Δευτέρα να έχουμε γυρίσει. Θέλω να γνωρίσουμε νέα άτομα.');
@@ -76,6 +143,9 @@ describe('end-to-end pipeline (demo mode, no network)', () => {
     expect(decision.outcome.votes).toHaveLength(3);
     expect(store.requestItems(request.id, 'geo').some((m) => m.domain === 'social')).toBe(true);
     expect(decision.steps.map((s) => s.key)).toEqual(['parse', 'retrieve', 'options', 'evaluate', 'decide']);
+    expect(request.days).toBe(3);
+    expect(decision.chat?.lines.length).toBeGreaterThanOrEqual(3);
+    expect(decision.outcome.chosenOptionId).not.toBeNull();
   });
 
   it('a numeric limit re-decides in code without re-evaluating', async () => {
@@ -83,7 +153,9 @@ describe('end-to-end pipeline (demo mode, no network)', () => {
     const d2 = await setLimit(request.id, 'geo', 'max_cost', 60);
     expect(d2.evaluations).toBe(decision.evaluations);
     expect(d2.steps.find((s) => s.key === 'evaluate')?.mode).toBe('code');
-    expect(d2.outcome.status).toBe('deadlock');
+    expect(d2.outcome.status).toBe('compromise'); // nothing fits 60€ -> still a proposal, the closest one
+    expect(d2.outcome.chosenOptionId).not.toBeNull();
+    expect(d2.outcome.concessions.find((c) => c.personaId === 'geo')?.items.join(' ')).toMatch(/Πρέπει να δεχτεί/);
     expect(d2.diff?.changes.join(' ')).toMatch(/60€/);
   });
 
@@ -133,7 +205,9 @@ describe('message grounding guard', () => {
     expect(ev[0].reasons.every((r) => items.some((m) => m.id === r.memoryId))).toBe(true);
     expect(ev[0].score).toBeGreaterThan(50);
     const out = decide([s.personas[2]], items, [opt({ id: 'a', features: ['θάλασσα'] })], ev, 'food');
-    expect(out.status).toBe('deadlock'); // 100€ > 25€ dinner limit
+    expect(out.status).toBe('compromise'); // 100€ > 25€ dinner limit: proposed anyway, with the breach spelled out
+    expect(out.chosenOptionId).toBe('a');
+    expect(out.rationale.join(' ')).toMatch(/25€/);
   });
 });
 
@@ -225,5 +299,18 @@ describe('delete a twin', () => {
     const again = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'pant'], {});
     expect(again.decision.outcome.votes).toHaveLength(2);
     expect(evaluationReport().heuristic.rows.some((r) => r.personaId === 'geo')).toBe(false);
+  });
+});
+
+describe('always a proposal', () => {
+  it('a judged breach reported for every option is about the request, so it warns instead of excluding all', () => {
+    const s = loadSeed();
+    const hardFact: MemoryItem = { ...rule('max_cost', '0'), id: 'job', rule: undefined, statement: 'Δουλεύει Σάββατα', domain: 'schedule', scope: 'profile' };
+    const options = ['a', 'b', 'c'].map((id) => opt({ id, costPerPerson: 50 }));
+    const ev = options.map((o) => ({ personaId: 'geo', optionId: o.id, score: o.id === 'b' ? 80 : 60, verdict: '', reasons: [], violations: [{ memoryId: 'job', text: 'πέφτει Σάββατο' }], unknowns: [] }));
+    const out = decide([s.personas[2]], [hardFact], options, ev, 'trip');
+    expect(out.status).toBe('agreement');
+    expect(out.chosenOptionId).toBe('b');
+    expect(out.results[0].warnings.join(' ')).toMatch(/όλες τις επιλογές/);
   });
 });

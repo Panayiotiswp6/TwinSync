@@ -549,7 +549,7 @@
       "id": "mem-geo-02",
       "personaId": "geo",
       "kind": "constraint",
-      "statement": "Όριο 150€ για όλο το διήμερο/ταξίδι (μαζί βενζίνη και φαγητό)",
+      "statement": "Όριο 150€ για όλο ένα διήμερο στην Ελλάδα (μαζί βενζίνη και φαγητό)",
       "domain": "money",
       "polarity": "neutral",
       "strength": 1,
@@ -568,6 +568,10 @@
       "rule": {
         "metric": "max_cost",
         "value": "150"
+      },
+      "context": {
+        "where": "domestic",
+        "days": 2
       }
     },
     {
@@ -594,6 +598,10 @@
       "rule": {
         "metric": "max_cost",
         "value": "25"
+      },
+      "context": {
+        "where": "local",
+        "days": 1
       }
     },
     {

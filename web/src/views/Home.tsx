@@ -1,14 +1,11 @@
 import { Heart, MessageCircle, Plus } from 'lucide-react';
-import { useState } from 'react';
-import type { AppState } from '../api';
+import { api, type AppState } from '../api';
 import { Composer } from '../components/Composer';
-import { NewTwinModal } from '../components/NewTwinModal';
 import { go } from '../components/Shell';
 import { Avatar, AvatarStack, Badge, CATEGORY, Empty, timeAgo } from '../components/ui';
 import { formatWhen } from '../../../shared/time';
 
-export function Stories({ state, onState }: { state: AppState; onState: (s: AppState) => void }) {
-  const [adding, setAdding] = useState(false);
+export function Stories({ state }: { state: AppState; onState: (s: AppState) => void }) {
   return (
     <div className="stories">
       {state.personas.map((p) => {
@@ -22,7 +19,7 @@ export function Stories({ state, onState }: { state: AppState; onState: (s: AppS
           </button>
         );
       })}
-      <button className="story" onClick={() => setAdding(true)}>
+      <button className="story" onClick={() => go('/onboard')}>
         <span className="story-ring add">
           <span className="story-add">
             <Plus size={26} />
@@ -30,13 +27,49 @@ export function Stories({ state, onState }: { state: AppState; onState: (s: AppS
         </span>
         <span className="story-name">Νέο Twin</span>
       </button>
-      {adding && <NewTwinModal onClose={() => setAdding(false)} onState={onState} live={state.status.aiMode === 'live'} />}
     </div>
+  );
+}
+
+function Welcome({ state, onState }: { state: AppState; onState: (s: AppState) => void }) {
+  return (
+    <section className="card welcome">
+      <div className="welcome-art" aria-hidden>
+        <span>🧑</span>
+        <span>🤝</span>
+        <span>🤖</span>
+      </div>
+      <h2>Ένα Twin για κάθε φίλο</h2>
+      <p className="muted">
+        Κάθε μέλος της παρέας απαντά σε μια σύντομη συνέντευξη μέσα στην εφαρμογή (χρήματα ανά περίσταση, χρόνος, φαγητό, ταξίδια, πώς αποφασίζει, πώς γράφει). Το Twin του μαθαίνει από αυτή — και από κάθε αίτημα που εγκρίνει — και μετά τα Twins συζητούν και συμφωνούν για λογαριασμό σας.
+      </p>
+      <div className="welcome-actions">
+        <button className="btn btn-brand big" onClick={() => go('/onboard')}>
+          <Plus size={17} /> Φτιάξε το πρώτο Twin
+        </button>
+        {state.personas.length === 0 && (
+          <button className="btn" onClick={async () => onState(await api.reset(false))}>
+            Δοκίμασε με συνθετική παρέα
+          </button>
+        )}
+      </div>
+      {state.personas.length === 1 && <p className="small">Χρειάζεται τουλάχιστον ακόμα ένα Twin για κοινή απόφαση.</p>}
+    </section>
   );
 }
 
 export function Home({ state, onState }: { state: AppState; onState: (s: AppState) => void }) {
   const posts = [...state.requests].reverse();
+  if (state.personas.length < 2 && !posts.length) {
+    return (
+      <div className="home">
+        <div className="feed">
+          {state.personas.length > 0 && <Stories state={state} onState={onState} />}
+          <Welcome state={state} onState={onState} />
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="home">
       <div className="feed">
@@ -64,16 +97,16 @@ export function Home({ state, onState }: { state: AppState; onState: (s: AppStat
                 </div>
               </header>
               <div className="post-cover" style={{ background: CATEGORY[r.category].grad }}>
-                <span className="post-emoji">{chosen?.emoji ?? (d?.outcome.status === 'deadlock' ? '🤔' : CATEGORY[r.category].emoji)}</span>
+                <span className="post-emoji">{chosen?.emoji ?? (!chosen && d ? '🤔' : CATEGORY[r.category].emoji)}</span>
                 <div className="post-cover-text">
-                  {d?.outcome.status === 'deadlock' ? (
+                  {d && !chosen ? (
                     <>
                       <span className="eyebrow light">Αδιέξοδο</span>
                       <h3>Δεν βρέθηκε κάτι για όλους</h3>
                     </>
                   ) : (
                     <>
-                      <span className="eyebrow light">Πρόταση των Twins</span>
+                      <span className="eyebrow light">{d?.outcome.status === 'compromise' ? 'Συμβιβασμός των Twins' : 'Πρόταση των Twins'}</span>
                       <h3>{chosen?.title ?? '—'}</h3>
                       {chosen && (
                         <span className="cover-chips">

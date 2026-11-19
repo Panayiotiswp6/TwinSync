@@ -7,6 +7,7 @@ import { Shell, parseRoute, type Route } from './components/Shell';
 import { SourceDrawer } from './components/SourceDrawer';
 import { Eval } from './views/Eval';
 import { Home } from './views/Home';
+import { Onboard } from './views/Onboard';
 import { Profile, TwinsList } from './views/Profile';
 import { Thread } from './views/Thread';
 
@@ -41,9 +42,12 @@ export function App() {
 
   if (!state) return <div className="boot">{error ? `Σφάλμα: ${error}` : <span className="spinner" />}</div>;
 
-  const reset = async () => {
-    if (!window.confirm('Επαναφορά όλων των δεδομένων στο αρχικό συνθετικό demo; Οι πηγές και οι αποφάσεις που προσθέσατε θα χαθούν.')) return;
-    setState(await api.reset());
+  const reset = async (empty: boolean) => {
+    const msg = empty
+      ? 'Διαγραφή ΟΛΩΝ των Twins, πηγών, αναμνήσεων και αποφάσεων; Η εφαρμογή θα ξεκινήσει άδεια για να φτιάξετε τα δικά σας Twins. Δεν αναιρείται.'
+      : 'Αντικατάσταση όλων των δεδομένων με τη συνθετική demo παρέα; Ό,τι προσθέσατε θα χαθεί.';
+    if (!window.confirm(msg)) return;
+    setState(await api.reset(empty));
     window.location.hash = '/';
   };
 
@@ -57,6 +61,7 @@ export function App() {
           <Composer state={state} onState={setState} />
         </div>
       )}
+      {route.name === 'onboard' && <Onboard state={state} onState={setState} />}
       {route.name === 'twins' && <TwinsList state={state} onState={setState} />}
       {route.name === 'twin' && <Profile key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'request' && <Thread key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
