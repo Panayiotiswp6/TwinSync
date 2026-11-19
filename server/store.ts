@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import path from 'node:path';
 import { containsQuote, slug } from '../shared/text';
 import type { MemoryDraft } from '../shared/heuristics';
-import type { Approval, Decision, GroupRequest, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage } from '../shared/types';
+import type { Approval, Decision, GroupRequest, HeldOutCase, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage } from '../shared/types';
 import { stamp } from './memory';
 import { loadSeed, type CatalogEntry } from './seed';
 
@@ -26,6 +26,8 @@ interface State {
   /** Embedding cache: memory id -> vector (only with an OpenAI key). */
   vectors: Record<string, number[]>;
   liveEval?: unknown;
+  /** Held-out decisions imported from owners' questionnaire ZIPs (never used as sources). */
+  holdouts?: HeldOutCase[];
 }
 
 const nowIso = () => new Date().toISOString();
@@ -104,6 +106,24 @@ export const store = {
   get catalog() {
     return catalog;
   },
+  get holdouts(): HeldOutCase[] {
+    return state.holdouts ?? [];
+  },
+  /** Replace the imported held-out cases of one persona. */
+  setHoldouts(personaId: PersonaId, cases: HeldOutCase[]) {
+    state.holdouts = [...(state.holdouts ?? []).filter((c) => c.personaId !== personaId), ...cases];
+    persist();
+  },
+  personaByHandle(handle: string) {
+    const h = handle.trim().replace(/^@/, '').toLowerCase();
+    return state.personas.find((p) => p.handle.toLowerCase() === h);
+  },
+  updatePersona(id: PersonaId, patch: Partial<Pick<Persona, 'name' | 'bio' | 'emoji'>>) {
+    const p = store.persona(id);
+    if (p) Object.assign(p, Object.fromEntries(Object.entries(patch).filter(([, v]) => typeof v === 'string' && v.trim())));
+    persist();
+    return p;
+  },
   get liveEval() {
     return state.liveEval;
   },
@@ -134,7 +154,7 @@ export const store = {
     return state.decisions.find((d) => d.id === id);
   },
 
-  addPersona(name: string, bio: string, emoji = '✨'): Persona {
+  addPersona(name: string, bio: string, emoji = '✨', handle?: string): Persona {
     const clean = name.trim().slice(0, 40);
     const words = clean.split(/\s+/);
     const initials = (words.length > 1 ? words[0][0] + words[1][0] : clean.slice(0, 2)).toUpperCase();
@@ -143,7 +163,7 @@ export const store = {
     const p: Persona = {
       id,
       name: clean,
-      handle: `${slug(clean).replace(/-/g, '.') || id}`,
+      handle: (handle && /^[a-z0-9._]{2,30}$/i.test(handle.replace(/^@/, '')) ? handle.replace(/^@/, '') : slug(clean).replace(/-/g, '.') || id).toLowerCase(),
       initials,
       colors: PALETTE[state.personas.length % PALETTE.length],
       emoji,

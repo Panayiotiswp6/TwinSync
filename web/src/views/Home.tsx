@@ -30,7 +30,7 @@ export function Stories({ state, onState }: { state: AppState; onState: (s: AppS
         </span>
         <span className="story-name">Νέο Twin</span>
       </button>
-      {adding && <NewTwinModal onClose={() => setAdding(false)} onState={onState} />}
+      {adding && <NewTwinModal onClose={() => setAdding(false)} onState={onState} live={state.status.aiMode === 'live'} />}
     </div>
   );
 }

@@ -5,12 +5,12 @@ import { fileURLToPath } from 'node:url';
 import { z } from 'zod';
 import { aiModel, aiProvider, embeddingsEnabled } from './ai';
 import { evaluationReport, holdoutLive } from './evaluation';
-import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
+import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
 import { parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
 
 const app = express();
-app.use(express.json({ limit: '1mb' }));
+app.use(express.json({ limit: '4mb' }));
 
 const status = () => ({
   aiMode: aiProvider() === 'demo' ? ('demo' as const) : ('live' as const),
@@ -98,6 +98,32 @@ app.post(
   '/api/personas/:id/style',
   wrap(async (req, res) => {
     const r = await refreshStyle(req.params.id);
+    res.json({ ...r, state: snapshot() });
+  }),
+);
+
+// ---- Questionnaire ZIP import (unzipped in the browser) ----
+const ImportBody = z.object({
+  persona: z.object({ name: z.string().trim().min(2).max(60), handle: z.string().trim().min(2).max(40), emoji: z.string().max(8).optional(), bio: z.string().max(300).optional() }),
+  files: z.array(z.object({ name: z.string().max(200), text: z.string().max(200_000) })).min(1).max(30),
+  holdout: z
+    .object({
+      cases: z.array(
+        z.object({
+          question: z.string().max(300),
+          category: z.string().max(30),
+          options: z.array(z.object({ id: z.string().max(20), title: z.string().max(200), costPerPerson: z.number().nullable(), features: z.array(z.string().max(120)).max(10).default([]), endsAt: z.string().nullable().default(null) })).max(5),
+          actualOptionId: z.string().max(20),
+          note: z.string().max(500).default(''),
+        }),
+      ).max(10),
+    })
+    .optional(),
+});
+app.post(
+  '/api/import',
+  wrap(async (req, res) => {
+    const r = await importPackage(ImportBody.parse(req.body));
     res.json({ ...r, state: snapshot() });
   }),
 );

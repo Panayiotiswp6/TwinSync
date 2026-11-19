@@ -380,3 +380,106 @@ export function approveMessage(decisionId: string, personaId: PersonaId, text?: 
   store.save();
   return d;
 }
+
+// ---------------------------------------------------------------------------
+// Questionnaire ZIP import: persona.json + NN-*.md sources + holdout.json
+// ---------------------------------------------------------------------------
+
+export interface ImportPackage {
+  persona: { name: string; handle: string; emoji?: string; bio?: string };
+  files: { name: string; text: string }[];
+  holdout?: {
+    cases: {
+      question: string;
+      category: string;
+      options: { id: string; title: string; costPerPerson: number | null; features: string[]; endsAt: string | null }[];
+      actualOptionId: string;
+      note: string;
+    }[];
+  };
+}
+
+const CATS: Category[] = ['trip', 'food', 'entertainment', 'activity', 'gift', 'other'];
+
+export async function importPackage(pkg: ImportPackage) {
+  const existing = store.personaByHandle(pkg.persona.handle);
+  const persona = existing
+    ? store.updatePersona(existing.id, { name: pkg.persona.name, bio: pkg.persona.bio ?? '', emoji: pkg.persona.emoji ?? '' })!
+    : store.addPersona(pkg.persona.name, pkg.persona.bio ?? '', pkg.persona.emoji || '✨', pkg.persona.handle);
+
+  // Re-importing the same file replaces it instead of duplicating it.
+  const sourceIds: string[] = [];
+  for (const f of pkg.files) {
+    const { meta, body } = parseFrontMatterText(f.text);
+    if (body.trim().length < 5) continue;
+    for (const old of store.sources.filter((s) => s.personaId === persona.id && s.fileName === f.name)) store.deleteSource(old.id);
+    const kinds = ['document', 'note', 'chat', 'email', 'past_decision'];
+    const kind = (kinds.includes(meta.kind) ? meta.kind : 'document') as 'document';
+    sourceIds.push(store.addSource(persona.id, kind, meta.title || f.name.replace(/\.[^.]+$/, ''), body, f.name, meta.date).id);
+  }
+
+  // Analyse three files at a time.
+  const results: Awaited<ReturnType<typeof analyzeAndStore>>[] = [];
+  for (let i = 0; i < sourceIds.length; i += 3) {
+    results.push(...(await Promise.all(sourceIds.slice(i, i + 3).map((id) => analyzeAndStore(id)))));
+  }
+
+  let styleNote: string | undefined;
+  try {
+    await refreshStyle(persona.id);
+  } catch (e) {
+    styleNote = `Το ύφος δεν αναλύθηκε: ${aiErrorReason(e)}`;
+  }
+
+  let holdouts = 0;
+  if (pkg.holdout?.cases?.length) {
+    const cases = pkg.holdout.cases
+      .filter((c) => c.options.length >= 2 && c.options.some((o) => o.id === c.actualOptionId))
+      .map((c, i) => ({
+        id: `imp-${persona.id}-${i + 1}`,
+        personaId: persona.id,
+        question: c.question.slice(0, 200),
+        category: (CATS.includes(c.category as Category) ? c.category : 'other') as Category,
+        actualOptionId: c.actualOptionId,
+        note: c.note.slice(0, 300),
+        origin: 'imported' as const,
+        options: c.options.map((o) => ({
+          id: o.id,
+          title: o.title.slice(0, 100),
+          emoji: '',
+          summary: '',
+          location: '',
+          costPerPerson: typeof o.costPerPerson === 'number' && o.costPerPerson >= 0 ? o.costPerPerson : null,
+          costNote: '',
+          startsAt: null,
+          endsAt: o.endsAt && parseIso(o.endsAt) ? o.endsAt : null,
+          features: o.features.slice(0, 8),
+          origin: 'catalog' as const,
+        })),
+      }));
+    store.setHoldouts(persona.id, cases);
+    holdouts = cases.length;
+  }
+
+  return {
+    persona,
+    sources: results.length,
+    memories: results.reduce((a, r) => a + r.created.length, 0),
+    dropped: results.reduce((a, r) => a + r.dropped, 0),
+    mode: results[0]?.mode ?? 'demo',
+    notes: [...new Set(results.map((r) => r.note).filter(Boolean)), ...(styleNote ? [styleNote] : [])] as string[],
+    holdouts,
+  };
+}
+
+function parseFrontMatterText(raw: string): { meta: Record<string, string>; body: string } {
+  const text = raw.replace(/^﻿/, '').replace(/\r\n/g, '\n');
+  const m = text.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!m) return { meta: {}, body: text.trim() };
+  const meta: Record<string, string> = {};
+  for (const line of m[1].split('\n')) {
+    const i = line.indexOf(':');
+    if (i > 0) meta[line.slice(0, i).trim()] = line.slice(i + 1).trim();
+  }
+  return { meta, body: m[2].trim() };
+}

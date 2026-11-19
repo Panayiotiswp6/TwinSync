@@ -243,3 +243,16 @@ export interface Usage {
   outputTokens: number;
   embeddingTokens: number;
 }
+
+/** A past decision kept OUT of the twin's sources, used only to test whether the twin predicts it. */
+export interface HeldOutCase {
+  id: string;
+  personaId: PersonaId;
+  question: string;
+  category: Category;
+  actualOptionId: string;
+  note: string;
+  options: CandidateOption[];
+  /** synthetic = team-written demo data; imported = the owner's own (with consent), from the questionnaire ZIP. */
+  origin: 'synthetic' | 'imported';
+}

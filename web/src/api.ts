@@ -57,7 +57,15 @@ export const api = {
   approveMessage: (decisionId: string, personaId: string, text?: string) => call<AppState>('POST', `/api/decisions/${decisionId}/messages/${personaId}/approve`, { text }),
   evaluation: () => call<EvalReport>('GET', '/api/eval'),
   evaluationLive: () => call<EvalReport>('POST', '/api/eval/live'),
+  importPackage: (pkg: ImportPackage) =>
+    call<{ persona: Persona; sources: number; memories: number; dropped: number; mode: string; notes: string[]; holdouts: number; state: AppState }>('POST', '/api/import', pkg),
 };
+
+export interface ImportPackage {
+  persona: { name: string; handle: string; emoji?: string; bio?: string };
+  files: { name: string; text: string }[];
+  holdout?: { cases: unknown[] };
+}
 
 export interface HoldoutRow {
   id: string;
@@ -69,6 +77,7 @@ export interface HoldoutRow {
   margin: number;
   note: string;
   why: string;
+  origin: 'synthetic' | 'imported';
 }
 export interface HoldoutReport {
   method: 'heuristic' | 'live';

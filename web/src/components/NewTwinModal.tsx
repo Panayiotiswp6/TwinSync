@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { api, type AppState } from '../api';
 import { go } from './Shell';
 import { Modal } from './ui';
+import { ZipImport } from './ZipImport';
 
 const EMOJIS = ['✨', '🎧', '📚', '🏄', '🎨', '⚽', '🍕', '🌿', '🚴', '🎮'];
 
-export function NewTwinModal({ onClose, onState }: { onClose: () => void; onState: (s: AppState) => void }) {
+export function NewTwinModal({ onClose, onState, live = false }: { onClose: () => void; onState: (s: AppState) => void; live?: boolean }) {
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [emoji, setEmoji] = useState('✨');
@@ -22,6 +23,8 @@ export function NewTwinModal({ onClose, onState }: { onClose: () => void; onStat
   };
   return (
     <Modal title="Νέο Twin" onClose={onClose}>
+      <ZipImport live={live} onState={onState} onDone={onClose} />
+      <div className="or">ή δημιουργία με το χέρι</div>
       <p className="muted small">Δημιουργήστε ένα Twin και μετά ανεβάστε αρχεία, σημειώσεις και chats του κατόχου. Χρησιμοποιήστε μόνο δικά σας δεδομένα με συναίνεση ή συνθετικά.</p>
       <label className="field">
         Όνομα
