@@ -7,7 +7,7 @@ import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from '
 import path from 'node:path';
 import { containsQuote, repairMojibake, slug } from '../shared/text';
 import type { MemoryDraft } from '../shared/heuristics';
-import type { Approval, Decision, GroupRequest, HeldOutCase, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage } from '../shared/types';
+import type { Approval, Decision, GroupRequest, HeldOutCase, MemoryItem, Origin, Persona, PersonaId, Source, SourceKind, Usage, WordSwap } from '../shared/types';
 import { stamp } from './memory';
 import { hasTeamSeed, loadSeed, loadTeamSeed, type CatalogEntry, type GroupExport } from './seed';
 
@@ -61,7 +61,7 @@ function load(): State {
   try {
     if (existsSync(STATE_FILE)) {
       const s = JSON.parse(readFileSync(STATE_FILE, 'utf8')) as State;
-      if (s.version === STATE_VERSION) return repairState(s);
+      if (s.version === STATE_VERSION) return syncTeam(repairState(s), seedState);
       console.warn('[store] state file from another version — starting from the seed');
     }
   } catch (e) {
@@ -74,7 +74,20 @@ const SOURCE_KINDS = ['document', 'note', 'chat', 'email', 'past_decision', 'wis
 const MEMORY_KINDS = ['preference', 'constraint', 'fact', 'decision_pattern', 'style'];
 const DOMAIN_LIST = ['travel', 'food', 'money', 'schedule', 'social', 'activities', 'comfort', 'style', 'other'];
 const arr = <T>(v: unknown): T[] => (Array.isArray(v) ? (v as T[]) : []);
+const swapsOf = (v: unknown): { swaps?: WordSwap[] } => {
+  const list = arr<WordSwap>(v).filter((w) => w && typeof w.to === 'string' && w.to.trim() && Array.isArray(w.from) && w.from.every((f) => typeof f === 'string' && f.trim()));
+  return list.length ? { swaps: list } : {};
+};
 const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : v == null ? fallback : String(v));
+
+/** The team's locked twins are defined in the repo: their writing style follows the committed team file. */
+function syncTeam(s: State, seed: State): State {
+  for (const p of s.personas) {
+    const t = p.locked ? seed.personas.find((x) => x.id === p.id) : undefined;
+    if (t?.style) p.style = t.style;
+  }
+  return s;
+}
 
 /** Make a saved state safe to render (fields from older versions or failed imports). Never drops user data. */
 export function repairState(s: State): State {
@@ -89,7 +102,7 @@ export function repairState(s: State): State {
     colors: Array.isArray(p.colors) && p.colors.length === 2 ? p.colors : (fixed++, ['#7f5af0', '#ff8a3d'] as [string, string]),
     emoji: str(p.emoji, ''),
     bio: str(p.bio, ''),
-    style: p.style && typeof p.style === 'object' ? { summary: str(p.style.summary), traits: arr<string>(p.style.traits), phrases: arr(p.style.phrases), usesEmoji: !!p.style.usesEmoji } : null,
+    style: p.style && typeof p.style === 'object' ? { summary: str(p.style.summary), traits: arr<string>(p.style.traits), phrases: arr(p.style.phrases), usesEmoji: !!p.style.usesEmoji, ...swapsOf(p.style.swaps) } : null,
     createdAt: str(p.createdAt, nowIso()),
   }));
   s.sources = arr<Source>(s.sources).map((x) => ({
@@ -383,7 +396,8 @@ export const store = {
 
   setStyle(personaId: PersonaId, style: Persona['style']) {
     const p = store.persona(personaId);
-    if (p) p.style = style;
+    // A rebuilt style card keeps the person's dialect words (they are curated, not measured).
+    if (p) p.style = style && !style.swaps && p.style?.swaps ? { ...style, swaps: p.style.swaps } : style;
     persist();
   },
 

@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { MemoryItem, Persona } from '../../../shared/types';
 import { api, type AppState } from '../api';
 import { go } from '../components/Shell';
-import { Avatar, Badge, type OpenSource } from '../components/ui';
+import { Avatar, Badge, Cite, InfoTip, type OpenSource } from '../components/ui';
 
 interface Turn {
   role: 'user' | 'twin';
@@ -103,21 +103,18 @@ function Conversation({ persona, state, onOpen }: { persona: Persona; state: App
                 <div className="dm-col">
                   <div className="dm-bubble">{t.text}</div>
                   {!!t.used?.length && (
-                    <details className="dm-why tiny muted">
-                      <summary>βάσει της μνήμης του ({t.used.length})</summary>
-                      <ul className="plain">
-                        {t.used.map((u) => (
-                          <li key={u.id}>
-                            {u.statement}{' '}
-                            {u.refs[0] && (
-                              <button type="button" className="cite" onClick={() => onOpen(u.refs[0])} title={`«${u.refs[0].quote}»`}>
-                                πηγή
-                              </button>
-                            )}
-                          </li>
-                        ))}
-                      </ul>
-                    </details>
+                    <span className="meta-row tiny muted">
+                      βάσει της μνήμης του
+                      <InfoTip size={13} label="Σε τι βασίστηκε" title="Σε τι βασίστηκε">
+                        <ul className="plain tip-list">
+                          {t.used.map((u) => (
+                            <li key={u.id}>
+                              {u.statement} <Cite refs={u.refs.slice(0, 1)} onOpen={onOpen} />
+                            </li>
+                          ))}
+                        </ul>
+                      </InfoTip>
+                    </span>
                   )}
                 </div>
               </div>

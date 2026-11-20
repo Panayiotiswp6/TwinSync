@@ -1,6 +1,7 @@
 // Private chat with one twin. Nothing is stored: the browser sends the conversation, the twin
 // answers in its owner's voice from its own memory, and the reply says which memory it used.
 
+import { applySwaps } from '../shared/dialect';
 import { styleSamples } from '../shared/messages';
 import { normalizeGreek } from '../shared/text';
 import type { MemoryItem } from '../shared/types';
@@ -85,7 +86,7 @@ export async function privateChat(personaId: string, turns: ChatTurn[]): Promise
       // A reply that is really a sample from another conversation ("…να το προλάβουμε") gets one rewrite.
       if (copiesSample(r.reply, samples)) r = await privateReply(persona, mem, samples, turns.slice(-12), new Date(), r.reply);
       const previous = turns.filter((t) => t.role === 'twin').at(-1)?.text ?? '';
-      return { reply: varyAddress(r.reply, previous), used: pick(r.usedMemoryIds), mode: 'live', model: aiModel() };
+      return { reply: applySwaps(varyAddress(r.reply, previous), persona.style?.swaps), used: pick(r.usedMemoryIds), mode: 'live', model: aiModel() };
     } catch (e) {
       const d = demoReply(items, last);
       return { reply: d.reply, used: pick(d.used.map((m) => m.id)), mode: 'demo', model: null, note: `Live AI απέτυχε (${aiErrorReason(e)}) — απάντηση χωρίς AI.` };

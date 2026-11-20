@@ -11,6 +11,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import type { MemoryDraft } from '../shared/heuristics';
+import { swapsNote } from '../shared/dialect';
 import { CATEGORIES, DOMAINS, type CandidateOption, type Category, type Evaluation, type Itinerary, type MemoryItem, type Persona, type RequestKind, type StyleCard, type Venue } from '../shared/types';
 import { contextHint, type RequestContext, WHERE_LABEL } from '../shared/context';
 import { KIND_CATEGORY, KIND_LABEL, LOCAL_KINDS } from '../shared/plan';
@@ -133,10 +134,9 @@ const STRENGTH = { low: 0.3, medium: 0.6, high: 0.9 } as const;
 
 /** Drop stray characters from scripts we never expect in Greek/English output (models occasionally leak e.g. Hebrew). */
 export function clean(s: string): string {
-  return s
-    .replace(/[\u0590-\u08FF\u0900-\u0DFF\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]+/g, '')
-    .replace(/\s{2,}/g, ' ')
-    .trim();
+  const stripped = s.replace(/[\u0590-\u08FF\u0900-\u0DFF\u3040-\u30FF\u3400-\u9FFF\uAC00-\uD7AF]+/g, '');
+  // Where a stray foreign-script word was removed, do not leave "προσθέτει ." behind.
+  return (stripped === s ? s : stripped.replace(/\s+([.,;!?…])/g, '$1')).replace(/\s{2,}/g, ' ').trim();
 }
 
 const DRAFT_SCHEMA = {
@@ -805,6 +805,13 @@ ${READING_RULES}
   return out;
 }
 
+/** Style notes for a prompt, with the person's dialect words as a strict rule. */
+function styleLine(style: StyleCard | null, fallback: string): string {
+  if (!style) return fallback;
+  const swaps = swapsNote(style);
+  return `${style.summary} | ${style.traits.join('; ')}${swaps ? ` | RULE: ${swaps}` : ''}`;
+}
+
 // ---------------------------------------------------------------------------
 // 6. Group-chat drafts in each person's style
 // ---------------------------------------------------------------------------
@@ -820,7 +827,7 @@ The friends should not be able to tell the twin from the real person. Style matt
 - Pick only the 1-2 FACTS that matter most to this person. State nothing that is not in their FACTS; every number must appear in the facts.
 - The messages must sound clearly different from each other.`,
     user: briefs
-      .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${b.style ? `${b.style.summary} | ${b.style.traits.join('; ')}` : 'unknown'}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n')}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
+      .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${styleLine(b.style, 'unknown')}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n')}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
       .join('\n\n'),
     schema: {
       type: 'object',
@@ -858,7 +865,7 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
 - Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.
 - A twin NEVER accepts breaking its own strict limit on its owner's behalf. If the SHARED facts say the proposal does not cover someone's limit, the group still converges on that closest proposal; that person says plainly what is not covered and that they will decide themselves (with their own approval) — no "οκ, κάνω πίσω".`,
     user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
-      .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${b.style ? `${b.style.summary} | ${b.style.traits.join('; ')}` : 'unknown — write plainly'}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
+      .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${styleLine(b.style, 'unknown — write plainly')}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
       .join('\n\n')}`,
     schema: {
       type: 'object',
@@ -896,7 +903,7 @@ export async function privateReply(persona: Persona, items: MemoryItem[], sample
 - Do not mention memory, sources, the app or AI. Only if asked directly whether you are a bot/AI, say honestly that you are ${persona.name}'s digital twin.
 - Be respectful; never share phone numbers, addresses or other people's private details.
 - usedMemoryIds: 0-3 ids of the memory items the reply relies on.`,
-    user: `STYLE: ${persona.style ? `${persona.style.summary} | ${persona.style.traits.join('; ')}` : 'unknown — write plainly and casually'}
+    user: `STYLE: ${styleLine(persona.style, 'unknown — write plainly and casually')}
 WRITING SAMPLES:
 ${samples.map((s) => `- ${s}`).join('\n') || '- (none)'}
 

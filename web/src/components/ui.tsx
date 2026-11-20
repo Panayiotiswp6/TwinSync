@@ -1,5 +1,6 @@
-import { X } from 'lucide-react';
-import { useEffect, type ReactNode } from 'react';
+import { Info, Quote, X } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import type { Category, Domain, MemoryKind, Persona, SourceKind, SourceRef } from '../../../shared/types';
 
 export type OpenSource = (ref: SourceRef) => void;
@@ -122,11 +123,106 @@ export function Cite({ refs, onOpen }: { refs: SourceRef[]; onOpen: OpenSource }
   return (
     <span className="cites">
       {refs.map((r, i) => (
-        <button key={r.sourceId + i} type="button" className="cite" title={r.quote ? `«${r.quote}»` : r.sourceId} onClick={() => onOpen(r)}>
-          {r.sourceId.replace(/^src-/, '')}
+        <button key={r.sourceId + i} type="button" className="cite" title={r.quote ? `«${r.quote}»` : 'Άνοιγμα πηγής'} onClick={() => onOpen(r)}>
+          <Quote size={10} /> πηγή{refs.length > 1 ? ` ${i + 1}` : ''}
         </button>
       ))}
     </span>
+  );
+}
+
+type Pos = { left: number; width: number; top?: number; bottom?: number; maxHeight: number };
+
+/**
+ * A small ⓘ that keeps explanations out of the way: hover (mouse) or tap to read them.
+ * The panel is rendered in a portal, so cards with overflow:hidden never clip it.
+ */
+export function InfoTip({ children, title, label = 'Λεπτομέρειες', tone, size = 15, wide }: { children: ReactNode; title?: ReactNode; label?: string; tone?: 'warn' | 'bad'; size?: number; wide?: boolean }) {
+  const [open, setOpen] = useState<null | 'hover' | 'pin'>(null);
+  const [pos, setPos] = useState<Pos | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLDivElement>(null);
+  const timer = useRef<number | undefined>(undefined);
+  const clear = () => window.clearTimeout(timer.current);
+  const later = (fn: () => void, ms: number) => {
+    clear();
+    timer.current = window.setTimeout(fn, ms);
+  };
+  const close = useCallback(() => {
+    clear();
+    setOpen(null);
+  }, []);
+
+  useLayoutEffect(() => {
+    if (!open || !btn.current) return;
+    const r = btn.current.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const width = Math.min(wide ? 420 : 340, vw - 24);
+    const left = Math.max(12, Math.min(r.left + r.width / 2 - width / 2, vw - width - 12));
+    const below = vh - r.bottom - 12;
+    const above = r.top - 12;
+    setPos(below >= 240 || below >= above ? { left, width, top: r.bottom + 8, maxHeight: below - 8 } : { left, width, bottom: vh - r.top + 8, maxHeight: above - 8 });
+  }, [open, wide]);
+
+  useEffect(() => {
+    if (!open) return;
+    const outside = (e: Event) => {
+      const t = e.target as Node;
+      if (!btn.current?.contains(t) && !pop.current?.contains(t)) close();
+    };
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && close();
+    const onScroll = (e: Event) => !pop.current?.contains(e.target as Node) && close();
+    document.addEventListener('pointerdown', outside);
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('scroll', onScroll, true);
+    window.addEventListener('resize', close);
+    return () => {
+      document.removeEventListener('pointerdown', outside);
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('scroll', onScroll, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open, close]);
+  useEffect(() => clear, []);
+
+  const mouse = (e: ReactPointerEvent) => e.pointerType === 'mouse';
+  return (
+    <>
+      <button
+        ref={btn}
+        type="button"
+        className={`infotip ${tone ? `infotip-${tone}` : ''} ${open ? 'on' : ''}`}
+        aria-label={label}
+        aria-expanded={!!open}
+        onClick={(e) => {
+          e.stopPropagation();
+          clear();
+          setOpen((o) => (o === 'pin' ? null : 'pin'));
+        }}
+        onPointerEnter={(e) => mouse(e) && later(() => setOpen((o) => o ?? 'hover'), 120)}
+        onPointerLeave={(e) => mouse(e) && later(() => setOpen((o) => (o === 'hover' ? null : o)), 180)}
+      >
+        <Info size={size} />
+      </button>
+      {open &&
+        createPortal(
+          <div
+            ref={pop}
+            className="infotip-pop"
+            role="dialog"
+            aria-label={label}
+            style={{ left: pos?.left ?? -9999, width: pos?.width, top: pos?.top, bottom: pos?.bottom, maxHeight: pos?.maxHeight, visibility: pos ? 'visible' : 'hidden' }}
+            onPointerEnter={(e) => mouse(e) && clear()}
+            onPointerLeave={(e) => mouse(e) && later(() => setOpen((o) => (o === 'hover' ? null : o)), 180)}
+            onClickCapture={(e) => (e.target as HTMLElement).closest('.cite, a') && later(close, 0)}
+          >
+            {title && <p className="infotip-title">{title}</p>}
+            {children}
+          </div>,
+          document.body,
+        )}
+    </>
   );
 }
 

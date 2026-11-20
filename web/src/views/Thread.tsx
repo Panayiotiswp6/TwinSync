@@ -8,7 +8,7 @@ import { Working } from '../components/Composer';
 import { Checks, PlanDetails, PlanHead } from '../components/Plan';
 import { LiveTwinChat, TwinChatView } from '../components/TwinChat';
 import { KIND_LABEL } from '../../../shared/plan';
-import { Avatar, AvatarStack, Badge, CATEGORY, Cite, Empty, ScoreRing, Spinner, timeAgo, type OpenSource } from '../components/ui';
+import { Avatar, AvatarStack, Badge, CATEGORY, Cite, Empty, InfoTip, ScoreRing, Spinner, timeAgo, type OpenSource } from '../components/ui';
 
 const STANCE = {
   agree: { label: 'Συμφωνεί', tone: 'good' },
@@ -53,24 +53,35 @@ function OptionCard({ o, d, people, onOpen, memory }: { o: CandidateOption; d: D
             </span>
           ))}
         </div>
-        {r.violations.map((v) => (
-          <p key={v.memoryId + o.id} className="violation">
-            ⛔ <b>{name(v.personaId)}</b>: {v.text}{' '}
-            <Badge tone={v.checkedBy === 'code' ? 'info' : 'ai'} title={v.checkedBy === 'code' ? 'Αριθμητικός έλεγχος σε κώδικα' : 'Κρίση του AI πάνω σε υποχρεωτικό στοιχείο μνήμης'}>
-              {v.checkedBy === 'code' ? 'κώδικας' : 'κρίση'}
-            </Badge>
-            {v.scope === 'request' && <Badge tone="warn">μόνο αυτό</Badge>} <Cite refs={refsOf(memory, v.memoryId)} onOpen={onOpen} />
-          </p>
-        ))}
-        {r.warnings.map((w) => (
-          <p key={w} className="tiny warn-text">
-            ⚠ {w}
-          </p>
-        ))}
-        <Checks checks={o.checks?.filter((c) => c.field === 'existence' || c.field === 'program')} compact />
-        <p className="tiny muted">
-          {o.costNote} {o.origin === 'ai' ? '· εκτίμηση AI, όχι κράτηση' : o.synthetic ? '· συνθετικό demo' : '· επιμελημένος κατάλογος'}
-        </p>
+        <div className="opt-foot">
+          {r.violations.length ? (
+            <span className="violation">⛔ Δεν καλύπτει: {[...new Set(r.violations.map((v) => name(v.personaId).split(' ')[0]))].join(', ')}</span>
+          ) : r.warnings.length ? (
+            <span className="tiny warn-text">⚠ {r.warnings.length === 1 ? '1 επισήμανση' : `${r.warnings.length} επισημάνσεις`}</span>
+          ) : (
+            <span className="tiny muted">{o.origin === 'ai' ? 'εκτίμηση AI, όχι κράτηση' : o.synthetic ? 'συνθετικό demo' : 'επιμελημένος κατάλογος'}</span>
+          )}
+          <InfoTip label={`Λεπτομέρειες: ${o.title}`} tone={r.violations.length ? 'bad' : r.warnings.length ? 'warn' : undefined} wide>
+            {r.violations.map((v) => (
+              <p key={v.memoryId + o.id} className="tip-note">
+                ⛔ <b>{name(v.personaId)}</b>: {v.text}{' '}
+                <Badge tone={v.checkedBy === 'code' ? 'info' : 'ai'} title={v.checkedBy === 'code' ? 'Αριθμητικός έλεγχος σε κώδικα' : 'Κρίση του AI πάνω σε υποχρεωτικό στοιχείο μνήμης'}>
+                  {v.checkedBy === 'code' ? 'κώδικας' : 'κρίση'}
+                </Badge>
+                {v.scope === 'request' && <Badge tone="warn">μόνο αυτό</Badge>} <Cite refs={refsOf(memory, v.memoryId)} onOpen={onOpen} />
+              </p>
+            ))}
+            {r.warnings.map((w) => (
+              <p key={w} className="tip-note warn-text">
+                ⚠ {w}
+              </p>
+            ))}
+            <Checks checks={o.checks?.filter((c) => c.field === 'existence' || c.field === 'program')} compact />
+            <p className="tip-note muted">
+              {o.costNote} {o.origin === 'ai' ? '· εκτίμηση AI, όχι κράτηση' : o.synthetic ? '· συνθετικό demo' : '· επιμελημένος κατάλογος'}
+            </p>
+          </InfoTip>
+        </div>
       </div>
     </article>
   );
@@ -144,7 +155,7 @@ function Wishes({ req, d, people, state, onState, onOpen }: { req: AppState['req
         <button className="btn" disabled={!!busy || !Number(limit)} onClick={() => run('limit', () => api.setLimit(req.id, who, Number(limit)))} title="Ελέγχεται σε κώδικα — οι αξιολογήσεις των Twins δεν ξαναγίνονται">
           {busy === 'limit' ? <Spinner /> : 'Εφαρμογή'}
         </button>
-        <span className="tiny muted">αριθμητικά όρια → άμεσος επανυπολογισμός σε κώδικα</span>
+        <InfoTip label="Πώς λειτουργεί το όριο">Τα αριθμητικά όρια ελέγχονται σε κώδικα: η απόφαση ξαναϋπολογίζεται αμέσως, χωρίς νέες αξιολογήσεις από τα Twins.</InfoTip>
       </div>
       {busy === 'wish' && <Working live={state.status.aiMode === 'live'} steps={['Κατανόηση επιθυμίας', 'Ανάκτηση μνήμης', 'Τα Twins ξανααξιολογούν', 'Κοινή απόφαση']} />}
       {err && <p className="error">{err}</p>}
@@ -211,7 +222,6 @@ function Messages({ d, people, state, onState, onOpen }: { d: Decision; people: 
                         {m.text}
                       </p>
                     )}
-                    {m.guardNote && <p className="tiny warn-text">⚠ {m.guardNote}</p>}
                     <div className="bubble-actions">
                       {m.status !== 'approved' && (
                         <>
@@ -235,17 +245,18 @@ function Messages({ d, people, state, onState, onOpen }: { d: Decision; people: 
                           )}
                         </>
                       )}
-                      <details className="more">
-                        <summary>Πού βασίστηκε</summary>
-                        <p className="tiny">
-                          Ύφος από: <Cite refs={m.styleSourceIds.map((id) => ({ sourceId: id, quote: '' }))} onOpen={onOpen} />
-                        </p>
-                        <ul className="tiny muted">
+                      <InfoTip label="Πού βασίστηκε" tone={m.guardNote ? 'warn' : undefined}>
+                        {m.guardNote && <p className="tip-note warn-text">⚠ {m.guardNote}</p>}
+                        <p className="infotip-title">Γεγονότα που χρησιμοποίησε</p>
+                        <ul className="plain tip-list">
                           {m.facts.map((f) => (
                             <li key={f}>{f}</li>
                           ))}
                         </ul>
-                      </details>
+                        <p className="tip-note">
+                          Ύφος από: <Cite refs={m.styleSourceIds.map((id) => ({ sourceId: id, quote: '' }))} onOpen={onOpen} />
+                        </p>
+                      </InfoTip>
                     </div>
                   </div>
                 </li>
@@ -309,11 +320,17 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
             «{req.text}» {req.periodStart && `· ${formatWhen(req.periodStart)} → ${formatWhen(req.periodEnd)}`}
           </p>
           {req.days && (
-            <p className="tiny muted">
-              Πλαίσιο: {req.days} {req.days === 1 ? 'μέρα' : 'μέρες'} · {req.where === 'abroad' ? 'εξωτερικό' : req.where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}
-              {req.city ? ` · ${req.kind === 'trip' ? 'αφετηρία' : 'πόλη'}: ${req.city}${req.cityAssumed ? ' (παραδοχή — αλλάζει στη φόρμα αιτήματος)' : ''}` : ''}
-              {req.area ? ` · περιοχή: ${req.area}` : ''}
-              {req.place ? ` · ${req.place}` : ''} — τα όρια του προφίλ εφαρμόζονται μόνο όπου ταιριάζει το πλαίσιο.
+            <p className="tiny muted meta-row">
+              <span>
+                {req.days} {req.days === 1 ? 'μέρα' : 'μέρες'} · {req.where === 'abroad' ? 'εξωτερικό' : req.where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}
+                {req.city ? ` · ${req.kind === 'trip' ? 'από' : ''} ${req.city}` : ''}
+                {req.area ? ` · ${req.area}` : ''}
+                {req.place ? ` · ${req.place}` : ''}
+              </span>
+              <InfoTip size={13} label="Πλαίσιο αιτήματος">
+                Τα όρια του προφίλ εφαρμόζονται μόνο όπου ταιριάζει το πλαίσιο (μέρες, Ελλάδα ή εξωτερικό, έξοδος στην πόλη).
+                {req.cityAssumed ? ' Η πόλη είναι παραδοχή — αλλάζει στη φόρμα αιτήματος.' : ''}
+              </InfoTip>
             </p>
           )}
         </div>
@@ -327,9 +344,18 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           <span key={s.key + s.label} className={`step step-${s.mode}`} title={s.detail}>
             {s.mode === 'ai' ? <Bot size={14} /> : s.mode === 'code' ? <Code2 size={14} /> : <Shuffle size={14} />}
             <b>{s.label}</b>
-            <span className="tiny">{s.detail}</span>
           </span>
         ))}
+        <InfoTip title="Πώς πάρθηκε η απόφαση" label="Βήματα απόφασης" wide>
+          <ul className="plain tip-list">
+            {d.steps.map((s) => (
+              <li key={s.key + s.label}>
+                <b>{s.label}</b> <Badge tone={s.mode === 'ai' ? 'ai' : s.mode === 'code' ? 'info' : 'neutral'}>{s.mode === 'ai' ? 'AI' : s.mode === 'code' ? 'κώδικας' : s.mode}</Badge>
+                <div className="muted small">{s.detail}</div>
+              </li>
+            ))}
+          </ul>
+        </InfoTip>
       </section>
 
       {busy ? (
@@ -358,8 +384,18 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           <div className="hero-cover">
             <span className="hero-emoji">{chosen.emoji}</span>
             <div>
-              <span className="eyebrow light">
+              <span className="eyebrow light meta-row">
                 {d.outcome.status === 'compromise' ? (d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα — η πιο κοντινή πρόταση' : 'Η πιο κοντινή πρόταση για όλους') : 'Η κοινή πρόταση των Twins'}
+                <InfoTip size={13} title="Πώς κατέληξαν" label="Πώς κατέληξαν" wide>
+                  <ul className="plain tip-list">
+                    {d.outcome.rationale.map((r) => (
+                      <li key={r}>{r}</li>
+                    ))}
+                  </ul>
+                  <p className="tip-note muted">
+                    Όρια στάσης: ≥{STANCE_THRESHOLDS.agree} συμφωνεί · {STANCE_THRESHOLDS.concede}–{STANCE_THRESHOLDS.agree - 1} με παραχώρηση · &lt;{STANCE_THRESHOLDS.concede} διαφωνεί.
+                  </p>
+                </InfoTip>
               </span>
               <h2>{chosen.venue?.name ?? chosen.title}</h2>
               <PlanHead o={chosen} />
@@ -368,8 +404,11 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           <div className="hero-body">
             {d.outcome.status === 'compromise' && (
               <div className="not-covered">
-                <p className="small">
-                  <b>Δεν καλύπτει πλήρως όλους.</b> Όποιος δεν καλύπτεται το αποφασίζει ο ίδιος με την έγκρισή του — τα Twins δεν το δέχονται για λογαριασμό του.
+                <p className="small meta-row">
+                  <b>Δεν καλύπτει πλήρως όλους.</b>
+                  <InfoTip size={14} label="Τι σημαίνει" tone="warn">
+                    Όποιος δεν καλύπτεται το αποφασίζει ο ίδιος με την έγκρισή του — τα Twins δεν το δέχονται για λογαριασμό του.
+                  </InfoTip>
                 </p>
                 <ul className="plain">
                   {d.outcome.results
@@ -404,11 +443,6 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
               </div>
             )}
             <PlanDetails o={chosen} people={people} memory={d.inputs} onOpen={onOpen} />
-            <ul className="plain rationale">
-              {d.outcome.rationale.slice(-2).map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
             <div className="concessions">
               {d.outcome.concessions.map((c) => {
                 const p = people.find((x) => x.id === c.personaId)!;
@@ -416,18 +450,19 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                   <div key={c.personaId} className="concession">
                     <Avatar persona={p} size={34} />
                     <div>
+                      <b className="conc-name">{p.name}</b>
                       <div className="conc-head">
-                        <b>{p.name}</b> <Badge tone={STANCE[c.stance].tone}>{STANCE[c.stance].label}</Badge>
+                        <Badge tone={STANCE[c.stance].tone}>{STANCE[c.stance].label}</Badge>
+                        {c.items.length ? (
+                          <InfoTip size={14} label={`Τι δίνει ο/η ${p.name}`} title="Τι δίνει">
+                            <ul className="plain tip-list">
+                              {c.items.map((i) => (
+                                <li key={i}>↘ {i}</li>
+                              ))}
+                            </ul>
+                          </InfoTip>
+                        ) : null}
                       </div>
-                      {c.items.length ? (
-                        <ul className="plain tiny">
-                          {c.items.map((i) => (
-                            <li key={i}>↘ {i}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <span className="tiny muted">Παίρνει τη δική του ψήφο.</span>
-                      )}
                     </div>
                     <ScoreRing value={c.finalScore} size={42} />
                   </div>
@@ -459,9 +494,6 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
             </div>
             {d.status === 'approved' && <p className="ok-box">✓ Εγκρίθηκε από όλους. Η κράτηση γίνεται από ανθρώπους — τα Twins δεν κλείνουν τίποτα.</p>}
             {d.status === 'rejected' && <p className="notice">Απορρίφθηκε. Προσθέστε μια επιθυμία ή ζητήστε νέες επιλογές.</p>}
-            <p className="tiny muted">
-              Όρια στάσης: ≥{STANCE_THRESHOLDS.agree} συμφωνεί · {STANCE_THRESHOLDS.concede}–{STANCE_THRESHOLDS.agree - 1} με παραχώρηση · &lt;{STANCE_THRESHOLDS.concede} διαφωνεί.
-            </p>
           </div>
         </section>
       ) : (
@@ -523,24 +555,30 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                   <ScoreRing value={v.score} />
                 </header>
                 {v.verdict && <p className="verdict">“{v.verdict}”</p>}
-                <ul className="plain reasons">
-                  {v.reasons.map((r, i) => (
-                    <li key={i} className={r.effect}>
-                      {r.effect === 'for' ? '＋' : '－'} {r.text} <Cite refs={refsOf(d.inputs, r.memoryId)} onOpen={onOpen} />
-                    </li>
-                  ))}
-                </ul>
-                {v.unknowns.length > 0 && (
-                  <details className="more">
-                    <summary>Αβεβαιότητες ({v.unknowns.length})</summary>
-                    <ul className="tiny muted">
-                      {v.unknowns.map((u) => (
-                        <li key={u}>? {u}</li>
+                <div className="meta-row tiny muted">
+                  <span>
+                    {v.reasons.filter((r) => r.effect === 'for').length} υπέρ · {v.reasons.filter((r) => r.effect !== 'for').length} κατά · βεβαιότητα {{ low: 'χαμηλή', medium: 'μέτρια', high: 'υψηλή' }[v.confidence]}
+                  </span>
+                  <InfoTip title={`Γιατί — ${p.name}`} label={`Γιατί ψηφίζει έτσι: ${p.name}`} wide>
+                    <ul className="plain tip-list">
+                      {v.reasons.map((r, i) => (
+                        <li key={i} className={r.effect === 'for' ? '' : 'muted'}>
+                          {r.effect === 'for' ? '＋' : '－'} {r.text} <Cite refs={refsOf(d.inputs, r.memoryId)} onOpen={onOpen} />
+                        </li>
                       ))}
                     </ul>
-                  </details>
-                )}
-                <span className="tiny muted">Βεβαιότητα ψήφου: {{ low: 'χαμηλή', medium: 'μέτρια', high: 'υψηλή' }[v.confidence]}</span>
+                    {v.unknowns.length > 0 && (
+                      <>
+                        <p className="infotip-title">Αβεβαιότητες</p>
+                        <ul className="plain tip-list muted">
+                          {v.unknowns.map((u) => (
+                            <li key={u}>? {u}</li>
+                          ))}
+                        </ul>
+                      </>
+                    )}
+                  </InfoTip>
+                </div>
               </article>
             );
           })}
@@ -548,34 +586,36 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
       </section>
 
       <section>
-        <h3 className="sec-title">Υποψήφιες επιλογές ({d.options.length})</h3>
-        {!!d.rejectedOptions?.length && (
-          <details className="more">
-            <summary>Απορρίφθηκαν πριν την ψηφοφορία ({d.rejectedOptions.length}) — έλεγχος σε κώδικα</summary>
-            <ul className="small">
-              {d.rejectedOptions.map((r, i) => (
-                <li key={r.title + i}>
-                  «{r.title}»: {r.reason}
-                </li>
-              ))}
-            </ul>
-          </details>
-        )}
+        <h3 className="sec-title meta-row">
+          Υποψήφιες επιλογές ({d.options.length})
+          {(!!d.rejectedOptions?.length || d.outcome.rationale.length > 0) && (
+            <InfoTip title="Πώς επιλέχθηκαν" label="Πώς επιλέχθηκαν" wide>
+              {!!d.rejectedOptions?.length && (
+                <>
+                  <p className="infotip-title">Απορρίφθηκαν πριν την ψηφοφορία ({d.rejectedOptions.length}) — έλεγχος σε κώδικα</p>
+                  <ul className="plain tip-list">
+                    {d.rejectedOptions.map((r, i) => (
+                      <li key={r.title + i}>
+                        «{r.title}»: <span className="muted">{r.reason}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+              <p className="infotip-title">Η αιτιολόγηση του κώδικα</p>
+              <ul className="plain tip-list">
+                {d.outcome.rationale.map((r) => (
+                  <li key={r}>{r}</li>
+                ))}
+              </ul>
+            </InfoTip>
+          )}
+        </h3>
         <div className="carousel">
           {d.options.map((o) => (
             <OptionCard key={o.id} o={o} d={d} people={people} onOpen={onOpen} memory={d.inputs} />
           ))}
         </div>
-        {d.outcome.rationale.length > 2 && (
-          <details className="more">
-            <summary>Όλη η αιτιολόγηση του κώδικα</summary>
-            <ul className="small">
-              {d.outcome.rationale.map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          </details>
-        )}
       </section>
 
       <Messages d={d} people={people} state={state} onState={onState} onOpen={onOpen} />
