@@ -98,21 +98,25 @@ export function Shell({ route, state, children, onReset }: { route: Route; state
               {u.calls} κλήσεις · {Math.round((u.inputTokens + u.outputTokens) / 1000)}k tokens
             </p>
           )}
-          <p className="tiny muted">{state.personas.every((p) => p.synthetic) ? 'Όλα τα δεδομένα είναι συνθετικά.' : 'Δικά σας δεδομένα, με συναίνεση.'}</p>
+          <p className="tiny muted">{state.personas.every((p) => p.synthetic) ? 'Όλα τα δεδομένα είναι συνθετικά.' : state.status.teamSeed ? 'Πραγματικά δεδομένα της ομάδας, με συναίνεση.' : 'Δικά σας δεδομένα, με συναίνεση.'}</p>
           <a className="link-btn tiny" href="/api/export" download="group.json" title="Αρχείο με τα Twins (προφίλ, πηγές, κρυφά τεστ) για να μπει στο repo ως η παρέα της ομάδας">
             <Download size={12} /> Εξαγωγή παρέας
           </a>
           {state.status.teamSeed && (
             <button className="link-btn tiny" onClick={() => onReset('team')}>
-              <RotateCcw size={12} /> Η παρέα της ομάδας
+              <RotateCcw size={12} /> Επαναφορά της ομάδας
             </button>
           )}
+          {!state.status.teamSeed && (
           <button className="link-btn tiny" onClick={() => onReset('empty')}>
             <Eraser size={12} /> Ξεκίνα από το μηδέν
           </button>
+          )}
+          {!state.status.teamSeed && (
           <button className="link-btn tiny" onClick={() => onReset('synthetic')}>
             <RotateCcw size={12} /> Συνθετική demo παρέα
           </button>
+          )}
         </div>
       </aside>
 

@@ -1,4 +1,4 @@
-import { Check, FilePlus2, Grid3x3, Inbox, PenLine, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, FilePlus2, Grid3x3, Inbox, Lock, PenLine, RefreshCw, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Domain, MemoryItem } from '../../../shared/types';
 import { describeDeadline } from '../../../shared/time';
@@ -148,9 +148,15 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
             <button className="btn" onClick={() => go('/new')}>
               Νέο αίτημα
             </button>
-            <button className="btn btn-danger" onClick={() => deleteTwin(state, persona.id, onState)} title="Οριστική διαγραφή του Twin">
-              <Trash2 size={16} /> Διαγραφή Twin
-            </button>
+            {persona.locked ? (
+              <span className="badge badge-ai" title="Μέλος της ομάδας — έρχεται με την εφαρμογή και δεν διαγράφεται">
+                <Lock size={12} /> Μέλος ομάδας
+              </span>
+            ) : (
+              <button className="btn btn-danger" onClick={() => deleteTwin(state, persona.id, onState)} title="Οριστική διαγραφή του Twin">
+                <Trash2 size={16} /> Διαγραφή Twin
+              </button>
+            )}
           </div>
           <ul className="stats">
             <li>
@@ -344,6 +350,7 @@ export function TwinsList({ state, onState }: { state: AppState; onState: (s: Ap
           const s = state.sources.filter((x) => x.personaId === p.id).length;
           return (
             <div key={p.id} className="card twin-card" role="button" tabIndex={0} onClick={() => go(`/twin/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`/twin/${p.id}`)}>
+              {!p.locked && (
               <button
                 className="icon-btn twin-del"
                 title={`Διαγραφή του Twin «${p.name}»`}
@@ -355,6 +362,7 @@ export function TwinsList({ state, onState }: { state: AppState; onState: (s: Ap
               >
                 <Trash2 size={16} />
               </button>
+              )}
               <Avatar persona={p} size={72} ring />
               <b>{p.name}</b>
               <span className="tiny muted">@{p.handle}</span>

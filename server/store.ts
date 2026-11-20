@@ -190,10 +190,13 @@ export const store = {
   },
   save: persist,
 
-  /** Back to the synthetic demo group, or (empty) to no twins at all. AI usage counters are kept. */
+  /**
+   * Back to the team group (if shipped), the synthetic group, or no twins. AI usage counters are kept.
+   * When the team group ships with the app, every reset keeps it: the team cannot be wiped.
+   */
   reset(kind: StartGroup = 'synthetic') {
     const usage = state.usage;
-    state = fresh(kind);
+    state = fresh(hasTeamSeed() ? 'team' : kind);
     state.usage = usage;
     persist();
   },
@@ -277,7 +280,9 @@ export const store = {
    * held-out tests, and the group requests it took part in (their decisions hold its votes).
    */
   deletePersona(id: PersonaId) {
-    if (!store.persona(id)) throw new Error('not found');
+    const p = store.persona(id);
+    if (!p) throw new Error('not found');
+    if (p.locked) throw new Error(`Το Twin «${p.name}» είναι μέλος της ομάδας του demo και δεν διαγράφεται.`);
     const requestIds = new Set(state.requests.filter((r) => r.participants.includes(id)).map((r) => r.id));
     const memoryIds = new Set(state.memory.filter((m) => m.personaId === id || (m.requestId && requestIds.has(m.requestId))).map((m) => m.id));
     const removed = {
