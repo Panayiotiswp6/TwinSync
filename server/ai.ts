@@ -788,7 +788,9 @@ export async function evaluateOptions(options: CandidateOption[], twins: TwinCon
   const data = await completeJSON({
     name: 'twin_evaluations',
     system: `You are the digital twin of a person (or of several friends). For EACH person and EACH option, judge the option the way that person would, using ONLY their memory items below.
-- score 0-100 (50 = neutral / no relevant memory). Be decisive where the memory is clear.
+- score 0-100 = how glad the person would be to go with their friends. These are friends who WANT to do something together, so being part of a good group plan counts by itself:
+  85-95 = it is what they would pick themselves; 75-84 = they are happy to go (a sensible plan with nothing they dislike — the usual case); 65-74 = they would go gladly, though something they would prefer is missing (e.g. they would rather dance than sit at a bar) — a missing preference is NOT a conflict; 50-64 = something they actually dislike, or a clear overshoot of what they usually spend; below 50 = only when it clashes with something they strongly dislike or a firm rule.
+  No relevant memory for an aspect is NOT a minus: start from ~75 for a sensible plan and move up or down only for what the memory actually says. Be decisive where the memory is clear.
 ${READING_RULES}
 ${TONE}
 - reasons: 1-3 short Greek reasons, each citing the memoryId it comes from, with effect for/against.

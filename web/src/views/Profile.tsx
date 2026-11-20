@@ -1,4 +1,4 @@
-import { Check, FilePlus2, Grid3x3, Inbox, Lock, MessageCircle, PenLine, RefreshCw, Trash2, X } from 'lucide-react';
+import { BookOpen, Check, FilePlus2, Grid3x3, Inbox, Lock, MessageCircle, PenLine, RefreshCw, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Domain, MemoryItem } from '../../../shared/types';
 import { describeDeadline } from '../../../shared/time';
@@ -37,42 +37,36 @@ function MemoryCard({ m, onOpen, onState, review }: { m: MemoryItem; onOpen: Ope
   const [text, setText] = useState(m.statement);
   const run = async (p: Parameters<typeof api.updateMemory>[1]) => onState(await api.updateMemory(m.id, p));
   return (
-    <div className="mem-card" style={{ ['--dom' as string]: dom(m.domain).color }}>
+    <div className="mem-card">
       <div className="mem-top">
         <span className="mem-dom">
-          {dom(m.domain).emoji} {dom(m.domain).label}
+          {dom(m.domain).label} · {kindLabel(m.kind)}
         </span>
-        <span className="mem-kind">{kindLabel(m.kind)}</span>
+        {m.hard && <span className="state bad">Υποχρεωτικό</span>}
       </div>
       {editing ? (
         <textarea className="input" rows={2} value={text} onChange={(e) => setText(e.target.value)} />
       ) : (
-        <p className="mem-statement">
-          {m.polarity === 'avoids' && '🚫 '}
-          {m.statement}
+        <p className="mem-statement">{m.statement}</p>
+      )}
+      {(m.rule || (m.context && (m.context.where !== 'any' || m.context.days > 0))) && (
+        <p className="mem-rule tiny muted">
+          {[
+            m.rule ? (m.rule.metric === 'avoid_place' ? `όχι ξανά: ${m.rule.value.split('|').join(', ')}` : m.rule.metric === 'max_cost' ? `${m.hard ? '≤' : '~'} ${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`) : '',
+            m.context && (m.context.where !== 'any' || m.context.days > 0) ? [{ local: 'στην πόλη', domestic: 'Ελλάδα', abroad: 'εξωτερικό', any: '' }[m.context.where], m.context.days ? `${m.context.days} ${m.context.days === 1 ? 'μέρα' : 'μέρες'}` : ''].filter(Boolean).join(', ') : '',
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </p>
       )}
-      <div className="mem-tags">
-        {m.hard && <Badge tone="bad">Υποχρεωτικό</Badge>}
-        {m.rule && <Badge tone="info">{m.rule.metric === 'avoid_place' ? `όχι ξανά: ${m.rule.value.split('|').join(', ')}` : m.rule.metric === 'max_cost' ? `${m.hard ? '≤' : '~'} ${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</Badge>}
-        {m.context && (m.context.where !== 'any' || m.context.days > 0) && (
-          <Badge tone="neutral" title="Ισχύει μόνο σε αυτό το πλαίσιο· αλλού μόνο ως ένδειξη">
-            {[{ local: '📍 πόλη', domestic: '🇬🇷 Ελλάδα', abroad: '✈️ εξωτερικό', any: '' }[m.context.where], m.context.days ? `${m.context.days} ${m.context.days === 1 ? 'μέρα' : 'μέρες'}` : ''].filter(Boolean).join(' · ')}
-          </Badge>
-        )}
-        {!m.hard && (
-          <span className="strength" title="Σημασία">
-            {[0.3, 0.6, 0.9].map((t) => (
-              <i key={t} className={m.strength >= t - 0.05 ? 'on' : ''} />
-            ))}
-          </span>
-        )}
-        {m.origin === 'ai' && <Badge tone="ai">AI</Badge>}
-        {m.origin === 'rules' && <Badge tone="neutral">κανόνες</Badge>}
-        {m.origin === 'owner' && <Badge tone="brand">κάτοχος</Badge>}
-      </div>
+      {m.refs?.[0] && (
+        <button type="button" className="mem-quote" onClick={() => onOpen(m.refs[0])} title="Άνοιγμα πηγής">
+          <BookOpen size={13} />
+          <span>{m.refs[0].quote ? `«${m.refs[0].quote.length > 110 ? `${m.refs[0].quote.slice(0, 108)}…` : m.refs[0].quote}»` : 'Δες την πηγή'}</span>
+        </button>
+      )}
       <div className="mem-foot">
-        <Cite refs={m.refs ?? []} onOpen={onOpen} />
+        <span className="tiny muted">{m.origin === 'owner' ? 'από τον κάτοχο' : m.origin === 'ai' ? 'από το AI' : ''}</span>
         <span className="mem-actions">
           {editing ? (
             <>
@@ -138,10 +132,13 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
   return (
     <div className="profile">
       <header className="profile-head">
-        <Avatar persona={persona} size={132} ring />
+        <Avatar persona={persona} size={88} />
         <div className="profile-info">
           <div className="profile-title">
-            <h1>{persona.handle}</h1>
+            <h1>
+              {persona.name}
+              {persona.age ? <span className="muted profile-age"> · {persona.age} ετών</span> : null}
+            </h1>
             <button className="btn btn-brand" onClick={() => setUpload(true)}>
               <FilePlus2 size={16} /> Πρόσθεσε πηγές
             </button>
@@ -172,9 +169,8 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
               <b>{decisions}</b> αποφάσεις
             </li>
           </ul>
-          <p className="profile-name">
-            {persona.name}
-            {persona.age ? <span className="muted"> · {persona.age} ετών</span> : null} {persona.synthetic && <Badge tone="info">Συνθετικό προφίλ</Badge>}
+          <p className="profile-name tiny muted">
+            @{persona.handle} {persona.synthetic && <Badge tone="info">Συνθετικό προφίλ</Badge>}
           </p>
           <p className="profile-bio">{persona.bio}</p>
         </div>
@@ -183,13 +179,8 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
       {domains.length > 0 && (
         <div className="highlights">
           {domains.map(({ d, n }) => (
-            <button key={d} className={`highlight ${domain === d ? 'on' : ''}`} onClick={() => (setDomain(domain === d ? null : d), setTab('memory'))}>
-              <span className="hl-circle" style={{ borderColor: DOMAIN[d].color }}>
-                {DOMAIN[d].emoji}
-              </span>
-              <span className="tiny">
-                {DOMAIN[d].label} · {n}
-              </span>
+            <button key={d} className={`chip ${domain === d ? 'chip-on' : ''}`} aria-pressed={domain === d} onClick={() => (setDomain(domain === d ? null : d), setTab('memory'))}>
+              {DOMAIN[d].label} <span className="muted">{n}</span>
             </button>
           ))}
         </div>

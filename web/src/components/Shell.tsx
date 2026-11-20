@@ -1,4 +1,4 @@
-import { Download, Eraser, Home, MessageCircle, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Download, Eraser, Home, MessageCircle, PlusSquare, RotateCcw, UserPlus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AppState, StartGroup } from '../api';
 import { Avatar } from './ui';
@@ -44,7 +44,7 @@ export function AiPill({ state }: { state: AppState }) {
   const s = state.status;
   return s.aiMode === 'live' ? (
     <span className="ai-pill live" title={`${s.provider} · ${s.model}${s.embeddings ? ' · embeddings' : ''}`}>
-      <Sparkles size={14} /> Live AI · {s.model}
+      Live AI
     </span>
   ) : (
     <span className="ai-pill demo" title="Χωρίς κλειδί AI: κανόνες, κατάλογος, πρότυπα">
@@ -93,30 +93,41 @@ export function Shell({ route, state, children, onReset }: { route: Route; state
         </div>
         <div className="side-foot">
           <AiPill state={state} />
-          {state.status.aiMode === 'live' && (
-            <p className="tiny muted">
-              {u.calls} κλήσεις · {Math.round((u.inputTokens + u.outputTokens) / 1000)}k tokens
-            </p>
-          )}
-          <p className="tiny muted">{state.personas.every((p) => p.synthetic) ? 'Όλα τα δεδομένα είναι συνθετικά.' : state.status.teamSeed ? 'Πραγματικά δεδομένα της ομάδας, με συναίνεση.' : 'Δικά σας δεδομένα, με συναίνεση.'}</p>
-          <a className="link-btn tiny" href="/api/export" download="group.json" title="Αρχείο με τα Twins (προφίλ και πηγές) για να μπει στο repo ως η παρέα της ομάδας">
-            <Download size={12} /> Εξαγωγή παρέας
-          </a>
-          {state.status.teamSeed && (
-            <button className="link-btn tiny" onClick={() => onReset('team')}>
-              <RotateCcw size={12} /> Επαναφορά της ομάδας
-            </button>
-          )}
-          {!state.status.teamSeed && (
-          <button className="link-btn tiny" onClick={() => onReset('empty')}>
-            <Eraser size={12} /> Ξεκίνα από το μηδέν
-          </button>
-          )}
-          {!state.status.teamSeed && (
-          <button className="link-btn tiny" onClick={() => onReset('synthetic')}>
-            <RotateCcw size={12} /> Συνθετική demo παρέα
-          </button>
-          )}
+          <details className="tech">
+            <summary>Τεχνικές λεπτομέρειες</summary>
+            <ul className="plain tiny muted">
+              {state.status.aiMode === 'live' && (
+                <li>
+                  {state.status.model}
+                  {state.status.embeddings ? ' · embeddings' : ''}
+                </li>
+              )}
+              {state.status.aiMode === 'live' && (
+                <li>
+                  {u.calls} κλήσεις · {Math.round((u.inputTokens + u.outputTokens) / 1000)}k tokens
+                </li>
+              )}
+              <li>{state.personas.every((p) => p.synthetic) ? 'Όλα τα δεδομένα είναι συνθετικά.' : state.status.teamSeed ? 'Πραγματικά δεδομένα της ομάδας, με συναίνεση.' : 'Δικά σας δεδομένα, με συναίνεση.'}</li>
+            </ul>
+            <a className="link-btn tiny" href="/api/export" download="group.json" title="Αρχείο με τα Twins (προφίλ και πηγές) για να μπει στο repo ως η παρέα της ομάδας">
+              <Download size={12} /> Εξαγωγή παρέας
+            </a>
+            {state.status.teamSeed && (
+              <button className="link-btn tiny" onClick={() => onReset('team')}>
+                <RotateCcw size={12} /> Επαναφορά της ομάδας
+              </button>
+            )}
+            {!state.status.teamSeed && (
+              <button className="link-btn tiny" onClick={() => onReset('empty')}>
+                <Eraser size={12} /> Ξεκίνα από το μηδέν
+              </button>
+            )}
+            {!state.status.teamSeed && (
+              <button className="link-btn tiny" onClick={() => onReset('synthetic')}>
+                <RotateCcw size={12} /> Συνθετική demo παρέα
+              </button>
+            )}
+          </details>
         </div>
       </aside>
 

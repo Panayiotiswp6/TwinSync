@@ -48,7 +48,7 @@ export function Checks({ checks, compact }: { checks?: OptionCheck[]; compact?: 
 }
 
 /** A discreet "Κράτηση" chip that reveals the place's public phone (only places that take bookings). */
-function Booking({ phone }: { phone: string }) {
+export function Booking({ phone }: { phone: string }) {
   const [open, setOpen] = useState(false);
   return open ? (
     <a className="booking on" href={`tel:${phone.replace(/\s+/g, '')}`}>

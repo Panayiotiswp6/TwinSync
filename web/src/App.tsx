@@ -15,6 +15,14 @@ export function App() {
   const [state, setState] = useState<AppState | null>(null);
   const [route, setRoute] = useState<Route>(parseRoute(window.location.hash));
   const [source, setSource] = useState<SourceRef | null>(null);
+  // A source opened from one page does not follow the user to the next one; Esc closes it.
+  useEffect(() => setSource(null), [route]);
+  useEffect(() => {
+    if (!source) return;
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && setSource(null);
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [source]);
   const [error, setError] = useState<string | null>(null);
 
   const refresh = useCallback(() => {

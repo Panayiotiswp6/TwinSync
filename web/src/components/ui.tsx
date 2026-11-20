@@ -58,25 +58,19 @@ export function timeAgo(iso: string): string {
   return new Date(iso).toLocaleDateString('el-GR', { day: 'numeric', month: 'short' });
 }
 
-/** Calm, consistent avatar colours (by id), whatever colours a persona was stored with. */
-const AVATAR = [
-  ['#7c3aed', '#6366f1'],
-  ['#0891b2', '#2563eb'],
-  ['#db2777', '#9333ea'],
-  ['#0d9488', '#0891b2'],
-  ['#ea580c', '#db2777'],
-  ['#4f46e5', '#0ea5e9'],
-  ['#059669', '#0d9488'],
-  ['#9333ea', '#c026d3'],
-];
+/** Calm, consistent avatar colours (by id), whatever colours a persona was stored with. Solid, no gradients. */
+const AVATAR = ['#8a5cc7', '#4f6bd8', '#b0782a', '#3f8fb5', '#b3466e', '#c2553d', '#5f7d3a', '#2e8b7a'];
 export function avatarColor(id: string): string {
-  const [a, b] = avatarPair(id);
-  return `linear-gradient(135deg, ${a}, ${b})`;
-}
-function avatarPair(id: string): string[] {
-  let h = 0;
-  for (const c of id) h = (h * 31 + c.charCodeAt(0)) >>> 0;
+  let h = 2166136261; // FNV-1a: spreads short ids well (the team's three twins get three different colours)
+  for (const c of id) h = Math.imul(h ^ c.charCodeAt(0), 16777619) >>> 0;
   return AVATAR[h % AVATAR.length];
+}
+
+/** First name, or "Παναγιώτης Κ." when two people in the group share it. */
+export function shortName(p: Persona, people: Persona[]): string {
+  const [first, ...rest] = p.name.trim().split(/\s+/);
+  const clash = people.some((x) => x.id !== p.id && x.name.trim().split(/\s+/)[0] === first);
+  return clash && rest.length ? `${first} ${rest.at(-1)!.charAt(0)}.` : first;
 }
 
 export function Avatar({ persona, size = 40, ring = false, onClick }: { persona: Persona; size?: number; ring?: boolean; onClick?: () => void }) {
