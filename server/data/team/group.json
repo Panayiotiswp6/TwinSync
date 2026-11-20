@@ -448,6 +448,16 @@
    "text": "Ψηνεστε για Σάββατο βραδυ;\nΤο airbnb με τα 85ευρω στην Νάξο ειναι κομπλε΄;\nΠροτείνω να φύγουμε νωρίς, φάση 6:30 για να το προλάβουμε\nΜαγκες δεν μπορω τελικά σημερα\nΓια που ειμαστε την παρασευη; Προτείνω να παμε σε κανα καλο εστιατόριο",
    "synthetic": false,
    "analyzed": true
+  },
+  {
+   "id": "src-grigoris-travel-supp",
+   "personaId": "grigoris",
+   "kind": "note",
+   "title": "Συνέντευξη · Ταξίδια (συμπλήρωση)",
+   "date": "2026-11-20T15:52:45.780Z",
+   "text": "Ε: Χώρες (ή μέρη) που έχεις πάει, από την αγαπημένη σου προς τα κάτω — και γιατί;\nΑ: 1. Αυστρία — έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό\n2. Ελβετία\n3. Ιταλία\n4. Γαλλία\n5. Αγγλία\n6. Βουλγαρία\n7. Γερμανία\nΕ: Θα ξαναπήγαινες σε μέρος που έχεις ήδη πάει;\nΑ: Μόνο στα αγαπημένα μου — εννοείται, άμα μου άρεσε το μέρος, π.χ. στην Αυστρία έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό",
+   "synthetic": false,
+   "analyzed": true
   }
  ],
  "memory": [
@@ -6015,6 +6025,123 @@
     "type": "decision",
     "sourceTrust": "verified",
     "contentHash": "c7735caad42a5e67cc9968a2f177ca6aeee611cd0eed040fb0c6e5b230d1a8bf",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-892f46e6",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Μέρη που έχει πάει, από το αγαπημένο: 1. Αυστρία (έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό), 2. Ελβετία, 3. Ιταλία",
+   "domain": "travel",
+   "polarity": "likes",
+   "strength": 0.85,
+   "hard": false,
+   "categories": [
+    "trip"
+   ],
+   "keywords": [
+    "Αυστρία",
+    "Ελβετία",
+    "σκι",
+    "φανταστικό",
+    "χιονοδρομικό"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "1. Αυστρία — έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό\n2. Ελβετία\n3. Ιταλία\n4. Γαλλία\n5. Αγγλία\n6. Βουλγαρία\n7. Γερμανία"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T15:52:45.780Z",
+   "memory": {
+    "id": "d0c6407f-59b4-403d-a11d-54b5c4239f18",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "a7b0a752e25efd5f26cd0325985e0629847ec30d85e03e16774b0478ddd60099",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-87da7e4f",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Θα ξαναπήγαινε μόνο στα αγαπημένα του/της — προτιμά νέα μέρη αντί για: Ιταλία, Γαλλία, Αγγλία, Βουλγαρία, Γερμανία",
+   "domain": "travel",
+   "polarity": "avoids",
+   "strength": 0.6,
+   "hard": false,
+   "categories": [
+    "trip"
+   ],
+   "keywords": [
+    "Ιταλία",
+    "Γαλλία",
+    "Αγγλία",
+    "Βουλγαρία",
+    "Γερμανία"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "Μόνο στα αγαπημένα μου"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T15:52:45.780Z",
+   "memory": {
+    "id": "1a70b1d8-431e-46cb-a6d5-40a9fa5a1cfe",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "3ac08856fca04e28201444b07ecd7f303a94fb10ae12f19e6de4e1386a6f2561",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-2fba511b",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Αγαπά την Αυστρία ως ταξιδιωτικό προορισμό, κυρίως για το σκι και τα χιονοδρομικά της.",
+   "domain": "travel",
+   "polarity": "likes",
+   "strength": 0.9,
+   "hard": false,
+   "context": {
+    "where": "abroad",
+    "days": 0
+   },
+   "categories": [
+    "trip",
+    "activity"
+   ],
+   "keywords": [
+    "Αυστρία",
+    "σκι",
+    "χιονοδρομικό"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "Αυστρία — έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό"
+    }
+   ],
+   "confidence": 0.98,
+   "status": "confirmed",
+   "origin": "ai",
+   "scope": "profile",
+   "createdAt": "2026-11-20T15:52:45.780Z",
+   "memory": {
+    "id": "fbbeebc7-4c93-4f07-9db4-1259f0a89d1f",
+    "type": "preference",
+    "sourceTrust": "verified",
+    "contentHash": "b27112283a9001b1b194cbdd5dbda274cc0cf4a6a29a0c24a37106cae258192d",
     "scope": "twin/grigoris"
    }
   }

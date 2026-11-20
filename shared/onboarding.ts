@@ -253,12 +253,14 @@ const MUSIC: Record<string, { keywords: string[]; note?: string }> = {
   'Indie / Alternative': { keywords: ['indie', 'alternative', 'live', 'μπαρ'] },
 };
 
+const STOP = /^(πολύ|πάρα|ήταν|είχε|είναι|γιατί|επειδή|αλλά|όμως|όλα|τόσο|πολλή|πολλά|έχω|έχει|πάει|πάω|πήγα|φορές|φορά|κάνω|κάνει|κάναμε|μου|μας|αυτό|εκεί|ακόμα|ωραίο|ωραία|ωραίοι)$/i;
+
 /** Content words of a short reason ("απίστευτη φύση και ωραίο κλίμα" → φύση, κλίμα, απίστευτη…). */
 function normalizeWords(t: string): string[] {
   return t
     .split(/[\s,.;—-]+/)
     .map((w) => w.trim())
-    .filter((w) => w.length >= 4 && !/^(πολύ|πάρα|ήταν|είχε|γιατί|επειδή|αλλά|όμως|όλα|τόσο|πολλή|πολλά)$/i.test(w));
+    .filter((w) => (w.length >= 4 || /^(σκι|ski)$/i.test(w)) && !STOP.test(w));
 }
 
 const LIKES: Record<string, { statement: string; keywords: string[]; domain: MemoryDraft['domain'] }> = {
