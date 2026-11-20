@@ -513,3 +513,18 @@ describe('flexibility for holidays and big trips', () => {
     expect(decision.outcome.chosenOptionId).not.toBeNull();
   });
 });
+
+describe('team twins are locked', () => {
+  it('a locked team twin cannot be deleted', () => {
+    store.reset();
+    const p = store.persona('geo')!;
+    p.locked = true;
+    expect(() => store.deletePersona('geo')).toThrow(/δεν διαγράφεται/);
+    expect(store.persona('geo')).toBeTruthy();
+    p.locked = false;
+  });
+  it('the shipped team file loads its twins locked', async () => {
+    const { loadTeamSeed } = await import('../server/seed');
+    expect(loadTeamSeed()).toBeNull(); // tests run on the synthetic group (TWINSYNC_SEED=synthetic)
+  });
+});

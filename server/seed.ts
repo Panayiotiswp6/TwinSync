@@ -114,7 +114,8 @@ export function loadTeamSeed(): GroupExport | null {
     if (g.format !== 'twinsync-group') return null;
     const sources = new Map(g.sources.map((s) => [s.id, s]));
     const memory = g.memory.filter((m) => m.refs.every((r) => containsQuote(sources.get(r.sourceId)?.text ?? '', r.quote)));
-    return { ...g, memory };
+    // The team's own twins ship with the app and are locked: nobody can delete them.
+    return { ...g, personas: g.personas.map((p) => ({ ...p, locked: true })), memory };
   } catch (e) {
     console.warn('[seed] could not read team/group.json:', (e as Error).message);
     return null;

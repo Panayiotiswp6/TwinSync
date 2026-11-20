@@ -81,6 +81,7 @@ app.post(
 app.delete(
   '/api/personas/:id',
   wrap((req, res) => {
+    if (store.persona(req.params.id)?.locked) return res.status(403).json({ error: `Το Twin «${store.persona(req.params.id)!.name}» είναι μέλος της ομάδας του demo και δεν διαγράφεται.` });
     const removed = store.deletePersona(req.params.id);
     res.json({ removed, state: snapshot() });
   }),

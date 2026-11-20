@@ -28,6 +28,8 @@ export interface Persona {
   bio: string;
   style: StyleCard | null;
   synthetic: boolean;
+  /** Team member shipped with the app (server/data/team): cannot be deleted. */
+  locked?: boolean;
   createdAt: string;
 }
 
