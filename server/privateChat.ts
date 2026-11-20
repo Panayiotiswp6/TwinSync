@@ -25,6 +25,24 @@ export function withRoutines(relevant: MemoryItem[], profile: MemoryItem[]): Mem
   return [...relevant, ...routines.slice(0, 12)];
 }
 
+const ADDRESS = ['ρε φίλε', 'ρε μπρο', 'ρε μάγκα', 'φίλε', 'μπρο', 'μάγκα', 'αδερφέ', 'ρε'];
+
+/** A real person does not say "ρε φίλε" in every message: drop an address word the previous reply already used. */
+export function varyAddress(reply: string, previous: string): string {
+  const prev = normalizeGreek(previous);
+  let out = reply;
+  for (const w of ADDRESS) {
+    const nw = normalizeGreek(w);
+    if (!prev.includes(nw)) continue;
+    const re = new RegExp(`(^|[\\s,])${w.replace(/ /g, '\\s+')}(?=[\\s,!.;?…]|$)`, 'giu');
+    out = out.replace(re, '$1');
+  }
+  // The same laugh at the end of two messages in a row reads like a template.
+  if (/χαχα\S*\s*$/i.test(previous.trim()) && /\s+χαχα\S*\s*$/i.test(out)) out = out.replace(/\s+χαχα\S*\s*$/i, '');
+  out = out.replace(/\s+,/g, ',').replace(/,\s*([!.;?…])/g, '$1').replace(/^[\s,]+/, '').replace(/\s{2,}/g, ' ').trim();
+  return out ? out.charAt(0).toUpperCase() + out.slice(1) : reply;
+}
+
 /** Demo mode: the closest memory item, said plainly (no AI). */
 function demoReply(items: MemoryItem[], text: string): { reply: string; used: MemoryItem[] } {
   const words = new Set(normalizeGreek(text).split(/[^a-zα-ω0-9]+/).filter((w) => w.length > 3).map((w) => w.slice(0, 5)));
@@ -48,7 +66,8 @@ export async function privateChat(personaId: string, turns: ChatTurn[]): Promise
     try {
       const samples = styleSamples(store.sources, personaId).flatMap((s) => s.text.split('\n')).map((l) => l.trim()).filter((l) => l.length > 1).slice(0, 14);
       const r = await privateReply(persona, items.filter((m) => m.kind !== 'style'), samples, turns.slice(-12));
-      return { reply: r.reply, used: pick(r.usedMemoryIds), mode: 'live', model: aiModel() };
+      const previous = turns.filter((t) => t.role === 'twin').at(-1)?.text ?? '';
+      return { reply: varyAddress(r.reply, previous), used: pick(r.usedMemoryIds), mode: 'live', model: aiModel() };
     } catch (e) {
       const d = demoReply(items, last);
       return { reply: d.reply, used: pick(d.used.map((m) => m.id)), mode: 'demo', model: null, note: `Live AI απέτυχε (${aiErrorReason(e)}) — απάντηση χωρίς AI.` };

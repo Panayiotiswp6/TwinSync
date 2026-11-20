@@ -629,3 +629,14 @@ describe('private chat sees the weekly routine', () => {
     expect(out.map((m) => m.id)).toEqual(['music', 'gym', 'school']);
   });
 });
+
+describe('private chat sounds human', () => {
+  it('drops an address word ("ρε φίλε", "μπρο") the previous reply already used', async () => {
+    const { varyAddress } = await import('../server/privateChat');
+    expect(varyAddress('Ναι ρε φίλε, μέσα! Πού λες να πάμε;', 'Ναι ρε φίλε, όλα καλά!')).toBe('Ναι, μέσα! Πού λες να πάμε;');
+    expect(varyAddress('Μέσα μπρο, τι ώρα;', 'Εντάξει ρε μπρο')).toBe('Μέσα, τι ώρα;');
+    expect(varyAddress('Ναι ρε φίλε, μέσα!', 'Όλα καλά!')).toBe('Ναι ρε φίλε, μέσα!'); // not used before: kept
+    expect(varyAddress('Ναι ρε ψήνομαι χαχα', 'Χαχα όχι ρε, έτσι μου βγήκε χαχα')).toBe('Ναι ψήνομαι');
+    expect(varyAddress('Ναι πάμε, τι ώρα λες;', 'Καλά ρε μπρο εσύ;')).toBe('Ναι πάμε, τι ώρα λες;');
+  });
+});
