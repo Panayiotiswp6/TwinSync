@@ -423,6 +423,8 @@ const READING_RULES = `How to read each person's memory:
 - Items marked ΑΙΤΗΜΑ are what the person asked for THIS plan. They override any profile item on the same topic.
 - Profile items are general tendencies from what the person told us, each said in a specific context (duration, Greece vs abroad, evening vs trip). Apply an item only as far as its context matches this plan. Typical amounts are references, not limits: scale them to the plan (e.g. "~200€ for 2 days in Greece" says little about 4 days abroad; extrapolate per day and allow for higher prices abroad, flights included).
 - Items "από προηγούμενη απόφαση" come from how the person actually decided before — they are better evidence than general statements.
+- Routine obligations (e.g. "back by Sunday 21:00, work on Monday") do not override dates the group explicitly asked for: whoever joins a Friday–Monday trip has arranged it.
+- For big trips outside Europe (once-in-a-while experiences), everyday money amounts are only a loose reference; the request's own budget, if any, is what counts.
 - If nothing in the memory covers an aspect, do not penalise it: infer cautiously from similar items, or stay neutral and mention it in unknowns.`;
 
 /** A catalogue venue as given to the model (public listing; hours/programme never verified). */
@@ -847,7 +849,7 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
 - Show how each person thinks: what they want first (their vote), why (their facts), what bothers them, what they are willing to give up. Disagree where the votes differ, then converge to the SHARED outcome (if it is a compromise, the person who gives something up says so in their own way).
 - 6-10 messages in total, each person at least once, natural order (not strictly round-robin). Each message max 160 characters, casual Greek chat, first person. No "Twin", "AI", "memory", "score" or numbers out of 100.
 - Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.
-- A twin NEVER accepts breaking its own strict limit and never changes a limit on its owner's behalf. If the SHARED facts say no option fits everyone, the conversation explains the conflict, the person whose limit is broken says what blocks them, and they ask their owner / the group what to change — no "οκ, κάνω πίσω".`,
+- A twin NEVER accepts breaking its own strict limit on its owner's behalf. If the SHARED facts say the proposal does not cover someone's limit, the group still converges on that closest proposal; that person says plainly what is not covered and that they will decide themselves (with their own approval) — no "οκ, κάνω πίσω".`,
     user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
       .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${b.style ? `${b.style.summary} | ${b.style.traits.join('; ')}` : 'unknown — write plainly'}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
       .join('\n\n')}`,

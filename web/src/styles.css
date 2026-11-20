@@ -766,3 +766,5 @@ h3 { font-size: 16.5px; }
   .itin-cost td { display: inline-block; border: 0; padding: 2px 6px; }
 }
 .serve { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.not-covered { border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); background: var(--warn-bg); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; }
+.not-covered .violation { color: var(--warn); }

@@ -6,13 +6,25 @@
 // Precedence: what a person says for THIS request (scope "request") always beats their
 // general profile on the same metric.
 
-import { localParts, parseIso } from './time';
+import { deadlineFor, localParts, parseIso } from './time';
 import { normalizeGreek } from './text';
 import type { Category, Domain, GroupRequest, MemoryItem, RequestKind, Where } from './types';
 
 export interface RequestContext {
   days: number;
   where: Exclude<Where, 'any'> | null;
+  /** The requested period: a routine weekly limit cannot override dates the group explicitly asked for. */
+  start?: string | null;
+  end?: string | null;
+  /** A big trip outside Europe: everyday money amounts are only a loose reference. */
+  longHaul?: boolean;
+}
+
+const LONG_HAUL = /(εκτοσ ευρωπ|εξω απο την ευρωπ|ασια|αφρικ|αμερικ|η\.?π\.?α|ιαπων|τοκιο|ταιλανδ|μπανγκοκ|μπαλι|ινδονησ|βιετναμ|ινδια|κινα|κορεα|νεα υορκη|καραιβ|μαλδιβ|σεισελ|μαυρικ|αυστραλ|ζηλανδ|μεξικ|βραζιλ|αργεντιν|περου|κουβα|ντουμπαι|εμιρατ|αιγυπτ|μαροκ|ιορδαν|ζανζιβαρ|κενυα|ταξιδι ζωησ|μεγαλο ταξιδι|μεγαλη εμπειρια|safari|σαφαρι|japan|thailand|bali|usa|new york)/;
+
+/** "Τετραήμερο στην Ιαπωνία", "κάτι εκτός Ευρώπης για εμπειρία ζωής". */
+export function isLongHaul(text: string): boolean {
+  return LONG_HAUL.test(normalizeGreek(text));
 }
 
 export const WHERE_LABEL: Record<Where, string> = {
@@ -36,10 +48,11 @@ export function spanDays(start: string | null | undefined, end: string | null | 
   return Math.max(1, Math.round((db - da) / 86400000) + 1);
 }
 
-export function requestContext(req: Pick<GroupRequest, 'periodStart' | 'periodEnd' | 'category' | 'days' | 'where'>): RequestContext {
+export function requestContext(req: Pick<GroupRequest, 'periodStart' | 'periodEnd' | 'category' | 'days' | 'where'> & Partial<Pick<GroupRequest, 'text' | 'place'>>): RequestContext {
   const days = req.days && req.days > 0 ? req.days : spanDays(req.periodStart, req.periodEnd);
   const where = req.where ?? (req.category === 'trip' ? 'domestic' : 'local');
-  return { days, where };
+  const longHaul = where === 'abroad' && isLongHaul(`${req.text ?? ''} ${req.place ?? ''}`);
+  return { days, where, start: req.periodStart, end: req.periodEnd, ...(longHaul ? { longHaul } : {}) };
 }
 
 export interface Fit {
@@ -53,7 +66,26 @@ const FULL: Fit = { applies: true, scale: 1, note: null };
 
 /** Does a profile item apply to this request, and how should its numbers scale? */
 export function contextFit(m: MemoryItem, ctx?: RequestContext | null): Fit {
-  if (!ctx || m.scope === 'request' || !m.context) return FULL;
+  if (!ctx || m.scope === 'request') return FULL;
+  // A routine weekly limit ("back by Sunday 21:00 — work on Monday") does not override a trip the group
+  // explicitly asked to end later: whoever joins a Fri–Mon trip has arranged that Monday.
+  if (m.rule?.metric === 'latest_end' && m.rule.value.startsWith('weekly:') && ctx.start && ctx.end) {
+    const deadline = deadlineFor(m.rule.value, parseIso(ctx.start));
+    const end = parseIso(ctx.end);
+    // Only when the trip runs into a LATER DAY (e.g. Monday): a weekend ending at 23:59 instead of 21:00 is still a weekend.
+    const day = (d: Date) => {
+      const p = localParts(d);
+      return p.y * 10000 + p.m * 100 + p.d;
+    };
+    if (deadline && end && day(end) > day(deadline)) {
+      return { applies: false, scale: 1, note: 'το αίτημα ορίζει επιστροφή αργότερα (διακοπές/άδεια) — το όριο της ρουτίνας δεν ισχύει εδώ' };
+    }
+  }
+  // Big trips outside Europe: everyday budgets are a loose reference, never a block.
+  if (m.rule?.metric === 'max_cost' && ctx.longHaul) {
+    return { applies: false, scale: 1, note: 'μεγάλο ταξίδι εκτός Ευρώπης — τα συνηθισμένα ποσά είναι μόνο ένδειξη' };
+  }
+  if (!m.context) return FULL;
   const c = m.context;
   if (c.where !== 'any' && ctx.where && c.where !== ctx.where) {
     return { applies: false, scale: 1, note: `ειπώθηκε για ${WHERE_LABEL[c.where]}, όχι για ${WHERE_LABEL[ctx.where]}` };

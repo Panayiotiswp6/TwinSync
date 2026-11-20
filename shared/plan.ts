@@ -302,6 +302,8 @@ export interface PrepareInput {
   wishes: MemoryItem[];
   wishText: string;
   catalogue: Venue[];
+  /** Last resort: a named place outside the requested area is kept (flagged) rather than showing nothing. */
+  lenient?: boolean;
 }
 
 /** Validate and enrich options before the twins vote. Invalid ones are returned with a reason. */
@@ -331,6 +333,11 @@ export function prepareOptions(options: CandidateOption[], inp: PrepareInput): {
     if (req.kind === 'trip' && o.origin === 'ai') reason = validateItinerary(o.itinerary, req.periodStart, req.periodEnd)[0] ?? null;
     else if (req.kind === 'trip' && o.itinerary) reason = validateItinerary(o.itinerary, req.periodStart, req.periodEnd)[0] ?? null;
     else if (local && (o.origin === 'ai' || o.venue)) reason = validateLocal(o, req);
+    let outside: string | null = null;
+    if (reason && inp.lenient && reason.startsWith('είναι στην περιοχή')) {
+      outside = reason;
+      reason = null;
+    }
     if (reason) {
       rejected.push({ title: o.title, reason });
       continue;
@@ -342,6 +349,8 @@ export function prepareOptions(options: CandidateOption[], inp: PrepareInput): {
     }
     o.costEstimated = true;
     o.checks = buildChecks(o, req, metro);
+    if (outside) o.checks.unshift({ field: 'route', status: 'to_check', text: `Εκτός ζητούμενης περιοχής: ${outside.replace('είναι στην ', '')} — καμία πρόταση μέσα στην περιοχή` });
+    if (o.synthetic && !o.venue && local) o.checks.unshift({ field: 'existence', status: 'to_check', text: 'Δεν βρέθηκε επώνυμο μέρος για αυτή την πόλη/περιοχή — διαλέξτε μαγαζί πριν πάτε' });
     o.coverage = coverageOf(o, wishes, inp.items);
     valid.push(o);
   }

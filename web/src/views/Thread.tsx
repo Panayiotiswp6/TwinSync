@@ -353,66 +353,56 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
             <Spinner label="Ξεκινάει…" />
           </div>
         )
-      ) : chosen && d.outcome.status === 'compromise' ? (
-        <section className="hero card compromise">
-          <div className="hero-cover">
-            <span className="hero-emoji">{d.outcome.noCommonTime ? '⏱️' : '⚖️'}</span>
-            <div>
-              <span className="eyebrow light">Χρειάζεται απόφαση των κατόχων</span>
-              <h2>{d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα' : 'Δεν υπάρχει πρόταση που να χωράει σε όλα τα αυστηρά όρια'}</h2>
-              <p className="small muted">Τα Twins δεν δέχονται παραβίαση ορίου για λογαριασμό κανενός. Τι θα άνοιγε επιλογές:</p>
-            </div>
-          </div>
-          <div className="hero-body">
-            <ul className="plain relax">
-              {d.outcome.relaxations.map((r) => {
-                const m = d.inputs.find((x) => x.id === r.memoryId);
-                const owner = people.find((p) => p.id === r.personaId);
-                return (
-                  <li key={r.memoryId + r.optionId}>
-                    → {r.text}{' '}
-                    {m?.rule && owner && (
-                      <button className="btn btn-sm" disabled={!!busy} onClick={() => relax(r.memoryId, r.optionId)} title="Αλλάζει μόνο για αυτό το αίτημα, από τον ίδιο τον κάτοχο">
-                        <Avatar persona={owner} size={18} /> Το αλλάζω εγώ, μόνο για αυτό
-                      </button>
-                    )}
-                  </li>
-                );
-              })}
-              {!d.outcome.relaxations.length && <li>Καμία μεμονωμένη αλλαγή δεν αρκεί — αλλάξτε μια επιθυμία ή ζητήστε νέες επιλογές.</li>}
-            </ul>
-            <div className="hypo">
-              <p className="eyebrow">Πιο κοντινή εναλλακτική — υποθετική, όχι εφικτή χωρίς αλλαγή</p>
-              <h3>
-                {chosen.emoji} {chosen.title}
-              </h3>
-              <PlanHead o={chosen} />
-              {d.outcome.results
-                .find((r) => r.optionId === chosen.id)
-                ?.violations.map((v) => (
-                  <p key={v.memoryId} className="violation">
-                    ⛔ <b>{name(v.personaId)}</b>: {v.text}
-                  </p>
-                ))}
-            </div>
-            <ul className="plain rationale small">
-              {d.outcome.rationale.slice(-1).map((r) => (
-                <li key={r}>{r}</li>
-              ))}
-            </ul>
-          </div>
-        </section>
       ) : chosen ? (
-        <section className="hero card">
+        <section className={`hero card ${d.outcome.status === 'compromise' ? 'compromise' : ''}`}>
           <div className="hero-cover">
             <span className="hero-emoji">{chosen.emoji}</span>
             <div>
-              <span className="eyebrow light">Η κοινή πρόταση των Twins</span>
+              <span className="eyebrow light">
+                {d.outcome.status === 'compromise' ? (d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα — η πιο κοντινή πρόταση' : 'Η πιο κοντινή πρόταση για όλους') : 'Η κοινή πρόταση των Twins'}
+              </span>
               <h2>{chosen.venue?.name ?? chosen.title}</h2>
               <PlanHead o={chosen} />
             </div>
           </div>
           <div className="hero-body">
+            {d.outcome.status === 'compromise' && (
+              <div className="not-covered">
+                <p className="small">
+                  <b>Δεν καλύπτει πλήρως όλους.</b> Όποιος δεν καλύπτεται το αποφασίζει ο ίδιος με την έγκρισή του — τα Twins δεν το δέχονται για λογαριασμό του.
+                </p>
+                <ul className="plain">
+                  {d.outcome.results
+                    .find((r) => r.optionId === chosen.id)
+                    ?.violations.map((v) => (
+                      <li key={v.memoryId} className="violation">
+                        ⚠ <b>{name(v.personaId)}</b>: {v.text}
+                      </li>
+                    ))}
+                </ul>
+                {d.outcome.relaxations.length > 0 && (
+                  <details className="more">
+                    <summary>Τι άλλο θα άνοιγε επιλογές</summary>
+                    <ul className="plain relax small">
+                      {d.outcome.relaxations.map((r) => {
+                        const m = d.inputs.find((x) => x.id === r.memoryId);
+                        const owner = people.find((p) => p.id === r.personaId);
+                        return (
+                          <li key={r.memoryId + r.optionId}>
+                            → {r.text}{' '}
+                            {m?.rule && owner && (
+                              <button className="btn btn-sm" disabled={!!busy} onClick={() => relax(r.memoryId, r.optionId)} title="Αλλάζει μόνο για αυτό το αίτημα, από τον ίδιο τον κάτοχο">
+                                <Avatar persona={owner} size={18} /> Το αλλάζω εγώ, μόνο για αυτό
+                              </button>
+                            )}
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </details>
+                )}
+              </div>
+            )}
             <PlanDetails o={chosen} people={people} memory={d.inputs} onOpen={onOpen} />
             <ul className="plain rationale">
               {d.outcome.rationale.slice(-2).map((r) => (
