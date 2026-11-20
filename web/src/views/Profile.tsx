@@ -173,7 +173,8 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
             </li>
           </ul>
           <p className="profile-name">
-            {persona.name} {persona.synthetic && <Badge tone="info">Συνθετικό προφίλ</Badge>}
+            {persona.name}
+            {persona.age ? <span className="muted"> · {persona.age} ετών</span> : null} {persona.synthetic && <Badge tone="info">Συνθετικό προφίλ</Badge>}
           </p>
           <p className="profile-bio">{persona.bio}</p>
         </div>
@@ -368,7 +369,10 @@ export function TwinsList({ state, onState }: { state: AppState; onState: (s: Ap
               )}
               <Avatar persona={p} size={72} ring />
               <b>{p.name}</b>
-              <span className="tiny muted">@{p.handle}</span>
+              <span className="tiny muted">
+                @{p.handle}
+                {p.age ? ` · ${p.age} ετών` : ''}
+              </span>
               <span className="small">{p.bio}</span>
               <span className="tiny muted">
                 {s} πηγές · {n} αναμνήσεις

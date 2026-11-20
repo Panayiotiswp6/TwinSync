@@ -102,7 +102,7 @@ export function extractWithRules(text: string): MemoryDraft[] {
     const quote = s.replace(/[.!;;]+$/, '');
 
     const budget =
-      n.match(/(οριο|μεχρι|εωσ|το πολυ|max|budget|≤|<=)\D{0,15}?(\d{1,4})(?:\s*-\s*(\d{1,4}))?\s*(€|ευρω)/) ??
+      n.match(/(οριο|μεχρι|εωσ|(?<![α-ω])ωσ|το πολυ|max|budget|≤|<=)\D{0,15}?(\d{1,4})(?:\s*-\s*(\d{1,4}))?\s*(€|ευρω)/) ??
       (neg ? n.match(/(πανω απο|παραπανω απο)\D{0,5}?(\d{2,4})()\s*(€|ευρω)/) : null);
     if (budget) {
       // A sentence about a money limit is not a statement about the topic itself ("όχι πάνω από 30€ για φαγητό").

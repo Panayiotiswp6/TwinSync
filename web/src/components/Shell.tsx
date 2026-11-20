@@ -1,9 +1,9 @@
-import { BarChart3, Download, Eraser, Home, MessageCircle, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
+import { Download, Eraser, Home, MessageCircle, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AppState, StartGroup } from '../api';
 import { Avatar } from './ui';
 
-export type Route = { name: 'home' } | { name: 'new' } | { name: 'onboard' } | { name: 'twin'; id: string } | { name: 'request'; id: string } | { name: 'eval' } | { name: 'twins' } | { name: 'chat'; id?: string };
+export type Route = { name: 'home' } | { name: 'new' } | { name: 'onboard' } | { name: 'twin'; id: string } | { name: 'request'; id: string } | { name: 'twins' } | { name: 'chat'; id?: string };
 
 export function parseRoute(hash: string): Route {
   let h = hash.replace(/^#/, '');
@@ -18,7 +18,6 @@ export function parseRoute(hash: string): Route {
   if (a === 'twin' && b) return { name: 'twin', id: b };
   if (a === 'twins') return { name: 'twins' };
   if (a === 'req' && b) return { name: 'request', id: b };
-  if (a === 'eval') return { name: 'eval' };
   if (a === 'chat') return b ? { name: 'chat', id: b } : { name: 'chat' };
   return { name: 'home' };
 }
@@ -60,7 +59,6 @@ export function Shell({ route, state, children, onReset }: { route: Route; state
     { key: 'new', path: '/new', label: 'Νέο αίτημα', icon: <PlusSquare size={22} /> },
     { key: 'twins', path: '/twins', label: 'Twins', icon: <Users size={22} /> },
     { key: 'chat', path: '/chat', label: 'Chat με Twin', icon: <MessageCircle size={22} /> },
-    { key: 'eval', path: '/eval', label: 'Αξιολόγηση', icon: <BarChart3 size={22} /> },
   ];
   const active = route.name === 'twin' || route.name === 'onboard' ? 'twins' : route.name === 'request' ? 'home' : route.name;
   const u = state.status.usage;
@@ -101,7 +99,7 @@ export function Shell({ route, state, children, onReset }: { route: Route; state
             </p>
           )}
           <p className="tiny muted">{state.personas.every((p) => p.synthetic) ? 'Όλα τα δεδομένα είναι συνθετικά.' : state.status.teamSeed ? 'Πραγματικά δεδομένα της ομάδας, με συναίνεση.' : 'Δικά σας δεδομένα, με συναίνεση.'}</p>
-          <a className="link-btn tiny" href="/api/export" download="group.json" title="Αρχείο με τα Twins (προφίλ, πηγές, κρυφά τεστ) για να μπει στο repo ως η παρέα της ομάδας">
+          <a className="link-btn tiny" href="/api/export" download="group.json" title="Αρχείο με τα Twins (προφίλ και πηγές) για να μπει στο repo ως η παρέα της ομάδας">
             <Download size={12} /> Εξαγωγή παρέας
           </a>
           {state.status.teamSeed && (

@@ -58,7 +58,8 @@
     ]
    },
    "synthetic": false,
-   "createdAt": "2026-11-20T11:50:02.936Z"
+   "createdAt": "2026-11-20T11:50:02.936Z",
+   "age": 20
   },
   {
    "id": "panagiotis-tsakyris",
@@ -102,7 +103,8 @@
     "usesEmoji": true
    },
    "synthetic": false,
-   "createdAt": "2026-11-20T12:44:14.067Z"
+   "createdAt": "2026-11-20T12:44:14.067Z",
+   "age": 19
   },
   {
    "id": "grigoris",
@@ -150,7 +152,8 @@
     "usesEmoji": false
    },
    "synthetic": false,
-   "createdAt": "2026-11-20T14:58:54.226Z"
+   "createdAt": "2026-11-20T14:58:54.226Z",
+   "age": 19
   }
  ],
  "sources": [

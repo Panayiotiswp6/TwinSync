@@ -23,6 +23,7 @@ function Picker({ state }: { state: AppState }) {
           <div key={p.id} className="card twin-card" role="button" tabIndex={0} onClick={() => go(`/chat/${p.id}`)} onKeyDown={(e) => e.key === 'Enter' && go(`/chat/${p.id}`)}>
             <Avatar persona={p} size={64} ring />
             <b>{p.name}</b>
+            {p.age ? <span className="tiny muted">{p.age} ετών</span> : null}
             <span className="small muted">{p.bio}</span>
             <span className="btn btn-sm">
               <MessageCircle size={14} /> Συνομίλησε

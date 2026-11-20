@@ -56,6 +56,9 @@ function QuestionField({ q, value, onChange, index }: { q: Question; value: Answ
       </label>
       {q.help && <p className="tiny muted">{q.help}</p>}
       {q.type === 'text' && <textarea rows={2} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={q.placeholder} />}
+      {q.type === 'age' && (
+        <input className="age-input" type="number" inputMode="numeric" min={10} max={110} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value.slice(0, 3))} placeholder={q.placeholder} />
+      )}
       {q.type === 'money' && <MoneyField value={value as MoneyAnswer | undefined} onChange={onChange} />}
       {q.type === 'ranked' && <RankedField value={value as RankedAnswer | undefined} onChange={onChange} />}
       {(q.type === 'chips' || q.type === 'multi') && (
@@ -133,41 +136,6 @@ function MoneyField({ value, onChange }: { value: MoneyAnswer | undefined; onCha
   );
 }
 
-function HoldoutEditor({ items, onChange }: { items: Holdout[]; onChange: (h: Holdout[]) => void }) {
-  const set = (i: number, h: Holdout) => onChange(items.map((x, k) => (k === i ? h : x)));
-  return (
-    <div className="ob-holdouts">
-      {items.map((h, i) => (
-        <div key={i} className="ob-holdout card">
-          <div className="ob-holdout-head">
-            <input value={h.question} onChange={(e) => set(i, { ...h, question: e.target.value })} placeholder="Η ερώτηση, π.χ. «Πού πήγαμε για τα γενέθλια του Νίκου;»" />
-            <button className="icon-btn" onClick={() => onChange(items.filter((_, k) => k !== i))} aria-label="Αφαίρεση">
-              <Trash2 size={16} />
-            </button>
-          </div>
-          {h.options.map((o, k) => (
-            <div key={k} className="ob-holdout-opt">
-              <input type="radio" name={`h${i}`} checked={h.chosen === k} onChange={() => set(i, { ...h, chosen: k })} aria-label="Αυτό διάλεξα" />
-              <input value={o.title} onChange={(e) => set(i, { ...h, options: h.options.map((x, j) => (j === k ? { ...x, title: e.target.value } : x)) })} placeholder={`Επιλογή ${k + 1} (π.χ. «Live bar, Ψυρρή»)`} />
-              <input type="number" min={0} value={o.cost ?? ''} onChange={(e) => set(i, { ...h, options: h.options.map((x, j) => (j === k ? { ...x, cost: e.target.value === '' ? null : Number(e.target.value) } : x)) })} placeholder="€" className="ob-cost" />
-            </div>
-          ))}
-          {h.options.length < 4 && (
-            <button className="link-btn tiny" onClick={() => set(i, { ...h, options: [...h.options, { title: '', cost: null }] })}>
-              + επιλογή
-            </button>
-          )}
-          <input value={h.why} onChange={(e) => set(i, { ...h, why: e.target.value })} placeholder="Γιατί το διάλεξες; (δεν το βλέπει το Twin)" />
-        </div>
-      ))}
-      {items.length < 3 && (
-        <button className="btn" onClick={() => onChange([...items, { question: '', options: [{ title: '', cost: null }, { title: '', cost: null }], chosen: 0, why: '' }])}>
-          <Plus size={15} /> Πρόσθεσε μια πραγματική επιλογή σου
-        </button>
-      )}
-    </div>
-  );
-}
 
 function BuildProgress({ jobId, onDone }: { jobId: string; onDone: (state: AppState, personaId: string) => void }) {
   const [events, setEvents] = useState<JobEvent[]>([]);
@@ -257,7 +225,7 @@ export function Onboard({ state, onState }: { state: AppState; onState: (s: AppS
     }
   }, [d]);
 
-  const steps = [...SECTIONS.map((s) => ({ id: s.id, title: s.title, emoji: s.emoji })), { id: 'test', title: 'Τεστ', emoji: '🎯' }, { id: 'done', title: 'Τέλος', emoji: '🚀' }];
+  const steps = [...SECTIONS.map((s) => ({ id: s.id, title: s.title, emoji: s.emoji })), { id: 'done', title: 'Τέλος', emoji: '🚀' }];
   const step = Math.min(d.step, steps.length - 1);
   const section = SECTIONS[step];
   const all = SECTIONS.flatMap((s) => s.questions);
@@ -273,7 +241,7 @@ export function Onboard({ state, onState }: { state: AppState; onState: (s: AppS
     setErr(null);
     try {
       const answers = Object.fromEntries(Object.entries(d.answers).filter(([, v]) => v !== undefined && v !== null));
-      const r = await api.onboard({ name: d.name, emoji: d.emoji, answers, holdouts: d.holdouts.filter((h) => h.question.trim()) });
+      const r = await api.onboard({ name: d.name, emoji: d.emoji, answers, holdouts: [] });
       setJobId(r.jobId);
     } catch (e) {
       setErr((e as Error).message);
@@ -347,25 +315,15 @@ export function Onboard({ state, onState }: { state: AppState; onState: (s: AppS
           </>
         )}
 
-        {steps[step].id === 'test' && (
-          <>
-            <h3>🎯 Κρυφό τεστ (προαιρετικό)</h3>
-            <p className="muted small">
-              Γράψε 1–3 πραγματικές επιλογές που έκανες πρόσφατα. Το Twin δεν τις βλέπει ποτέ — στη σελίδα «Αξιολόγηση» ελέγχουμε αν μαντεύει σωστά τι διάλεξες. Έτσι μετράμε πόσο σου μοιάζει.
-            </p>
-            <HoldoutEditor items={d.holdouts} onChange={(holdouts) => setD({ ...d, holdouts })} />
-          </>
-        )}
-
         {steps[step].id === 'done' && (
           <>
             <h3>🚀 Έτοιμο για δημιουργία</h3>
             <p>
-              <b>{answered}</b> από {all.length} απαντήσεις{d.holdouts.length ? ` · ${d.holdouts.length} κρυφά τεστ` : ''}.
+              <b>{answered}</b> από {all.length} απαντήσεις.
             </p>
             {missing.length > 0 && (
               <div className="notice small">
-                Λείπουν {missing.length} βασικές ερωτήσεις — το Twin θα είναι πιο αβέβαιο εκεί:
+                Λείπουν {missing.length} βασικές ερωτήσεις — εκεί το Twin θα σε ξέρει λιγότερο:
                 <ul>
                   {missing.slice(0, 6).map((q) => (
                     <li key={q.id}>

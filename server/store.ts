@@ -80,11 +80,12 @@ const swapsOf = (v: unknown): { swaps?: WordSwap[] } => {
 };
 const str = (v: unknown, fallback = ''): string => (typeof v === 'string' ? v : v == null ? fallback : String(v));
 
-/** The team's locked twins are defined in the repo: their writing style follows the committed team file. */
+/** The team's locked twins are defined in the repo: their writing style and age follow the committed team file. */
 function syncTeam(s: State, seed: State): State {
   for (const p of s.personas) {
     const t = p.locked ? seed.personas.find((x) => x.id === p.id) : undefined;
     if (t?.style) p.style = t.style;
+    if (t?.age) p.age = t.age;
   }
   return s;
 }
@@ -188,9 +189,9 @@ export const store = {
     const h = handle.trim().replace(/^@/, '').toLowerCase();
     return state.personas.find((p) => p.handle.toLowerCase() === h);
   },
-  updatePersona(id: PersonaId, patch: Partial<Pick<Persona, 'name' | 'bio' | 'emoji'>>) {
+  updatePersona(id: PersonaId, patch: Partial<Pick<Persona, 'name' | 'bio' | 'emoji' | 'age'>>) {
     const p = store.persona(id);
-    if (p) Object.assign(p, Object.fromEntries(Object.entries(patch).filter(([, v]) => typeof v === 'string' && v.trim())));
+    if (p) Object.assign(p, Object.fromEntries(Object.entries(patch).filter(([, v]) => (typeof v === 'string' && v.trim()) || (typeof v === 'number' && Number.isFinite(v)))));
     persist();
     return p;
   },

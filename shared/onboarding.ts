@@ -7,7 +7,7 @@
 import type { MemoryDraft } from './heuristics';
 import type { Category, Where } from './types';
 
-export type QType = 'text' | 'money' | 'chips' | 'multi' | 'deadline' | 'dm' | 'ranked';
+export type QType = 'text' | 'age' | 'money' | 'chips' | 'multi' | 'deadline' | 'dm' | 'ranked';
 
 export interface Question {
   id: string;
@@ -55,9 +55,9 @@ export const SECTIONS: Section[] = [
     emoji: '👋',
     intro: 'Λίγα βασικά για να σε γνωρίσει το Twin σου.',
     questions: [
+      { id: 'me_age', q: 'Πόσων χρονών είσαι;', type: 'age', placeholder: 'π.χ. 21' },
       { id: 'me_about', q: 'Πες μας λίγα λόγια για σένα: τι σπουδάζεις ή τι δουλεύεις, τι κάνεις στον ελεύθερο χρόνο σου, τι σε ενθουσιάζει;', type: 'text', placeholder: 'π.χ. «ΗΜΜΥ στο 3ο έτος, παίζω μπάσκετ, λατρεύω αυτοκίνητα και ταξίδια με φίλους»' },
       { id: 'me_friend', q: 'Πώς θα σε περιέγραφε ένας κολλητός σου με μία πρόταση;', type: 'text', placeholder: 'π.χ. «ο πρώτος που λέει ναι σε όλα, αλλά πάντα αργεί»' },
-      { id: 'me_daily', q: 'Πότε είσαι συνήθως ελεύθερος/η μέσα στην εβδομάδα;', type: 'text', placeholder: 'π.χ. δουλεύω Δευ–Παρ 9–5, τα ΣΚ είμαι ελεύθερος' },
       { id: 'me_area', q: 'Σε ποια πόλη και περιοχή μένεις ή κινείσαι συνήθως;', type: 'text', placeholder: 'π.χ. Αθήνα, Ζωγράφου', help: 'Βοηθά να προτείνει μέρη κοντά σε όλους.' },
       { id: 'me_move', q: 'Πώς κινείσαι στην πόλη;', type: 'multi', options: ['Αυτοκίνητο (οδηγώ)', 'Μετρό / ΜΜΜ', 'Μηχανάκι', 'Ποδήλατο / περπάτημα', 'Ταξί'] },
     ],
@@ -83,7 +83,7 @@ export const SECTIONS: Section[] = [
     questions: [
       { id: 'time_early', q: 'Αναχώρηση για εκδρομή στις 7 το πρωί;', type: 'chips', options: ['Κανένα πρόβλημα', 'Αν πρέπει…', 'Όχι πριν τις 9–10'] },
       { id: 'time_night', q: 'Μέχρι τι ώρα σου αρέσει να κρατάει μια βραδινή έξοδος;', type: 'chips', options: ['Ως τις 12', 'Γύρω στις 2', 'Μέχρι να ξημερώσει'] },
-      { id: 'time_fixed', q: 'Σταθερές υποχρεώσεις που πρέπει να ξέρει το Twin σου; (μέρες, ώρες, γιατί)', type: 'text', optional: true, placeholder: 'π.χ. προπόνηση Τρίτη & Πέμπτη 19:00, Σάββατο πρωί δουλεύω' },
+      { id: 'time_fixed', q: 'Σταθερό πρόγραμμα μέσα στην εβδομάδα που πρέπει να ξέρει το Twin σου; (σχολή, δουλειά, γυμναστήριο — μέρες και ώρες)', type: 'text', optional: true, placeholder: 'π.χ. σχολή Δευ–Τετ 9–15, γυμναστήριο καθημερινές 18–20, Σάββατο πρωί δουλεύω' },
     ],
   },
   {

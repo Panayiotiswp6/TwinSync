@@ -7,11 +7,11 @@ import { decide } from '../shared/decide';
 import { contextOf, evaluateWithRules, extractWithRules, parseRequestWithRules, type MemoryDraft } from '../shared/heuristics';
 import { applySwaps } from '../shared/dialect';
 import { chatFacts, messageFacts, placeLine, styleSamples, templateChat, templateMessage, ungroundedReason } from '../shared/messages';
-import { areasOf, datesBetween, inArea, KIND_CATEGORY, KIND_LABEL, kindFromText, linkByKeywords, LOCAL_KINDS, planWishes, prepareOptions } from '../shared/plan';
+import { areasOf, coverageOf, datesBetween, inArea, KIND_CATEGORY, KIND_LABEL, kindFromText, linkByKeywords, LOCAL_KINDS, matchVenue, planWishes, prepareOptions } from '../shared/plan';
 import { normalizeGreek } from '../shared/text';
 import { athensIso, formatWhen, localParts, parseIso, WEEKDAYS_EL } from '../shared/time';
 import type { CandidateOption, Category, Decision, Evaluation, GroupRequest, Itinerary, MemoryItem, Persona, PersonaId, PipelineStep, RequestKind, StyleCard, TwinChat, TwinMessage, Venue } from '../shared/types';
-import { aiErrorReason, aiModel, analyzeSource, buildStyle, draftMessages, evaluateOptions, generateOptions, liveAi, negotiationChat, parseRequest, type TwinContext } from './ai';
+import { aiErrorReason, aiModel, analyzeSource, buildStyle, draftMessages, evaluateOptions, generateOptions, liveAi, negotiationChat, parseRequest, reviseItinerary, type TwinContext } from './ai';
 import { noEmit, type Emit } from './jobs';
 import { retrieve } from './retrieval';
 import { loadTripFixtures, loadVenues, type TripFixture, type VenueEntry } from './seed';
@@ -101,7 +101,7 @@ type Parsed = {
 /** Where the group is: the request text > the city in the form > the demo's assumption (shown, editable). */
 export const DEFAULT_CITY = 'Αθήνα';
 
-export async function createRequest(text: string, participants: PersonaId[], wishes: Record<PersonaId, string>, emit: Emit = noEmit, form: { city?: string; cityAssumed?: boolean } = {}) {
+export async function createRequest(text: string, participants: PersonaId[], wishes: Record<PersonaId, string>, emit: Emit = noEmit, form: { city?: string; cityAssumed?: boolean; pick?: string } = {}) {
   const formCity = form.city?.trim() || DEFAULT_CITY;
   const now = new Date();
   const wishList = participants.filter((id) => wishes[id]?.trim()).map((id) => ({ personaId: id, name: store.persona(id)!.name, text: wishes[id].trim() }));
@@ -130,7 +130,8 @@ export async function createRequest(text: string, participants: PersonaId[], wis
   const where = kind === 'trip' ? (parsed.where === 'local' || !parsed.where ? 'domestic' : parsed.where) : LOCAL_KINDS.includes(kind) ? 'local' : (parsed.where ?? 'local');
   const city = parsed.city || formCity;
   const cityAssumed = !parsed.city && (form.cityAssumed ?? !form.city);
-  const req = store.addRequest({ text, title: parsed.title, category, kind, city, cityAssumed, area: parsed.area, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd, participants, days, where, place: parsed.place });
+  const pick = form.pick?.trim().slice(0, 80) || undefined;
+  const req = store.addRequest({ text, title: pick && !normalizeGreek(parsed.title).includes(normalizeGreek(pick)) ? `${pick} — ${parsed.title}` : parsed.title, category, kind, city, cityAssumed, area: parsed.area, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd, participants, days, where, place: parsed.place, ...(pick ? { pick } : {}) });
   emit({
     who: 'system',
     kind: 'info',
@@ -270,7 +271,7 @@ const allVenues = () => (venues ??= loadVenues());
 
 /** Catalogue in the shape used for matching (existence + public reference). */
 export function venueCatalogue(): Venue[] {
-  return allVenues().map((v) => ({ name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt }));
+  return allVenues().map((v) => ({ name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt, ...(v.phone ? { phone: v.phone } : {}) }));
 }
 
 const KIND_VENUES: Partial<Record<RequestKind, VenueEntry['kind'][]>> = { coffee: ['coffee'], drinks: ['drinks'], club: ['club', 'drinks'], live: ['live'], dinner: ['dinner'] };
@@ -296,13 +297,37 @@ function venueOption(v: VenueEntry, req: GroupRequest, items: MemoryItem[]): Can
     summary: `${v.subtype} · ${v.area}${v.address ? `, ${v.address}` : ''}`,
     location: `${v.area}, ${v.city}`,
     costPerPerson: v.priceHint ?? null,
-    costNote: 'εκτίμηση της ομάδας, όχι τιμή καταστήματος',
+    costNote: 'ανά άτομο',
     startsAt: req.periodStart,
     endsAt: req.periodEnd,
     features: [...v.features, ...(v.quiet ? ['ήσυχο'] : [])],
     origin: 'catalog',
-    venue: { name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt },
+    venue: { name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt, ...(v.phone ? { phone: v.phone } : {}) },
     why: linkByKeywords(text, items).map((l) => ({ personaId: l.personaId, memoryId: l.memoryId, text: `ταιριάζει με «${l.statement}»` })),
+  };
+}
+
+/** The place the group asked to check: the catalogue entry when we know it, otherwise the name as given. */
+export function pickOption(req: GroupRequest, items: MemoryItem[]): CandidateOption {
+  const name = req.pick ?? '';
+  const hit = matchVenue(name, venueCatalogue());
+  const entry = hit && allVenues().find((v) => v.id === hit.catalogId);
+  if (entry) return { ...venueOption(entry, req, items), id: 'opt-1' };
+  const kind = req.kind ? KIND_LABEL[req.kind] : 'έξοδος';
+  return {
+    id: 'opt-1',
+    title: name,
+    emoji: (req.kind && KIND_EMOJI[req.kind]) || '📍',
+    summary: `Η επιλογή της παρέας για ${kind.toLowerCase()}${req.area ? ` · ${req.area}` : ''}. Κρίνεται από ό,τι είναι γνωστό για το μέρος.`,
+    location: [req.area, req.city].filter(Boolean).join(', '),
+    costPerPerson: null,
+    costNote: '',
+    startsAt: req.periodStart,
+    endsAt: req.periodEnd,
+    features: [],
+    origin: 'ai',
+    venue: { name, kind, area: req.area ?? '', city: req.city ?? DEFAULT_CITY },
+    why: [],
   };
 }
 
@@ -449,7 +474,13 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     catalogue: venueCatalogue(),
   });
   const prep = (list: CandidateOption[]) => prepareOptions(list, prepInput());
-  if (previous && !opts.regenerateOptions) {
+  if (req.pick && (!previous || opts.regenerateOptions)) {
+    // The group named the place: the twins judge THAT place (does it fit, and who does it clash with).
+    options = [pickOption(req, inputs)];
+    rejected = [];
+    optMode = 'code';
+    optDetail = `έλεγχος της επιλογής σας: «${req.pick}»`;
+  } else if (previous && !opts.regenerateOptions) {
     options = previous.options;
     optMode = 'code';
     optDetail = 'ίδιες επιλογές με την προηγούμενη εκτέλεση';
@@ -819,6 +850,100 @@ export async function learnFromDecision(decisionId: string, personaId: PersonaId
 // ---------------------------------------------------------------------------
 // The owner (not the twin) relaxes one strict limit, only for this request.
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Editing a trip plan: strike out activities, then confirm
+// ---------------------------------------------------------------------------
+
+const sameTitle = (a: string, b: string) => normalizeGreek(a).replace(/\s+/g, ' ').trim() === normalizeGreek(b).replace(/\s+/g, ' ').trim();
+
+/**
+ * Nothing struck out → the plan is confirmed as it is (no more edits).
+ * Some activities struck out → the same plan without them (AI adjusts costs; checked in code, code fallback).
+ */
+export async function editItinerary(decisionId: string, optionId: string, remove: { date: string; index: number }[]) {
+  const d = store.decision(decisionId);
+  const o = d?.options.find((x) => x.id === optionId);
+  const it = o?.itinerary;
+  if (!d || !o || !it) throw new Error('not found');
+  if (it.confirmed) throw new Error('Το πρόγραμμα έχει ήδη επιβεβαιωθεί.');
+  const req = store.request(d.requestId)!;
+  const removed = remove
+    .map((r) => ({ date: r.date, slot: it.days.find((x) => x.date === r.date)?.slots[r.index] }))
+    .filter((r): r is { date: string; slot: NonNullable<typeof r.slot> } => !!r.slot);
+  if (!removed.length) {
+    it.confirmed = true;
+    store.save();
+    return { decision: d, mode: 'confirm' as const };
+  }
+  const isRemoved = (date: string, title: string) => removed.some((r) => r.date === date && sameTitle(r.slot.title, title));
+  // Code: the same plan without the struck-out slots (costs unchanged).
+  const byCode: Itinerary = { ...it, days: it.days.map((day) => ({ ...day, slots: day.slots.filter((x) => !isRemoved(day.date, x.title)) })) };
+  let next = byCode;
+  let mode: 'ai' | 'code' = 'code';
+  if (liveAi()) {
+    try {
+      const r = await reviseItinerary(it, removed.map((x) => ({ date: x.date, title: x.slot.title })));
+      // Accept only a minimal edit: same days, every kept slot still there, nothing removed left, nothing new.
+      const ok = byCode.days.every((day) => {
+        const got = r.days.find((x) => x.date === day.date);
+        return !!got && got.slots.length === day.slots.length && day.slots.every((x) => got.slots.some((y) => sameTitle(y.title, x.title)));
+      });
+      if (ok) {
+        const c = r.cost;
+        const cost = { ...c, transport: it.cost.transport, stay: it.cost.stay, food: Math.min(c.food, it.cost.food), activities: Math.min(c.activities, it.cost.activities) };
+        cost.total = cost.transport + cost.stay + cost.food + cost.activities;
+        next = { ...it, days: byCode.days.map((day) => ({ ...day, slots: r.days.find((x) => x.date === day.date)!.slots.map((y) => ({ ...y, serves: day.slots.find((x) => sameTitle(x.title, y.title))?.serves ?? y.serves })) })), cost };
+        mode = 'ai';
+      }
+    } catch (e) {
+      console.warn('[itinerary] revision failed:', aiErrorReason(e));
+    }
+  }
+  o.itinerary = next;
+  o.costPerPerson = next.cost.total;
+  o.costNote = `μετακίνηση ${next.cost.transport}€ + διαμονή ${next.cost.stay}€ + φαγητό ${next.cost.food}€ + δραστηριότητες ${next.cost.activities}€`;
+  const groupItem = (m: MemoryItem) => m.refs.some((r) => store.source(r.sourceId)?.personaId === 'group');
+  o.coverage = coverageOf(o, planWishes(d.inputs, groupItem, true, !!req.place, req.where), d.inputs);
+  store.save();
+  return { decision: d, mode };
+}
+
+// ---------------------------------------------------------------------------
+// The owners correct what their twins said in the group chat, then re-decide
+// ---------------------------------------------------------------------------
+
+/** Each edited chat message is the owner's own word for this request: it becomes a wish, then a new run. */
+export async function chatEdits(requestId: string, edits: { personaId: PersonaId; text: string }[], emit: Emit = noEmit) {
+  const req = store.request(requestId);
+  if (!req) throw new Error('not found');
+  const list = edits.filter((e) => req.participants.includes(e.personaId) && e.text.trim().length >= 2).map((e) => ({ personaId: e.personaId, name: store.persona(e.personaId)!.name, text: e.text.trim().slice(0, 300) }));
+  if (!list.length) throw new Error('Καμία αλλαγή.');
+  const t = timer();
+  let drafts: Record<string, MemoryDraft[]> = {};
+  let mode: 'ai' | 'demo' = 'demo';
+  if (liveAi()) {
+    try {
+      drafts = (await parseRequest(req.text, new Date(req.createdAt), list, req.city || DEFAULT_CITY, req.participants.length)).wishDrafts;
+      mode = 'ai';
+    } catch (e) {
+      emit({ who: 'system', kind: 'info', text: `Live AI απέτυχε (${aiErrorReason(e)}) — κανόνες.` });
+    }
+  }
+  let created = 0;
+  for (const w of list) {
+    emit({ who: w.personaId, kind: 'think', text: `Ο/Η ${w.name.split(' ')[0]} διόρθωσε: «${w.text}»` });
+    const src = store.addSource(w.personaId, 'wish', `Διόρθωση στη συζήτηση για «${req.title}»`, w.text);
+    src.analyzed = true;
+    const got = drafts[w.personaId]?.length ? drafts[w.personaId] : extractWithRules(w.text).map((d) => ({ ...d, categories: [] }));
+    // Even a sentence with no clear rule counts as what this person wants for THIS plan.
+    const list2 = got.length ? got : [{ kind: 'preference' as const, statement: w.text, domain: 'other' as const, polarity: 'neutral' as const, strength: 0.8, hard: false, categories: [], keywords: [], quote: w.text, confidence: 1 }];
+    created += store.addMemory(w.personaId, src, list2, { origin: 'owner', status: 'confirmed', scope: 'request', requestId }).created.length;
+  }
+  const parseStep: PipelineStep = { key: 'parse', label: 'Διορθώσεις στη συζήτηση', detail: `${list.length} μήνυμα(τα) διορθώθηκαν από τους κατόχους · ${created} νέες επιθυμίες για αυτό το αίτημα`, mode, ms: t() };
+  const decision = await runDecision(requestId, { parseStep, regenerateOptions: true, emit });
+  return { decision };
+}
 
 export async function relaxLimit(requestId: string, memoryId: string, optionId: string) {
   const req = store.request(requestId);

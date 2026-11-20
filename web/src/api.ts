@@ -43,8 +43,11 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 export const api = {
   state: () => call<AppState>('GET', '/api/state'),
   reset: (kind: StartGroup) => call<AppState>('POST', `/api/reset${kind === 'empty' ? '?empty=1' : kind === 'team' ? '?seed=team' : ''}`),
-  createRequestAsync: (text: string, participants: string[], wishes: Record<string, string>, city?: string, cityAssumed?: boolean) =>
-    call<{ jobId: string }>('POST', '/api/requests?async=1', { text, participants, wishes, city, cityAssumed }),
+  createRequestAsync: (text: string, participants: string[], wishes: Record<string, string>, city?: string, cityAssumed?: boolean, pick?: string) =>
+    call<{ jobId: string }>('POST', '/api/requests?async=1', { text, participants, wishes, city, cityAssumed, ...(pick ? { pick } : {}) }),
+  chatEdits: (requestId: string, edits: { personaId: string; text: string }[]) => call<{ jobId: string }>('POST', `/api/requests/${requestId}/chat-edits`, { edits }),
+  editItinerary: (decisionId: string, optionId: string, remove: { date: string; index: number }[]) =>
+    call<{ mode: 'confirm' | 'ai' | 'code'; state: AppState }>('POST', `/api/decisions/${decisionId}/itinerary`, { optionId, remove }),
   relax: (requestId: string, memoryId: string, optionId: string) => call<{ decisionId: string; state: AppState }>('POST', `/api/requests/${requestId}/relax`, { memoryId, optionId }),
   job: (id: string, since: number) => call<Job & { total: number; state?: AppState }>('GET', `/api/jobs/${id}?since=${since}`),
   onboard: (body: OnboardBody) => call<{ jobId: string }>('POST', '/api/onboard', body),

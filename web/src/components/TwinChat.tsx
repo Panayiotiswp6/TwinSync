@@ -1,4 +1,4 @@
-import { ArrowRight } from 'lucide-react';
+import { ArrowRight, Check, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { ChatLine, JobEvent, Persona, TwinChat } from '../../../shared/types';
 import { api, type AppState } from '../api';
@@ -172,22 +172,103 @@ export function LiveTwinChat({ jobId, people, onDone, onError }: { jobId: string
   );
 }
 
-/** Static: the stored negotiation of a decision. */
-export function TwinChatView({ chat, people }: { chat: TwinChat | undefined; people: Persona[] }) {
+/** One stored chat line; the owner can correct what their twin said (pencil). */
+function EditableLine({ p, text, edited, showHead, onEdit, onUndo }: { p: Persona; text: string; edited: boolean; showHead: boolean; onEdit?: (t: string) => void; onUndo?: () => void }) {
+  const [draft, setDraft] = useState<string | null>(null);
+  return (
+    <div className={`dm-row ${showHead ? 'head' : ''}`}>
+      <span className="dm-ava">{showHead && <Avatar persona={p} size={28} />}</span>
+      <div className="dm-col">
+        {showHead && <span className="dm-name">{p.name}</span>}
+        {draft !== null ? (
+          <div className="dm-edit">
+            <textarea rows={2} value={draft} maxLength={300} autoFocus onChange={(e) => setDraft(e.target.value)} aria-label={`Διόρθωση μηνύματος: ${p.name}`} />
+            <div className="dm-edit-actions">
+              <button className="btn btn-sm" onClick={() => setDraft(null)}>
+                Άκυρο
+              </button>
+              <button
+                className="btn btn-sm btn-brand"
+                disabled={draft.trim().length < 2 || draft.trim() === text}
+                onClick={() => {
+                  onEdit?.(draft.trim());
+                  setDraft(null);
+                }}
+              >
+                <Check size={14} /> Αποθήκευση
+              </button>
+            </div>
+          </div>
+        ) : (
+          <div className="dm-line">
+            <div className={`dm-bubble say ${edited ? 'edited' : ''}`}>{text}</div>
+            {onEdit && (
+              <button className="dm-pen" onClick={() => setDraft(text)} aria-label={`Διόρθωση: ${p.name}`} title="Διόρθωσε τι είπε το Twin σου">
+                <Pencil size={13} />
+              </button>
+            )}
+            {edited && onUndo && (
+              <button className="dm-pen" onClick={onUndo} aria-label="Αναίρεση διόρθωσης" title="Αναίρεση">
+                <RotateCcw size={13} />
+              </button>
+            )}
+          </div>
+        )}
+        {edited && draft === null && <span className="dm-edited tiny">διορθώθηκε</span>}
+      </div>
+    </div>
+  );
+}
+
+/** Static: the stored negotiation of a decision. Owners can correct their twin's lines and re-run from them. */
+export function TwinChatView({ chat, people, onRegenerate }: { chat: TwinChat | undefined; people: Persona[]; onRegenerate?: (edits: { personaId: string; text: string }[]) => void }) {
+  const [edits, setEdits] = useState<Record<number, string>>({});
   if (!chat?.lines.length) return null;
-  const events: JobEvent[] = chat.lines.map((l: ChatLine, i) => ({ at: i, who: l.personaId, kind: 'say', text: l.text }));
+  const n = Object.keys(edits).length;
+  let prev = '';
   return (
     <section>
       <h3 className="sec-title meta-row">
         Η συζήτηση των Twins <Badge tone={chat.mode === 'live' ? 'ai' : 'neutral'}>{chat.mode === 'live' ? 'ύφος κάθε κατόχου · AI' : 'πρότυπο'}</Badge>
-        <InfoTip label="Πώς ελέγχεται η συζήτηση" tone={chat.note ? 'warn' : undefined}>
-          {chat.note && <p className="tip-note warn-text">{chat.note}</p>}
-          Κάθε μήνυμα ελέγχεται σε κώδικα: αριθμοί και επιλογές πρέπει να υπάρχουν στα δεδομένα της απόφασης, αλλιώς απορρίπτεται.
+        <InfoTip label="Πώς ελέγχεται η συζήτηση">
+          {chat.note && <p className="tip-note">{chat.note}</p>}
+          Κάθε μήνυμα ελέγχεται σε κώδικα: αριθμοί και επιλογές πρέπει να υπάρχουν στα δεδομένα της απόφασης, αλλιώς απορρίπτεται. Με το μολύβι διορθώνεις τι είπε το Twin σου — η διόρθωση μετράει ως δική σου επιθυμία για αυτό το σχέδιο.
         </InfoTip>
       </h3>
       <div className="dm dm-static">
         <DmHead people={people} live={false} sub="ομαδική συνομιλία" />
-        <div className="dm-body">{renderEvents(events, people)}</div>
+        <div className="dm-body">
+          {chat.lines.map((l: ChatLine, i) => {
+            const p = people.find((x) => x.id === l.personaId);
+            if (!p) return null;
+            const head = prev !== p.id;
+            prev = p.id;
+            return (
+              <EditableLine
+                key={i}
+                p={p}
+                text={edits[i] ?? l.text}
+                edited={edits[i] !== undefined}
+                showHead={head}
+                onEdit={onRegenerate ? (t) => setEdits((e) => ({ ...e, [i]: t })) : undefined}
+                onUndo={() =>
+                  setEdits((e) => {
+                    const { [i]: _drop, ...rest } = e;
+                    return rest;
+                  })
+                }
+              />
+            );
+          })}
+        </div>
+        {n > 0 && onRegenerate && (
+          <footer className="dm-foot dm-regen">
+            <span className="small">{n === 1 ? '1 μήνυμα διορθώθηκε' : `${n} μηνύματα διορθώθηκαν`} — τα Twins ξανααποφασίζουν με βάση τη συζήτηση.</span>
+            <button className="btn btn-brand" onClick={() => onRegenerate(Object.entries(edits).map(([i, text]) => ({ personaId: chat.lines[Number(i)].personaId, text })))}>
+              <RefreshCw size={15} /> Regenerate
+            </button>
+          </footer>
+        )}
       </div>
     </section>
   );

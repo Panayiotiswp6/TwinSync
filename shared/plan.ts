@@ -333,8 +333,8 @@ export function prepareOptions(options: CandidateOption[], inp: PrepareInput): {
     const o: CandidateOption = { ...raw };
     if (o.venue) {
       const hit = matchVenue(o.venue.name, inp.catalogue);
-      if (hit) o.venue = { ...o.venue, name: hit.name, area: hit.area || o.venue.area, city: hit.city, address: hit.address ?? o.venue.address, catalogId: hit.catalogId, source: hit.source, url: hit.url, checkedAt: hit.checkedAt };
-      else o.venue = { ...o.venue, catalogId: undefined, source: undefined, url: undefined, checkedAt: undefined };
+      if (hit) o.venue = { ...o.venue, name: hit.name, area: hit.area || o.venue.area, city: hit.city, address: hit.address ?? o.venue.address, catalogId: hit.catalogId, source: hit.source, url: hit.url, checkedAt: hit.checkedAt, ...(hit.phone ? { phone: hit.phone } : {}) };
+      else o.venue = { ...o.venue, catalogId: undefined, source: undefined, url: undefined, checkedAt: undefined, phone: undefined };
     }
     if (o.why) o.why = cleanLinks<WishLink>(o.why, owner);
     if (o.itinerary) {

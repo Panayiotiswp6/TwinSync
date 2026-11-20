@@ -15,7 +15,7 @@ import { swapsNote } from '../shared/dialect';
 import { CATEGORIES, DOMAINS, type CandidateOption, type Category, type Evaluation, type Itinerary, type MemoryItem, type Persona, type RequestKind, type StyleCard, type Venue } from '../shared/types';
 import { contextHint, type RequestContext, WHERE_LABEL } from '../shared/context';
 import { KIND_CATEGORY, KIND_LABEL, LOCAL_KINDS } from '../shared/plan';
-import { containsQuote, clamp } from '../shared/text';
+import { containsQuote, clamp, normalizeGreek } from '../shared/text';
 import { athensIso, localParts, parseIso } from '../shared/time';
 
 const KINDS: RequestKind[] = ['coffee', 'drinks', 'club', 'live', 'dinner', 'trip', 'activity', 'gift', 'other'];
@@ -420,6 +420,17 @@ function describeContext(ctx?: RequestContext | null): string {
 }
 
 /** How a twin should read its memory. Shared by option generation and evaluation. */
+/** Plans read as finished proposals: no hedging in what the group sees (the checks run in code). */
+const TONE = `- Write every user-facing text (summary, features, modes, stay note, slot titles) as a confident, finished plan. Never write "επιβεβαιώστε", "ελέγξτε", "προς έλεγχο", "ενδεικτικό", "αν είναι ανοικτό", "εφόσον" or similar hedging.`;
+
+// A sentence that only hedges ("Οι ώρες χρειάζονται επιβεβαίωση") is dropped from what the group sees.
+const HEDGE = /(επιβεβαι|ελεγξτε|ελεγχθ|προσ ελεγχο|ενδεικτικ|δεν ειναι βεβαι|ενδεχομεν|to verify|to check)/;
+export function confident(text: string): string {
+  const parts = text.split(/(?<=[.;!])\s+|\s*·\s*/);
+  const kept = parts.filter((x) => !HEDGE.test(normalizeGreek(x)));
+  return (kept.length ? kept : parts.slice(0, 1)).join(' ').replace(/\s{2,}/g, ' ').trim();
+}
+
 const READING_RULES = `How to read each person's memory:
 - Items marked ΑΙΤΗΜΑ are what the person asked for THIS plan. They override any profile item on the same topic.
 - Profile items are general tendencies from what the person told us, each said in a specific context (duration, Greece vs abroad, evening vs trip). Apply an item only as far as its context matches this plan. Typical amounts are references, not limits: scale them to the plan (e.g. "~200€ for 2 days in Greece" says little about 4 days abroad; extrapolate per day and allow for higher prices abroad, flights included).
@@ -472,11 +483,12 @@ export async function generateOptions(req: PlanRequest, twins: TwinContext[], ct
     name: 'candidate_options',
     system: `You propose concrete, followable plans for a group of friends who are in ${city}. Request kind: ${req.kind ? KIND_LABEL[req.kind] : 'other'}.
 ${READING_RULES}
+${TONE}
 - 5 options, DIFFERENT from each other, each answering the request as asked. Include at least one option that satisfies every strict item that applies, and as close as possible to everyone's wishes. Do not add things nobody asked for (no extra walk or snack).
 ${
   local
     ? `- Each option is ONE specific, NAMED place (its real name) of the requested kind, in ${city}${req.area ? ` and inside the requested area: ${req.area}` : ''}. Never "κάπου στα …", "ένα καφέ κοντά στο …", "ένα από τα μπαρ της οδού …".
-- Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well; it will be shown as "to verify".
+- Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well.
 - coffee: cafés only. drinks: follow the asked type (cocktail bar, quiet bar, wine bar, beer). club: a club. live: a venue for live music — do NOT state an artist, programme, start time or ticket price as fact; say the programme must be confirmed.
 - Use what people listen to: their genres decide the TYPE of place (λαϊκά → μπουζούκια/πίστα, house/pop → club, jazz → jazz club, rock → rock bar/live). If someone's favourite artist usually plays at a kind of venue, propose such a venue and put that artist in artistHint (it will be shown as "δείτε αν εμφανίζεται", never as a confirmed date). artistHint "" otherwise.
 - startsAt/endsAt: the proposed time window inside the requested period (ISO with the Athens offset). One evening past midnight is one outing.
@@ -548,13 +560,13 @@ ${
     id: `opt-${i + 1}`,
     title: clean(o.title).slice(0, 90),
     emoji: [...o.emoji].slice(0, 2).join('') || '✨',
-    summary: clean(o.summary).slice(0, 400),
+    summary: confident(clean(o.summary)).slice(0, 400),
     location: clean([o.area, o.city].filter(Boolean).join(', ')).slice(0, 80),
     costPerPerson: o.costPerPerson >= 0 ? Math.round(o.costPerPerson) : null,
     costNote: clean(o.costNote).slice(0, 160),
     startsAt: parseIso(o.startsAt) ? o.startsAt : null,
     endsAt: parseIso(o.endsAt) ? o.endsAt : null,
-    features: o.features.slice(0, 7).map((f) => clean(f).slice(0, 80)),
+    features: o.features.slice(0, 7).map((f) => clean(f).slice(0, 80)).filter((f) => !HEDGE.test(normalizeGreek(f))),
     origin: 'ai' as const,
     ...(o.venueName.trim()
       ? { venue: { name: clean(o.venueName).slice(0, 80), kind: clean(o.venueKind).slice(0, 40), area: clean(o.area).slice(0, 60), city: clean(o.city).slice(0, 40) || city, ...(o.address.trim() ? { address: clean(o.address).slice(0, 80) } : {}) } satisfies Venue }
@@ -597,6 +609,7 @@ async function generateTrips(req: PlanRequest, twins: TwinContext[], ctx: Reques
     name: 'trip_plans',
     system: `You plan complete group trips that people can actually follow. The group starts from ${origin}. Destination: ${where}${req.place ? `, the request names: ${req.place}` : ''}.
 ${READING_RULES}
+${TONE}
 - 3 DIFFERENT plans, each ONE destination city and country.
 - itinerary.days: one entry for EVERY date in ${JSON.stringify(dates)} (date as YYYY-MM-DD, title like "Πέμπτη — άφιξη"), each with 2-4 slots in time order, no overlaps (HH:MM local time). First day starts with the departure transfer, last day ends with the return.
 - Slots are SPECIFIC: a named trail/peak, museum, market, a named club or bar for the night, a restaurant area. Realistic transfer times and a safety buffer before the return. In winter, if a cable car / trail / beach may not run, give an "alternative".
@@ -675,9 +688,9 @@ ${READING_RULES}
       origin,
       destination: clean(o.destination).slice(0, 60),
       country: clean(o.country).slice(0, 40),
-      depart: { at: o.itinerary.depart.at, mode: clean(o.itinerary.depart.mode).slice(0, 80) },
-      return: { at: o.itinerary.return.at, mode: clean(o.itinerary.return.mode).slice(0, 80) },
-      stay: { name: clean(o.itinerary.stay.name).slice(0, 80), area: clean(o.itinerary.stay.area).slice(0, 60), note: clean(o.itinerary.stay.note).slice(0, 160) },
+      depart: { at: o.itinerary.depart.at, mode: confident(clean(o.itinerary.depart.mode)).slice(0, 80) },
+      return: { at: o.itinerary.return.at, mode: confident(clean(o.itinerary.return.mode)).slice(0, 80) },
+      stay: { name: clean(o.itinerary.stay.name).slice(0, 80), area: clean(o.itinerary.stay.area).slice(0, 60), note: confident(clean(o.itinerary.stay.note)).slice(0, 160) },
       days: o.itinerary.days.slice(0, 10).map((d) => ({
         date: d.date.slice(0, 10),
         title: clean(d.title).slice(0, 60),
@@ -698,13 +711,13 @@ ${READING_RULES}
       id: `opt-${i + 1}`,
       title: clean(o.title).slice(0, 90),
       emoji: [...o.emoji].slice(0, 2).join('') || '🧳',
-      summary: clean(o.summary).slice(0, 400),
+      summary: confident(clean(o.summary)).slice(0, 400),
       location: `${it.destination}, ${it.country}`,
       costPerPerson: it.cost.total,
       costNote: `μετακίνηση ${it.cost.transport}€ + διαμονή ${it.cost.stay}€ + φαγητό ${it.cost.food}€ + δραστηριότητες ${it.cost.activities}€`,
       startsAt: parseIso(it.depart.at) ? it.depart.at : null,
       endsAt: parseIso(it.return.at) ? it.return.at : null,
-      features: o.features.slice(0, 6).map((f) => clean(f).slice(0, 80)),
+      features: o.features.slice(0, 6).map((f) => clean(f).slice(0, 80)).filter((f) => !HEDGE.test(normalizeGreek(f))),
       origin: 'ai',
       why: o.why.map((w) => ({ ...w, text: clean(w.text).slice(0, 160) })),
       itinerary: it,
@@ -714,10 +727,54 @@ ${READING_RULES}
 
 /** One line per option for the evaluator: the SAME validated plan the group will see. */
 export function describeOption(o: CandidateOption): string {
-  const head = `- ${o.id}: ${o.title}${o.venue ? ` | ${o.venue.name} (${o.venue.kind}), ${o.venue.area}` : ` | ${o.location}`} | ${o.costPerPerson ?? '?'}€/άτομο | ${o.startsAt ?? '?'} → ${o.endsAt ?? '?'} | ${o.features.join('; ')}${o.event ? ' | πρόγραμμα ΜΗ επιβεβαιωμένο' : ''} | ${o.summary}`;
+  const head = `- ${o.id}: ${o.title}${o.venue ? ` | ${o.venue.name} (${o.venue.kind}), ${o.venue.area}` : ` | ${o.location}`} | ${o.costPerPerson ?? '?'}€/άτομο | ${o.startsAt ?? '?'} → ${o.endsAt ?? '?'} | ${o.features.join('; ')} | ${o.summary}`;
   if (!o.itinerary) return head;
   const it = o.itinerary;
   return `${head}\n    διαμονή: ${it.stay.name}, ${it.stay.area} (${it.stay.note})\n${it.days.map((d) => `    ${d.date} ${d.title}: ${d.slots.map((x) => `${x.start}-${x.end} ${x.title}${x.alternative ? ` [εναλλακτική: ${x.alternative}]` : ''}`).join(' · ')}`).join('\n')}`;
+}
+
+/**
+ * The group struck some activities out of a trip plan: return the same plan without them.
+ * Minimal change only — every other slot stays as it is; costs follow what was removed.
+ */
+export async function reviseItinerary(it: Itinerary, removed: { date: string; title: string }[]): Promise<{ days: Itinerary['days']; cost: Itinerary['cost'] }> {
+  const data = await completeJSON({
+    name: 'trip_revision',
+    system: `You edit a group's trip plan. The group removed some activities. Return the SAME plan without them.
+- Remove exactly the listed activities. Keep every other slot exactly as it is (same start, end, part, title, place, serves, alternative, conditional). Do not add new activities and do not move other days.
+- Only if a removed activity leaves a slot's neighbour without a sensible end, you may stretch that neighbour's end time — nothing else.
+- cost: lower "activities" (or "food" for a removed meal) by what the removed activities would cost per person; keep transport and stay; total = transport + stay + food + activities.
+${TONE}`,
+    user: `PLAN (JSON):\n${JSON.stringify({ days: it.days, cost: it.cost })}\n\nREMOVED:\n${removed.map((r) => `- ${r.date}: ${r.title}`).join('\n')}`,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['days', 'cost'],
+      properties: {
+        days: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'title', 'slots'], properties: { date: { type: 'string' }, title: { type: 'string' }, slots: { type: 'array', items: SLOT } } } },
+        cost: { type: 'object', additionalProperties: false, required: ['transport', 'stay', 'food', 'activities', 'total'], properties: { transport: { type: 'number' }, stay: { type: 'number' }, food: { type: 'number' }, activities: { type: 'number' }, total: { type: 'number' } } },
+      },
+    },
+    maxTokens: 8000,
+  });
+  const p = z.object({ days: z.array(z.object({ date: z.string(), title: z.string(), slots: z.array(RawSlot) })), cost: z.object({ transport: z.number(), stay: z.number(), food: z.number(), activities: z.number(), total: z.number() }) }).parse(data);
+  return {
+    days: p.days.map((d) => ({
+      date: d.date.slice(0, 10),
+      title: clean(d.title).slice(0, 60),
+      slots: d.slots.map((x) => ({
+        start: x.start,
+        end: x.end,
+        part: x.part,
+        title: clean(x.title).slice(0, 120),
+        place: clean(x.place).slice(0, 80),
+        serves: x.serves,
+        ...(x.alternative.trim() ? { alternative: clean(x.alternative).slice(0, 140) } : {}),
+        ...(x.conditional.trim() ? { conditional: clean(x.conditional).slice(0, 120) } : {}),
+      })),
+    })),
+    cost: { transport: Math.round(p.cost.transport), stay: Math.round(p.cost.stay), food: Math.round(p.cost.food), activities: Math.round(p.cost.activities), total: Math.round(p.cost.total) },
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -732,6 +789,7 @@ export async function evaluateOptions(options: CandidateOption[], twins: TwinCon
     system: `You are the digital twin of a person (or of several friends). For EACH person and EACH option, judge the option the way that person would, using ONLY their memory items below.
 - score 0-100 (50 = neutral / no relevant memory). Be decisive where the memory is clear.
 ${READING_RULES}
+${TONE}
 - reasons: 1-3 short Greek reasons, each citing the memoryId it comes from, with effect for/against.
 - violations: ONLY for HARD items without a numeric rule (e.g. vegetarian, no tent) whose context applies to this plan and that the option itself clearly breaks; cite the memoryId. Something true of every option because of the requested dates (e.g. "works on Saturdays") is not a violation of an option — mention it in unknowns. Numeric limits (cost, time) are checked by code — do not list them.
 - unknowns: what you cannot judge because the memory or the option lacks information. Never invent facts about the person.
@@ -863,6 +921,7 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
 - Show how each person thinks: what they want first (their vote), why (their facts), what bothers them, what they are willing to give up. Disagree where the votes differ, then converge to the SHARED outcome (if it is a compromise, the person who gives something up says so in their own way).
 - 6-10 messages in total, each person at least once, natural order (not strictly round-robin). Each message max 160 characters, casual Greek chat, first person. No "Twin", "AI", "memory", "score" or numbers out of 100.
 - Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.
+- Talk about the plan as settled: no "να το επιβεβαιώσουμε", "να ελέγξουμε", "αν είναι ανοιχτό".
 - A twin NEVER accepts breaking its own strict limit on its owner's behalf. If the SHARED facts say the proposal does not cover someone's limit, the group still converges on that closest proposal; that person says plainly what is not covered and that they will decide themselves (with their own approval) — no "οκ, κάνω πίσω".`,
     user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
       .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${styleLine(b.style, 'unknown — write plainly')}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
@@ -903,7 +962,7 @@ export async function privateReply(persona: Persona, items: MemoryItem[], sample
 - Do not mention memory, sources, the app or AI. Only if asked directly whether you are a bot/AI, say honestly that you are ${persona.name}'s digital twin.
 - Be respectful; never share phone numbers, addresses or other people's private details.
 - usedMemoryIds: 0-3 ids of the memory items the reply relies on.`,
-    user: `STYLE: ${styleLine(persona.style, 'unknown — write plainly and casually')}
+    user: `${persona.age ? `AGE: ${persona.age}\n` : ''}STYLE: ${styleLine(persona.style, 'unknown — write plainly and casually')}
 WRITING SAMPLES:
 ${samples.map((s) => `- ${s}`).join('\n') || '- (none)'}
 
