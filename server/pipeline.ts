@@ -13,6 +13,7 @@ import { athensIso, formatWhen, localParts, parseIso, WEEKDAYS_EL } from '../sha
 import type { CandidateOption, Category, Decision, Evaluation, GroupRequest, Itinerary, MemoryItem, Persona, PersonaId, PipelineStep, RequestKind, StyleCard, TwinChat, TwinMessage, Venue } from '../shared/types';
 import { aiErrorReason, aiModel, analyzeSource, buildStyle, draftMessages, evaluateOptions, generateOptions, liveAi, negotiationChat, parseRequest, reviseItinerary, type TwinContext } from './ai';
 import { noEmit, type Emit } from './jobs';
+import { withRoutines } from './privateChat';
 import { retrieve } from './retrieval';
 import { loadTripFixtures, loadVenues, type TripFixture, type VenueEntry } from './seed';
 import { store } from './store';
@@ -452,8 +453,11 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
   for (const p of personas) {
     const r = await retrieve(`${req.title}. ${req.text}`, store.profile(p.id), store.requestItems(requestId, p.id), { kind: req.kind, category: req.category, ctx });
     methods.add(r.method);
-    twins.push({ persona: p, items: r.items, learned: learnedIds(r.items) });
-    for (const line of recall(r.items, ctx)) emit({ who: p.id, kind: 'think', text: line });
+    // An everyday plan must be judged against the person's weekly routine (classes, gym, work) even when
+    // the request's words did not retrieve it: "17:00 Δευτέρα" vs "γυμναστήριο 16:00–18:00".
+    const items = req.kind && LOCAL_KINDS.includes(req.kind) ? withRoutines(r.items, store.profile(p.id)) : r.items;
+    twins.push({ persona: p, items, learned: learnedIds(items) });
+    for (const line of recall(items, ctx)) emit({ who: p.id, kind: 'think', text: line });
   }
   const inputs = twins.flatMap((x) => x.items);
   steps.push({ key: 'retrieve', label: 'Ανάκτηση μνήμης', detail: `${inputs.length} αναμνήσεις από ${personas.length} Twins (${[...methods].map((m) => (m === 'embeddings' ? 'embeddings' : 'λέξεις-κλειδιά')).join(', ')} · μόνο ό,τι αφορά ${req.kind ? KIND_LABEL[req.kind].toLowerCase() : 'το αίτημα'})`, mode: methods.has('embeddings') ? 'ai' : 'code', ms: t() });
@@ -604,6 +608,14 @@ function recall(items: MemoryItem[], ctx: RequestContext): string[] {
   return out.slice(0, 3);
 }
 
+/** Drops a "θα το αποφασίσω εγώ με την έγκρισή μου" sentence (only for someone whose strict limit is covered). */
+export function withoutOwnCall(text: string): string {
+  return text
+    .replace(/[^.!;]*αποφασ[^.!;]*[εέ]γκρ[^.!;]*[.!;]?/g, '')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+}
+
 /** The twins' negotiation as a group DM, in each owner's voice (live) or from templates (demo). */
 async function twinChat(d: Decision, personas: Persona[]): Promise<TwinChat> {
   const req = store.request(d.requestId)!;
@@ -630,7 +642,10 @@ async function twinChat(d: Decision, personas: Persona[]): Promise<TwinChat> {
     });
     if (lines.length >= 3 && new Set(lines.map((l) => l.personaId)).size >= Math.min(2, personas.length)) {
       const style = (id: string) => personas.find((p) => p.id === id)?.style?.swaps;
-      return { lines: lines.map((l) => ({ ...l, text: applySwaps(l.text, style(l.personaId)) })), mode: 'live', note: dropped ? `${dropped} μήνυμα(τα) απορρίφθηκαν από τον έλεγχο γεγονότων.` : undefined };
+      // "Θα το αποφασίσω εγώ με την έγκρισή μου" belongs only to someone whose strict limit is not covered.
+      const fix = (l: { personaId: string; text: string }) => (breached.has(l.personaId) ? l.text : withoutOwnCall(l.text));
+      const kept = lines.map((l) => ({ ...l, text: fix(l) })).filter((l) => l.text.length > 1);
+      return { lines: kept.map((l) => ({ ...l, text: applySwaps(l.text, style(l.personaId)) })), mode: 'live', note: dropped ? `${dropped} μήνυμα(τα) απορρίφθηκαν από τον έλεγχο γεγονότων.` : undefined };
     }
     return { lines: templateChat(d, personas), mode: 'template', note: 'Το AI έγραψε μηνύματα με στοιχεία εκτός απόφασης — μπήκε πρότυπο.' };
   } catch (e) {

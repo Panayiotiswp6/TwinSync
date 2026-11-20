@@ -731,3 +731,11 @@ describe('the twins’ chat stays on the decision', () => {
     expect(perPerson[need!.personaId].some((f) => f.includes('ΧΩΡΙΣ-ΝΟΗΜΑ'))).toBe(false);
   });
 });
+
+describe('the chat says "with my own approval" only when a limit is not covered', () => {
+  it('drops the sentence from someone whose limits are all covered', async () => {
+    const { withoutOwnCall } = await import('../server/pipeline');
+    expect(withoutOwnCall('Η Sfika δεν είναι η πιο ξεκάθαρη επιλογή, αλλά συμφωνώ σ’ αυτήν. Θα το αποφασίσω εγώ με την έγκρισή μου')).toBe('Η Sfika δεν είναι η πιο ξεκάθαρη επιλογή, αλλά συμφωνώ σ’ αυτήν.');
+    expect(withoutOwnCall('Κλείνουμε Sfika, Σάββατο στις 21:00')).toBe('Κλείνουμε Sfika, Σάββατο στις 21:00');
+  });
+});
