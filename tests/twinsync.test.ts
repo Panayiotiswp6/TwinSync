@@ -675,3 +675,43 @@ describe('dialect words stand for one standard word only', () => {
     if (kouzaris) expect(kouzaris.style?.swaps?.[0]?.to).toBe('τζε');
   });
 });
+
+describe('group edits (demo mode, no network)', () => {
+  beforeEach(() => store.reset());
+
+  it('a named place is the only option: the twins say if it fits; the final proposal can show its booking phone', async () => {
+    const { decision, request } = await createRequest('Ποτό την Παρασκευή το βράδυ;', ['pan', 'pant', 'geo'], {}, undefined, { pick: 'The Clumsies' });
+    expect(request.pick).toBe('The Clumsies');
+    expect(decision.options).toHaveLength(1);
+    expect(decision.options[0].venue?.name).toBe('The Clumsies');
+    expect(decision.options[0].venue?.phone).toMatch(/^\+30 2\d{2} \d{3} \d{4}$/);
+    expect(decision.outcome.chosenOptionId).toBe(decision.options[0].id);
+    expect(decision.evaluations.filter((e) => e.optionId === decision.options[0].id)).toHaveLength(3);
+  });
+
+  it('trip plan: struck-out activities leave, the rest stays; confirming locks it', async () => {
+    const { editItinerary } = await import('../server/pipeline');
+    const { decision } = await createRequest('Τετραήμερο στο εξωτερικό 4–7 Δεκεμβρίου', ['pan', 'pant', 'geo'], {});
+    const o = decision.options.find((x) => x.id === decision.outcome.chosenOptionId)!;
+    const before = o.itinerary!.days.map((d) => d.slots.map((x) => x.title));
+    const day = o.itinerary!.days[1];
+    const gone = day.slots[0].title;
+    await editItinerary(decision.id, o.id, [{ date: day.date, index: 0 }]);
+    const after = store.decision(decision.id)!.options.find((x) => x.id === o.id)!.itinerary!;
+    expect(after.days[1].slots.map((x) => x.title)).toEqual(before[1].filter((t) => t !== gone));
+    expect(after.days[0].slots.map((x) => x.title)).toEqual(before[0]);
+    expect(after.confirmed).toBeFalsy();
+    await editItinerary(decision.id, o.id, []);
+    expect(store.decision(decision.id)!.options.find((x) => x.id === o.id)!.itinerary!.confirmed).toBe(true);
+    await expect(editItinerary(decision.id, o.id, [{ date: day.date, index: 0 }])).rejects.toThrow();
+  });
+
+  it('a corrected chat line becomes that owner’s wish for this plan, then the twins decide again', async () => {
+    const { chatEdits } = await import('../server/pipeline');
+    const { request, decision } = await createRequest('Πού να φάμε την Παρασκευή;', ['pan', 'pant', 'geo'], {});
+    const r = await chatEdits(request.id, [{ personaId: 'geo', text: 'Εγώ ως 20€ το πολύ για φαγητό' }]);
+    expect(r.decision.id).not.toBe(decision.id);
+    const wish = store.requestItems(request.id, 'geo').find((m) => m.rule?.metric === 'max_cost');
+    expect(wish?.rule?.value).toBe('20');
+  });
+});

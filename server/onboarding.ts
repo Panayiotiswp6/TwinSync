@@ -17,8 +17,10 @@ import { store } from './store';
 
 export async function onboard(body: OnboardBody, emit: Emit) {
   const a = body.answers;
-  const bio = answerText(SECTIONS[0].questions[0], a.me_friend).slice(0, 200);
+  const bio = answerText(SECTIONS[0].questions.find((q) => q.id === 'me_friend')!, a.me_friend).slice(0, 200);
   const persona = store.addPersona(body.name.trim(), bio, body.emoji || '✨');
+  const age = Number(String(a.me_age ?? '').match(/\d{1,3}/)?.[0]);
+  if (age >= 10 && age <= 110) store.updatePersona(persona.id, { age });
   emit({ who: persona.id, kind: 'join', text: `Γεια! Είμαι το Twin ${persona.name} — μαθαίνω από τις απαντήσεις σου.` });
 
   // 1. Sources, one per section, with the exact Q/A lines.

@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronUp, Sparkles } from 'lucide-react';
+import { ChevronDown, ChevronUp, MapPin, Sparkles } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, type AppState } from '../api';
 import { go } from './Shell';
@@ -52,6 +52,7 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
   const [text, setText] = useState('');
   const [participants, setParticipants] = useState<string[]>(state.personas.slice(0, 4).map((p) => p.id));
   const [wishes, setWishes] = useState<Record<string, string>>({});
+  const [pick, setPick] = useState('');
   const [showWishes, setShowWishes] = useState(!compact);
   const [busy, setBusy] = useState(false);
   const [city, setCity] = useState(readCity);
@@ -67,7 +68,7 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
       } catch {
         /* remembered city is only a convenience */
       }
-      setJobId((await api.createRequestAsync(text, participants, wishes, city.trim() || 'Αθήνα', !city.trim())).jobId);
+      setJobId((await api.createRequestAsync(text, participants, wishes, city.trim() || 'Αθήνα', !city.trim(), pick.trim() || undefined)).jobId);
     } catch (e) {
       setErr((e as Error).message);
       setBusy(false);
@@ -134,6 +135,10 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
         <label className="city-field small" title="Πού βρίσκεται η παρέα. Αν το γράψει το αίτημα («είμαστε στη Θεσσαλονίκη»), μετράει εκείνο.">
           📍
           <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Αθήνα (παραδοχή)" aria-label="Πόλη της παρέας" />
+        </label>
+        <label className="city-field pick-field small" title="Προαιρετικό: ένα συγκεκριμένο μέρος που θέλετε να ελέγξουν τα Twins — αν ταιριάζει σε όλους και με ποιον αντικρούεται.">
+          <MapPin size={14} />
+          <input value={pick} onChange={(e) => setPick(e.target.value)} placeholder="Συγκεκριμένο μέρος; π.χ. The Clumsies" aria-label="Συγκεκριμένο μέρος για έλεγχο" />
         </label>
         <button className="link-btn small" onClick={() => setShowWishes((s) => !s)}>
           {showWishes ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Προσωρινές επιθυμίες

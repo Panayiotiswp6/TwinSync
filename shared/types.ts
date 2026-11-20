@@ -35,6 +35,8 @@ export interface Persona {
   colors: [string, string];
   emoji: string;
   bio: string;
+  /** Age in years (from the interview). */
+  age?: number;
   style: StyleCard | null;
   synthetic: boolean;
   /** Team member shipped with the app (server/data/team): cannot be deleted. */
@@ -137,6 +139,8 @@ export interface GroupRequest {
   where?: Exclude<Where, 'any'>;
   /** Trip destination if named. */
   place?: string;
+  /** A specific place the group wants checked ("θα έκανε το Clumsies για βραδινή έξοδο;"): the only option. */
+  pick?: string;
   kind?: RequestKind;
   /** City the group is in / starts from. */
   city?: string;
@@ -169,6 +173,8 @@ export interface Venue {
   source?: string;
   url?: string;
   checkedAt?: string;
+  /** Public phone for bookings (only places that take reservations). */
+  phone?: string;
 }
 
 /** Why a proposal (or a slot of a plan) fits: tied to one twin's memory item. */
@@ -202,6 +208,8 @@ export interface Itinerary {
   days: { date: string; title: string; slots: PlanSlot[] }[];
   /** EUR per person. */
   cost: { transport: number; stay: number; food: number; activities: number; total: number };
+  /** The group confirmed the plan as it is: no more edits. */
+  confirmed?: boolean;
 }
 export interface WishCoverage {
   personaId: PersonaId;

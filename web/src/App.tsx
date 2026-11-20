@@ -5,7 +5,6 @@ import { Composer } from './components/Composer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Shell, parseRoute, type Route } from './components/Shell';
 import { SourceDrawer } from './components/SourceDrawer';
-import { Eval } from './views/Eval';
 import { Home } from './views/Home';
 import { Onboard } from './views/Onboard';
 import { PrivateChat } from './views/PrivateChat';
@@ -69,7 +68,6 @@ export function App() {
       {route.name === 'twins' && <TwinsList state={state} onState={setState} />}
       {route.name === 'twin' && <Profile key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'request' && <Thread key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
-      {route.name === 'eval' && <Eval state={state} onState={refresh} />}
       {route.name === 'chat' && <PrivateChat key={route.id ?? 'pick'} id={route.id} state={state} onOpen={setSource} />}
       </ErrorBoundary>
       <ErrorBoundary resetKey={source?.sourceId ?? ''}>

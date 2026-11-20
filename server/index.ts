@@ -8,7 +8,7 @@ import { evaluationReport, holdoutLive } from './evaluation';
 import { getJob, startJob } from './jobs';
 import { onboard } from './onboarding';
 import { privateChat } from './privateChat';
-import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, learnFromDecision, refreshStyle, relaxLimit, removeItemAndRerun, runDecision, setLimit } from './pipeline';
+import { addWish, analyzeAndStore, approveMessage, chatEdits, createRequest, editItinerary, groupMessages, importPackage, learnFromDecision, refreshStyle, relaxLimit, removeItemAndRerun, runDecision, setLimit } from './pipeline';
 import { hasTeamSeed, parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
 
@@ -171,9 +171,10 @@ app.post(
         wishes: z.record(z.string(), z.string().max(1000)).default({}),
         city: z.string().trim().max(40).optional(),
         cityAssumed: z.boolean().optional(),
+        pick: z.string().trim().max(80).optional(),
       })
       .parse(req.body);
-    const form = { city: b.city, cityAssumed: b.cityAssumed };
+    const form = { city: b.city, cityAssumed: b.cityAssumed, pick: b.pick };
     const participants = b.participants.filter((id) => store.persona(id));
     if (participants.length < 2) return res.status(400).json({ error: 'Χρειάζονται τουλάχιστον δύο Twins' });
     if (req.query.async === '1') {
@@ -273,7 +274,28 @@ app.post(
   }),
 );
 
+app.post(
+  '/api/requests/:id/chat-edits',
+  wrap(async (req, res) => {
+    const b = z.object({ edits: z.array(z.object({ personaId: z.string(), text: z.string().trim().min(2).max(300) })).min(1).max(20) }).parse(req.body);
+    if (!store.request(req.params.id)) return res.status(404).json({ error: 'not found' });
+    const job = startJob('request', async (emit) => {
+      const r = await chatEdits(req.params.id, b.edits, emit);
+      return { requestId: r.decision.requestId, decisionId: r.decision.id };
+    });
+    res.json({ jobId: job.id });
+  }),
+);
+
 // ---- Decisions ----
+app.post(
+  '/api/decisions/:id/itinerary',
+  wrap(async (req, res) => {
+    const b = z.object({ optionId: z.string(), remove: z.array(z.object({ date: z.string().max(10), index: z.number().int().min(0).max(20) })).max(40) }).parse(req.body);
+    const r = await editItinerary(req.params.id, b.optionId, b.remove);
+    res.json({ mode: r.mode, state: snapshot() });
+  }),
+);
 app.post(
   '/api/decisions/:id/approval',
   wrap((req, res) => {

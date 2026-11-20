@@ -59,7 +59,7 @@ function OptionCard({ o, d, people, onOpen, memory }: { o: CandidateOption; d: D
           ) : r.warnings.length ? (
             <span className="tiny warn-text">⚠ {r.warnings.length === 1 ? '1 επισήμανση' : `${r.warnings.length} επισημάνσεις`}</span>
           ) : (
-            <span className="tiny muted">{o.origin === 'ai' ? 'εκτίμηση AI, όχι κράτηση' : o.synthetic ? 'συνθετικό demo' : 'επιμελημένος κατάλογος'}</span>
+            <span className="tiny muted">{o.synthetic ? 'συνθετικό demo' : o.venue?.catalogId ? 'από τον κατάλογο' : ''}</span>
           )}
           <InfoTip label={`Λεπτομέρειες: ${o.title}`} tone={r.violations.length ? 'bad' : r.warnings.length ? 'warn' : undefined} wide>
             {r.violations.map((v) => (
@@ -77,13 +77,54 @@ function OptionCard({ o, d, people, onOpen, memory }: { o: CandidateOption; d: D
               </p>
             ))}
             <Checks checks={o.checks?.filter((c) => c.field === 'existence' || c.field === 'program')} compact />
-            <p className="tip-note muted">
-              {o.costNote} {o.origin === 'ai' ? '· εκτίμηση AI, όχι κράτηση' : o.synthetic ? '· συνθετικό demo' : '· επιμελημένος κατάλογος'}
-            </p>
+            {o.costNote && <p className="tip-note muted">{o.costNote}</p>}
           </InfoTip>
         </div>
       </div>
     </article>
+  );
+}
+
+/** "Θα έκανε το Clumsies;": for each twin, does the named place fit — and if not, why. */
+function PickVerdict({ d, o, people }: { d: Decision; o: CandidateOption; people: Persona[] }) {
+  const r = d.outcome.results.find((x) => x.optionId === o.id);
+  const rows = people.map((p) => {
+    const ev = d.evaluations.find((e) => e.personaId === p.id && e.optionId === o.id);
+    const viol = r?.violations.filter((v) => v.personaId === p.id) ?? [];
+    const stance = d.outcome.concessions.find((c) => c.personaId === p.id)?.stance ?? 'agree';
+    const fits = !viol.length && stance !== 'object';
+    const against = ev?.reasons.find((x) => x.effect !== 'for')?.text;
+    const pro = ev?.reasons.find((x) => x.effect === 'for')?.text;
+    const why = viol[0]?.text ?? (stance === 'agree' ? (ev?.verdict || pro) : against ?? ev?.verdict) ?? '';
+    return { p, fits, mild: fits && stance === 'agree_with_concession', why, score: ev?.score ?? r?.scores[p.id] ?? 0 };
+  });
+  const clash = rows.filter((x) => !x.fits);
+  return (
+    <div className={`pick-verdict ${clash.length ? 'clash' : 'fit'}`}>
+      <p className="pick-head">
+        {clash.length ? (
+          <>
+            <X size={16} /> Δεν ταιριάζει σε όλους — αντικρούεται με: <b>{clash.map((x) => x.p.name.split(' ')[0]).join(', ')}</b>
+          </>
+        ) : (
+          <>
+            <Check size={16} /> Ταιριάζει σε όλη την παρέα
+          </>
+        )}
+      </p>
+      <ul className="plain">
+        {rows.map((x) => (
+          <li key={x.p.id} className="pick-row">
+            <Avatar persona={x.p} size={30} />
+            <div>
+              <b>{x.p.name}</b> <Badge tone={x.fits ? (x.mild ? 'warn' : 'good') : 'bad'}>{x.fits ? (x.mild ? 'Με παραχώρηση' : 'Ταιριάζει') : 'Δεν ταιριάζει'}</Badge>
+              {x.why && <p className="small muted">{x.why}</p>}
+            </div>
+            <ScoreRing value={x.score} size={38} />
+          </li>
+        ))}
+      </ul>
+    </div>
   );
 }
 
@@ -173,102 +214,6 @@ function Wishes({ req, d, people, state, onState, onOpen }: { req: AppState['req
   );
 }
 
-function Messages({ d, people, state, onState, onOpen }: { d: Decision; people: Persona[]; state: AppState; onState: (s: AppState) => void; onOpen: OpenSource }) {
-  const [busy, setBusy] = useState(false);
-  const [edit, setEdit] = useState<Record<string, string>>({});
-  const run = async (fn: () => Promise<AppState>) => {
-    setBusy(true);
-    try {
-      onState(await fn());
-    } finally {
-      setBusy(false);
-    }
-  };
-  return (
-    <section className="card chat">
-      <header className="chat-head">
-        <h3>Τα Twins γράφουν στο group</h3>
-        {d.messages && state.status.aiMode === 'live' && (
-          <button className="btn btn-sm" disabled={busy} onClick={() => run(() => api.messages(d.id, true))}>
-            <RefreshCw size={14} /> Ξαναγράψε
-          </button>
-        )}
-      </header>
-      {!d.messages ? (
-        <div className="chat-empty">
-          <p className="small muted">Κάθε Twin γράφει ένα προσχέδιο με το ύφος του κατόχου του — μόνο με γεγονότα της απόφασης. Δεν στέλνεται τίποτα χωρίς έγκριση.</p>
-          <button className="btn btn-brand" disabled={busy} onClick={() => run(() => api.messages(d.id))}>
-            {busy ? <Spinner label="Γράφουν…" /> : <><Sparkles size={15} /> Γράψε τα μηνύματα</>}
-          </button>
-        </div>
-      ) : (
-        <>
-          {d.messagesNote && <p className="notice small">{d.messagesNote}</p>}
-          <ul className="plain bubbles">
-            {d.messages.map((m) => {
-              const p = people.find((x) => x.id === m.personaId)!;
-              const editing = edit[m.personaId] !== undefined;
-              return (
-                <li key={m.personaId} className="bubble-row">
-                  <Avatar persona={p} size={34} />
-                  <div className="bubble-col">
-                    <span className="tiny muted">
-                      {p.name} · {m.mode === 'live' ? 'AI με το ύφος του' : 'πρότυπο'} · {m.status === 'approved' ? '✓ εγκρίθηκε' : 'προσχέδιο'}
-                    </span>
-                    {editing ? (
-                      <textarea className="input" rows={2} value={edit[m.personaId]} onChange={(e) => setEdit({ ...edit, [m.personaId]: e.target.value })} />
-                    ) : (
-                      <p className="bubble">
-                        {m.text}
-                      </p>
-                    )}
-                    <div className="bubble-actions">
-                      {m.status !== 'approved' && (
-                        <>
-                          <button
-                            className="btn btn-sm btn-brand"
-                            disabled={busy}
-                            onClick={() =>
-                              run(async () => {
-                                const s = await api.approveMessage(d.id, m.personaId, edit[m.personaId]);
-                                setEdit(({ [m.personaId]: _drop, ...rest }) => rest);
-                                return s;
-                              })
-                            }
-                          >
-                            <Check size={14} /> {editing ? 'Αποθήκευση & έγκριση' : 'Εγκρίνω'}
-                          </button>
-                          {!editing && (
-                            <button className="btn btn-sm" onClick={() => setEdit({ ...edit, [m.personaId]: m.text })}>
-                              Αλλαγή
-                            </button>
-                          )}
-                        </>
-                      )}
-                      <InfoTip label="Πού βασίστηκε" tone={m.guardNote ? 'warn' : undefined}>
-                        {m.guardNote && <p className="tip-note warn-text">⚠ {m.guardNote}</p>}
-                        <p className="infotip-title">Γεγονότα που χρησιμοποίησε</p>
-                        <ul className="plain tip-list">
-                          {m.facts.map((f) => (
-                            <li key={f}>{f}</li>
-                          ))}
-                        </ul>
-                        <p className="tip-note">
-                          Ύφος από: <Cite refs={m.styleSourceIds.map((id) => ({ sourceId: id, quote: '' }))} onOpen={onOpen} />
-                        </p>
-                      </InfoTip>
-                    </div>
-                  </div>
-                </li>
-              );
-            })}
-          </ul>
-        </>
-      )}
-    </section>
-  );
-}
-
 export function Thread({ id, state, onState, onOpen }: { id: string; state: AppState; onState: (s: AppState) => void; onOpen: OpenSource }) {
   const req = state.requests.find((r) => r.id === id);
   const decisions = state.decisions.filter((d) => d.requestId === id);
@@ -290,6 +235,17 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
     } catch (e) {
       setErr((e as Error).message);
     } finally {
+      setBusy(null);
+    }
+  };
+
+  const regenerateFromChat = async (edits: { personaId: string; text: string }[]) => {
+    setBusy('chat');
+    setErr(null);
+    try {
+      setJob((await api.chatEdits(req.id, edits)).jobId);
+    } catch (e) {
+      setErr((e as Error).message);
       setBusy(null);
     }
   };
@@ -385,7 +341,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
             <span className="hero-emoji">{chosen.emoji}</span>
             <div>
               <span className="eyebrow light meta-row">
-                {d.outcome.status === 'compromise' ? (d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα — η πιο κοντινή πρόταση' : 'Η πιο κοντινή πρόταση για όλους') : 'Η κοινή πρόταση των Twins'}
+                {req.pick ? 'Η επιλογή σας — τι λένε τα Twins' : d.outcome.status === 'compromise' ? (d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα — η πιο κοντινή πρόταση' : 'Η πιο κοντινή πρόταση για όλους') : 'Η κοινή πρόταση των Twins'}
                 <InfoTip size={13} title="Πώς κατέληξαν" label="Πώς κατέληξαν" wide>
                   <ul className="plain tip-list">
                     {d.outcome.rationale.map((r) => (
@@ -398,11 +354,11 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                 </InfoTip>
               </span>
               <h2>{chosen.venue?.name ?? chosen.title}</h2>
-              <PlanHead o={chosen} />
+              <PlanHead o={chosen} booking />
             </div>
           </div>
           <div className="hero-body">
-            {d.outcome.status === 'compromise' && (
+            {d.outcome.status === 'compromise' && !req.pick && (
               <div className="not-covered">
                 <p className="small meta-row">
                   <b>Δεν καλύπτει πλήρως όλους.</b>
@@ -442,7 +398,9 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                 )}
               </div>
             )}
-            <PlanDetails o={chosen} people={people} memory={d.inputs} onOpen={onOpen} />
+            {req.pick && <PickVerdict d={d} o={chosen} people={people} />}
+            <PlanDetails o={chosen} people={people} memory={d.inputs} onOpen={onOpen} edit={{ decisionId: d.id, onState }} />
+            {!req.pick && (
             <div className="concessions">
               {d.outcome.concessions.map((c) => {
                 const p = people.find((x) => x.id === c.personaId)!;
@@ -469,6 +427,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                 );
               })}
             </div>
+            )}
             <div className="approvals">
               {people.map((p) => {
                 const a = d.approvals[p.id];
@@ -517,7 +476,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
         </section>
       )}
 
-      {!busy && <TwinChatView chat={d.chat} people={people} />}
+      {!busy && <TwinChatView chat={d.chat} people={people} onRegenerate={regenerateFromChat} />}
 
       <div className="thread-actions">
         <button className="btn" disabled={!!busy} onClick={() => rerun(false)}>
@@ -528,62 +487,6 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
         </button>
         {err && <span className="error">{err}</span>}
       </div>
-
-      <section>
-        <h3 className="sec-title">Τι ψηφίζει κάθε Twin</h3>
-        <div className="votes">
-          {d.outcome.votes.map((v) => {
-            const p = people.find((x) => x.id === v.personaId)!;
-            const o = d.options.find((x) => x.id === v.optionId);
-            return (
-              <article key={v.personaId} className="vote card">
-                <header className="vote-head">
-                  <Avatar persona={p} size={40} ring />
-                  <div>
-                    <b>{p.name}</b>
-                    <div className="tiny muted">το Twin ψηφίζει</div>
-                    <div className="vote-option">
-                      {o ? (
-                        <>
-                          {o.emoji} {o.title}
-                        </>
-                      ) : (
-                        'καμία επιλογή'
-                      )}
-                    </div>
-                  </div>
-                  <ScoreRing value={v.score} />
-                </header>
-                {v.verdict && <p className="verdict">“{v.verdict}”</p>}
-                <div className="meta-row tiny muted">
-                  <span>
-                    {v.reasons.filter((r) => r.effect === 'for').length} υπέρ · {v.reasons.filter((r) => r.effect !== 'for').length} κατά · βεβαιότητα {{ low: 'χαμηλή', medium: 'μέτρια', high: 'υψηλή' }[v.confidence]}
-                  </span>
-                  <InfoTip title={`Γιατί — ${p.name}`} label={`Γιατί ψηφίζει έτσι: ${p.name}`} wide>
-                    <ul className="plain tip-list">
-                      {v.reasons.map((r, i) => (
-                        <li key={i} className={r.effect === 'for' ? '' : 'muted'}>
-                          {r.effect === 'for' ? '＋' : '－'} {r.text} <Cite refs={refsOf(d.inputs, r.memoryId)} onOpen={onOpen} />
-                        </li>
-                      ))}
-                    </ul>
-                    {v.unknowns.length > 0 && (
-                      <>
-                        <p className="infotip-title">Αβεβαιότητες</p>
-                        <ul className="plain tip-list muted">
-                          {v.unknowns.map((u) => (
-                            <li key={u}>? {u}</li>
-                          ))}
-                        </ul>
-                      </>
-                    )}
-                  </InfoTip>
-                </div>
-              </article>
-            );
-          })}
-        </div>
-      </section>
 
       <section>
         <h3 className="sec-title meta-row">
@@ -617,8 +520,6 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           ))}
         </div>
       </section>
-
-      <Messages d={d} people={people} state={state} onState={onState} onOpen={onOpen} />
 
       <p className="tiny muted center">
         {d.id} · {d.aiModel ? `AI: ${d.aiModel}` : 'demo mode'} · {d.inputs.length} αναμνήσεις χρησιμοποιήθηκαν ·{' '}

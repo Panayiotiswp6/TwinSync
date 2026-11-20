@@ -140,6 +140,7 @@ export interface VenueEntry {
   url: string;
   checkedAt: string;
   features: string[];
+  phone?: string;
 }
 
 export function loadVenues(): VenueEntry[] {
