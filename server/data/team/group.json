@@ -395,7 +395,7 @@
    "kind": "note",
    "title": "Συνέντευξη · Φαγητό",
    "date": "2026-11-20T14:58:54.229Z",
-   "text": "Ε: Τι δεν τρως σε καμία περίπτωση;\nΑ: Τίποτα από αυτά\nΕ: Αν διάλεγες εσύ πού θα φάει όλη η παρέα, τι θα διάλεγες και γιατί;\nΑ: ιταλικό επειδη μαρέσουν τα μακαρόνια και η πίτσα\nΕ: Τι σου χαλάει ένα μαγαζί;\nΑ: μικρές μερίδες για ακριβό φαγητό, αργή εξυπηρέτηση, αγενές προσωπικό",
+   "text": "Ε: Τι δεν τρως σε καμία περίπτωση;\nΑ: Τίποτα από αυτά\nΕ: Αλλεργίες ή κάτι άλλο που πρέπει να ξέρει η παρέα;\nΑ: Αλλεργια στα γαλακτοκομικά\nΕ: Αν διάλεγες εσύ πού θα φάει όλη η παρέα, τι θα διάλεγες και γιατί;\nΑ: ιταλικό επειδη μαρέσουν τα μακαρόνια και η πίτσα\nΕ: Τι σου χαλάει ένα μαγαζί;\nΑ: μικρές μερίδες για ακριβό φαγητό, αργή εξυπηρέτηση, αγενές προσωπικό",
    "synthetic": false,
    "analyzed": true
   },
@@ -450,12 +450,32 @@
    "analyzed": true
   },
   {
+   "id": "src-grigoris-me-supp",
+   "personaId": "grigoris",
+   "kind": "note",
+   "title": "Συνέντευξη · Εσύ (συμπλήρωση)",
+   "date": "2026-11-20T16:00:36.480Z",
+   "text": "Ε: Πώς κινείσαι στην πόλη;\nΑ: Αυτοκίνητο (οδηγώ), Ταξί άμα είναι ανάγκη — μένω μακριά από σταθμό μετρό",
+   "synthetic": false,
+   "analyzed": true
+  },
+  {
    "id": "src-grigoris-travel-supp",
    "personaId": "grigoris",
    "kind": "note",
    "title": "Συνέντευξη · Ταξίδια (συμπλήρωση)",
-   "date": "2026-11-20T15:52:45.780Z",
-   "text": "Ε: Χώρες (ή μέρη) που έχεις πάει, από την αγαπημένη σου προς τα κάτω — και γιατί;\nΑ: 1. Αυστρία — έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό\n2. Ελβετία\n3. Ιταλία\n4. Γαλλία\n5. Αγγλία\n6. Βουλγαρία\n7. Γερμανία\nΕ: Θα ξαναπήγαινες σε μέρος που έχεις ήδη πάει;\nΑ: Μόνο στα αγαπημένα μου — εννοείται, άμα μου άρεσε το μέρος, π.χ. στην Αυστρία έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό",
+   "date": "2026-11-20T16:00:36.480Z",
+   "text": "Ε: Χώρες (ή μέρη) που έχεις πάει, από την αγαπημένη σου προς τα κάτω — και γιατί;\nΑ: 1. Αυστρία — έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό\n2. Ελβετία\n3. Ιταλία\n4. Γαλλία\n5. Αγγλία\n6. Βουλγαρία\n7. Γερμανία\nΕ: Θα ξαναπήγαινες σε μέρος που έχεις ήδη πάει;\nΑ: Μόνο στα αγαπημένα μου — εννοείται, άμα μου άρεσε το μέρος, π.χ. στην Αυστρία έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό\nΕ: Τρία μέρη που θέλεις οπωσδήποτε να πας και γιατί;\nΑ: Ιαπωνία, Αμερική, Ανταρκτική — επειδή δεν έχω βγει ποτέ εκτός Ευρώπης και θέλω να γνωρίσω άλλους πολιτισμούς\nΕ: Τι ρυθμό θέλεις σε ένα ταξίδι;\nΑ: Γεμάτο πρόγραμμα, να δούμε τα πάντα — προς την ισορροπία: να μην χάνουμε άπειρο χρόνο στη χαλάρωση και στην ξεκούραση για να προλάβουμε δραστηριότητες, αλλά να μην κοιμόμαστε μόνο 3 ώρες τη μέρα, αυτό το θεωρώ υπερβολή\nΕ: Τι καιρό προτιμάς στις διακοπές;\nΑ: Ζέστη & ήλιος",
+   "synthetic": false,
+   "analyzed": true
+  },
+  {
+   "id": "src-grigoris-music-supp",
+   "personaId": "grigoris",
+   "kind": "note",
+   "title": "Συνέντευξη · Μουσική (συμπλήρωση)",
+   "date": "2026-11-20T16:00:36.480Z",
+   "text": "Ε: Τι ακούς;\nΑ: Ελληνικά λαϊκά / μπουζούκια, Ελληνικό rap / trap, Pop (mainstream)\nΕ: Αγαπημένοι καλλιτέχνες ή συγκροτήματα;\nΑ: Light, Snik, Βίσση, Οικονομόπουλος, Φερρής, Drake, Travis Scott\nΕ: Πόσο συχνά πας σε live, συναυλίες ή μπουζούκια;\nΑ: Σπάνια — έχω πάει συνολικά 3 φορές\nΕ: Τι μουσική δεν αντέχεις;\nΑ: Βαριά μπουζούκια όπως Μακρόπουλος, Πλούταρχος",
    "synthetic": false,
    "analyzed": true
   }
@@ -6029,7 +6049,40 @@
    }
   },
   {
-   "id": "mem-grigoris-892f46e6",
+   "id": "mem-grigoris-c3f180a1",
+   "personaId": "grigoris",
+   "kind": "fact",
+   "statement": "Στην πόλη κινείται με: αυτοκίνητο (οδηγώ), ταξί άμα είναι ανάγκη — μένω μακριά από σταθμό μετρό",
+   "domain": "travel",
+   "polarity": "neutral",
+   "strength": 0.5,
+   "hard": false,
+   "categories": [
+    "entertainment",
+    "food"
+   ],
+   "keywords": [],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-me-supp",
+     "quote": "Αυτοκίνητο (οδηγώ), Ταξί άμα είναι ανάγκη — μένω μακριά από σταθμό μετρό"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "44e3c862-8580-47f6-866f-cd928a887fd1",
+    "type": "fact",
+    "sourceTrust": "owner",
+    "contentHash": "bb12fea1942c140d8ef48f391a44b57c2ee2dd0933495242d15585e6400713b5",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-0d281735",
    "personaId": "grigoris",
    "kind": "preference",
    "statement": "Μέρη που έχει πάει, από το αγαπημένο: 1. Αυστρία (έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό), 2. Ελβετία, 3. Ιταλία",
@@ -6057,9 +6110,9 @@
    "status": "confirmed",
    "origin": "owner",
    "scope": "profile",
-   "createdAt": "2026-11-20T15:52:45.780Z",
+   "createdAt": "2026-11-20T16:00:36.480Z",
    "memory": {
-    "id": "d0c6407f-59b4-403d-a11d-54b5c4239f18",
+    "id": "3b1c69ac-6f28-4ced-ad46-17cc6787b165",
     "type": "preference",
     "sourceTrust": "owner",
     "contentHash": "a7b0a752e25efd5f26cd0325985e0629847ec30d85e03e16774b0478ddd60099",
@@ -6067,7 +6120,7 @@
    }
   },
   {
-   "id": "mem-grigoris-87da7e4f",
+   "id": "mem-grigoris-1e86b6c0",
    "personaId": "grigoris",
    "kind": "preference",
    "statement": "Θα ξαναπήγαινε μόνο στα αγαπημένα του/της — προτιμά νέα μέρη αντί για: Ιταλία, Γαλλία, Αγγλία, Βουλγαρία, Γερμανία",
@@ -6095,9 +6148,9 @@
    "status": "confirmed",
    "origin": "owner",
    "scope": "profile",
-   "createdAt": "2026-11-20T15:52:45.780Z",
+   "createdAt": "2026-11-20T16:00:36.480Z",
    "memory": {
-    "id": "1a70b1d8-431e-46cb-a6d5-40a9fa5a1cfe",
+    "id": "12692084-21dc-4319-95ff-cac6756365a5",
     "type": "preference",
     "sourceTrust": "owner",
     "contentHash": "3ac08856fca04e28201444b07ecd7f303a94fb10ae12f19e6de4e1386a6f2561",
@@ -6105,10 +6158,117 @@
    }
   },
   {
-   "id": "mem-grigoris-2fba511b",
+   "id": "mem-grigoris-37567c75",
    "personaId": "grigoris",
    "kind": "preference",
-   "statement": "Αγαπά την Αυστρία ως ταξιδιωτικό προορισμό, κυρίως για το σκι και τα χιονοδρομικά της.",
+   "statement": "Θέλει οπωσδήποτε να πάει: Ιαπωνία, Αμερική, Ανταρκτική — επειδή δεν έχω βγει ποτέ εκτός Ευρώπης και θέλω να γνωρίσω άλλους πολιτισμούς",
+   "domain": "travel",
+   "polarity": "likes",
+   "strength": 0.9,
+   "hard": false,
+   "categories": [
+    "trip"
+   ],
+   "keywords": [
+    "Ιαπωνία",
+    "Αμερική",
+    "Ανταρκτική"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "Ιαπωνία, Αμερική, Ανταρκτική — επειδή δεν έχω βγει ποτέ εκτός Ευρώπης και θέλω να γνωρίσω άλλους πολιτισμούς"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "497f58b7-a685-4284-b549-f5a0312acf8d",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "e1d13751b627ab69b30900a31d831f5086387240b1906b004e123c1a10288f36",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-59876645",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Ρυθμός ταξιδιού: γεμάτο πρόγραμμα, να δούμε τα πάντα — προς την ισορροπία: να μην χάνουμε άπειρο χρόνο στη χαλάρωση και στην ξεκούραση για να προλάβουμε δραστηριότητες, αλλά να μην κοιμόμαστε μόνο 3 ώρες τη μέρα, αυτό το θεωρώ υπερβολή",
+   "domain": "travel",
+   "polarity": "neutral",
+   "strength": 0.7,
+   "hard": false,
+   "categories": [
+    "trip"
+   ],
+   "keywords": [
+    "γεμάτο πρόγραμμα",
+    "αξιοθέατα"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "Γεμάτο πρόγραμμα, να δούμε τα πάντα — προς την ισορροπία: να μην χάνουμε άπειρο χρόνο στη χαλάρωση και στην ξεκούραση για να προλάβουμε δραστηριότητες, αλλά να μην κοιμόμαστε μόνο 3 ώρες τη μέρα, αυτό το θεωρώ υπερβολή"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "4ed61948-7127-4da1-ac1f-1564caa21d93",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "7648bae2c7b319f4d671c7a8c9376ef336efbdff68b39bcda051ee157144bd47",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-d9fdfd8a",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Στις διακοπές προτιμά: ζέστη & ήλιος",
+   "domain": "travel",
+   "polarity": "likes",
+   "strength": 0.6,
+   "hard": false,
+   "categories": [
+    "trip"
+   ],
+   "keywords": [
+    "ζέστη",
+    "ήλιος",
+    "θάλασσα"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "Ζέστη & ήλιος"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "c19e77d6-5b33-405d-840b-5f7ee4bc306b",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "90f4ceaa31d81b6892f5864d16ae24182e5c21e0acc270e8025abaaa2e1be04c",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-e3bd2fb3",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Η Αυστρία είναι ο αγαπημένος του προορισμός, κυρίως για σκι και τα χιονοδρομικά της.",
    "domain": "travel",
    "polarity": "likes",
    "strength": 0.9,
@@ -6132,16 +6292,325 @@
      "quote": "Αυστρία — έχω πάει δύο φορές επειδή κάνω σκι και είχε φανταστικό χιονοδρομικό"
     }
    ],
+   "confidence": 0.99,
+   "status": "confirmed",
+   "origin": "ai",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "b9a96255-8d08-4c4f-9fa6-011ae1b98e26",
+    "type": "preference",
+    "sourceTrust": "verified",
+    "contentHash": "694cb4c812993ed6a5f41c1410a441385f8cfb346fb0e20ebc4b637c0987cb24",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-e2a5b5c4",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Θέλει να γνωρίσει άλλους πολιτισμούς και γι’ αυτό θέλει να επισκεφθεί την Ιαπωνία, την Αμερική και την Ανταρκτική.",
+   "domain": "travel",
+   "polarity": "likes",
+   "strength": 0.9,
+   "hard": false,
+   "context": {
+    "where": "abroad",
+    "days": 0
+   },
+   "categories": [
+    "trip"
+   ],
+   "keywords": [
+    "Ιαπωνία",
+    "Αμερική",
+    "Ανταρκτική",
+    "άλλοι πολιτισμοί"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-travel-supp",
+     "quote": "Ιαπωνία, Αμερική, Ανταρκτική — επειδή δεν έχω βγει ποτέ εκτός Ευρώπης και θέλω να γνωρίσω άλλους πολιτισμούς"
+    }
+   ],
+   "confidence": 0.99,
+   "status": "confirmed",
+   "origin": "ai",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "e0bd5b34-d33b-4e9b-a602-b05a50929a1b",
+    "type": "preference",
+    "sourceTrust": "verified",
+    "contentHash": "d43300f7616f5b56db17312ef1f199ec6a50631c3ee7a25fa223577d90b98e1f",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-cdea92b7",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Ακούει ελληνικά λαϊκά / μπουζούκια — του/της ταιριάζουν μπουζούκια και λαϊκά live",
+   "domain": "social",
+   "polarity": "likes",
+   "strength": 0.7,
+   "hard": false,
+   "categories": [
+    "entertainment",
+    "trip"
+   ],
+   "keywords": [
+    "μπουζούκια",
+    "λαϊκά",
+    "πίστα",
+    "live"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-music-supp",
+     "quote": "Ελληνικά λαϊκά / μπουζούκια, Ελληνικό rap / trap, Pop (mainstream)"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "40b0fc18-6b6b-49b3-9764-bc4937abdfc1",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "535640999dffff84f2ff529a166447b77b38b55ae3bda0d0d82c4684c6f0d2a1",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-7f2b5a95",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Ακούει ελληνικό rap / trap — club με hip hop / trap",
+   "domain": "social",
+   "polarity": "likes",
+   "strength": 0.7,
+   "hard": false,
+   "categories": [
+    "entertainment",
+    "trip"
+   ],
+   "keywords": [
+    "hip hop",
+    "trap",
+    "rap",
+    "club"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-music-supp",
+     "quote": "Ελληνικά λαϊκά / μπουζούκια, Ελληνικό rap / trap, Pop (mainstream)"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "3839c622-2993-4923-b731-9f0514b75c57",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "2bead10c47aa5541c0af22b8638823cf06cd29e58588a9cc13242db3008487e7",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-27da3f04",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Ακούει pop (mainstream) — mainstream club / πάρτι",
+   "domain": "social",
+   "polarity": "likes",
+   "strength": 0.7,
+   "hard": false,
+   "categories": [
+    "entertainment",
+    "trip"
+   ],
+   "keywords": [
+    "pop",
+    "club",
+    "dj",
+    "πάρτι"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-music-supp",
+     "quote": "Ελληνικά λαϊκά / μπουζούκια, Ελληνικό rap / trap, Pop (mainstream)"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "6c800283-4b67-4eba-9799-b847130e5d1e",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "2c75e8175c5cd920c7363279eef482b8d23be8123f57bc04db207d361316ec76",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-88fa9a3a",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Αγαπημένοι καλλιτέχνες: Light, Snik, Βίσση, Οικονομόπουλος, Φερρής, Drake, Travis Scott — αν εμφανίζονται κάπου, είναι λόγος για έξοδο",
+   "domain": "social",
+   "polarity": "likes",
+   "strength": 0.8,
+   "hard": false,
+   "categories": [
+    "entertainment",
+    "trip"
+   ],
+   "keywords": [
+    "Light",
+    "Snik",
+    "Βίσση",
+    "Οικονομόπουλος",
+    "Φερρής",
+    "Drake",
+    "Travis Scott"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-music-supp",
+     "quote": "Light, Snik, Βίσση, Οικονομόπουλος, Φερρής, Drake, Travis Scott"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "d1805f26-a8d5-489a-872c-beba77942655",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "3cb575782296fbf1d6be7c2b2b7903316a49716749f79d0216b07eced1076d4d",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-c9c2dbba",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Πηγαίνει σε live / μπουζούκια: σπάνια",
+   "domain": "social",
+   "polarity": "neutral",
+   "strength": 0.5,
+   "hard": false,
+   "categories": [
+    "entertainment"
+   ],
+   "keywords": [],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-music-supp",
+     "quote": "Σπάνια"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "owner",
+   "scope": "profile",
+   "createdAt": "2026-11-20T16:00:36.480Z",
+   "memory": {
+    "id": "58f2f0d6-3ab1-4a38-bc0e-406b07795268",
+    "type": "preference",
+    "sourceTrust": "owner",
+    "contentHash": "dc5e3ebdd4de265d6a62ed894879b82faebbf1a117b9addd6605bafc0e92375e",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-17cb7e0f",
+   "personaId": "grigoris",
+   "kind": "preference",
+   "statement": "Δεν αντέχει τα βαριά μπουζούκια, όπως του Μακρόπουλου και του Πλούταρχου.",
+   "domain": "other",
+   "polarity": "avoids",
+   "strength": 0.9,
+   "hard": false,
+   "context": {
+    "where": "any",
+    "days": 0
+   },
+   "categories": [
+    "entertainment"
+   ],
+   "keywords": [
+    "βαριά μπουζούκια",
+    "Μακρόπουλος",
+    "Πλούταρχος"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-music-supp",
+     "quote": "Βαριά μπουζούκια όπως Μακρόπουλος, Πλούταρχος"
+    }
+   ],
    "confidence": 0.98,
    "status": "confirmed",
    "origin": "ai",
    "scope": "profile",
-   "createdAt": "2026-11-20T15:52:45.780Z",
+   "createdAt": "2026-11-20T16:00:36.480Z",
    "memory": {
-    "id": "fbbeebc7-4c93-4f07-9db4-1259f0a89d1f",
-    "type": "preference",
+    "id": "a23d759a-15f4-404f-8c52-04119939458c",
+    "type": "commitment",
     "sourceTrust": "verified",
-    "contentHash": "b27112283a9001b1b194cbdd5dbda274cc0cf4a6a29a0c24a37106cae258192d",
+    "contentHash": "e55c16126a2f9ccee613ad8601434f9d5f4b0bf29586cc537969e4eec72db0a9",
+    "scope": "twin/grigoris"
+   }
+  },
+  {
+   "id": "mem-grigoris-dfcbafdb",
+   "personaId": "grigoris",
+   "kind": "constraint",
+   "statement": "Αλλεργία στα γαλακτοκομικά — χρειάζεται επιλογές χωρίς γαλακτοκομικά",
+   "domain": "food",
+   "polarity": "avoids",
+   "strength": 1,
+   "hard": true,
+   "context": {
+    "where": "any",
+    "days": 0
+   },
+   "categories": [
+    "food",
+    "trip"
+   ],
+   "keywords": [
+    "χωρίς γαλακτοκομικά",
+    "χωρίς λακτόζη",
+    "vegan"
+   ],
+   "refs": [
+    {
+     "sourceId": "src-grigoris-9bccbad3",
+     "quote": "Αλλεργια στα γαλακτοκομικά"
+    }
+   ],
+   "confidence": 1,
+   "status": "confirmed",
+   "origin": "ai",
+   "scope": "profile",
+   "createdAt": "2026-11-20T14:59:05.347Z",
+   "memory": {
+    "id": "95bdeed3-e463-44d2-9539-30c9c9f7bc8c",
+    "type": "commitment",
+    "sourceTrust": "verified",
+    "contentHash": "bbd9f1421a6d65a2c6482a6d022d834a632f2981d19709a5529c16a2f4d35dd1",
     "scope": "twin/grigoris"
    }
   }

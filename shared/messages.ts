@@ -90,6 +90,14 @@ export function ungroundedReason(text: string, facts: string[], options: Candida
     if (![n, n.replace('.', ':'), n.replace(':', '.')].some((v) => known.has(v))) return `ανέφερε «${n}», που δεν υπάρχει στα δεδομένα της απόφασης`;
   }
   const norm = normalizeGreek(text);
+  // Street + number must appear together as in the facts ("Τριβωνιανού 37" mixes two venues).
+  for (const o of options) {
+    const street = normalizeGreek(o.venue?.address ?? '').match(/^[^\d\s]{4,}/)?.[0];
+    if (!street) continue;
+    for (const m of norm.matchAll(new RegExp(`${street.slice(0, -1)}\\S*\\s+(\\d{1,3})`, 'g'))) {
+      if (!factText.includes(`${street} ${m[1]}`)) return `ανέφερε «${m[0]}», διεύθυνση που δεν υπάρχει στα δεδομένα`;
+    }
+  }
   for (const o of options) {
     const head = normalizeGreek(o.title.split(/[–&,:-]/)[0].trim());
     if (head.length >= 6 && norm.includes(head) && !factText.includes(head)) return `ανέφερε «${o.title}», που δεν είναι στα δεδομένα του`;

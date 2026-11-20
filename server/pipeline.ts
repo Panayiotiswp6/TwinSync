@@ -6,7 +6,7 @@ import { contextFit, requestContext, spanDays, type RequestContext } from '../sh
 import { decide } from '../shared/decide';
 import { contextOf, evaluateWithRules, extractWithRules, parseRequestWithRules, type MemoryDraft } from '../shared/heuristics';
 import { chatFacts, messageFacts, placeLine, styleSamples, templateChat, templateMessage, ungroundedReason } from '../shared/messages';
-import { areasOf, datesBetween, inArea, KIND_CATEGORY, KIND_LABEL, linkByKeywords, LOCAL_KINDS, planWishes, prepareOptions } from '../shared/plan';
+import { areasOf, datesBetween, inArea, KIND_CATEGORY, KIND_LABEL, kindFromText, linkByKeywords, LOCAL_KINDS, planWishes, prepareOptions } from '../shared/plan';
 import { normalizeGreek } from '../shared/text';
 import { athensIso, formatWhen, localParts, parseIso, WEEKDAYS_EL } from '../shared/time';
 import type { CandidateOption, Category, Decision, Evaluation, GroupRequest, Itinerary, MemoryItem, Persona, PersonaId, PipelineStep, RequestKind, StyleCard, TwinChat, TwinMessage, Venue } from '../shared/types';
@@ -122,7 +122,8 @@ export async function createRequest(text: string, participants: PersonaId[], wis
     parsed = rulesParse(text, now, wishList);
   }
   const days = spanDays(parsed.periodStart, parsed.periodEnd);
-  const kind = parsed.kind;
+  // Safety net: if the model could not classify the request, the rules may (e.g. "πού να βγούμε… με μουσική" = live).
+  const kind = parsed.kind === 'other' ? (kindFromText(text) ?? 'other') : parsed.kind;
   const category = KIND_CATEGORY[kind] ?? parsed.category;
   // A local plan is local wherever the group is (Thessaloniki is not "a trip in Greece").
   const where = kind === 'trip' ? (parsed.where === 'local' || !parsed.where ? 'domestic' : parsed.where) : LOCAL_KINDS.includes(kind) ? 'local' : (parsed.where ?? 'local');

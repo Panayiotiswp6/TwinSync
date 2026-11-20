@@ -97,7 +97,8 @@ export function contextFit(m: MemoryItem, ctx?: RequestContext | null): Fit {
 }
 
 export function appliesToCategory(item: MemoryItem, category: Category): boolean {
-  return item.categories.length === 0 || item.categories.includes(category);
+  // An unclassified request ("other") filters nothing out.
+  return category === 'other' || item.categories.length === 0 || item.categories.includes(category);
 }
 
 /** Effective euro limit of a max_cost item for this request (scaled by duration). */
