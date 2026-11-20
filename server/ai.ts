@@ -319,7 +319,7 @@ export async function parseRequest(text: string, now: Date, wishes: { personaId:
     name: 'group_request',
     system: `You read a Greek group request from ${participants} friends, plus each person's one-off wishes for THIS request only.
 Unless the text says otherwise the group is in ${groupCity}. Today is ${athensNow(now)} (Europe/Athens local time; use the real Athens UTC offset for every datetime: +02:00 in winter, +03:00 in summer).
-- kind: what exactly is asked — coffee (καφές, also studying at a café), drinks (ποτό, cocktail, wine, beer bar), club, live (συναυλία, μπουζούκια, live μουσική), dinner (φαγητό), trip (ταξίδι/εκδρομή of one or more nights), activity, gift, other.
+- kind: what exactly is asked — coffee (καφές, also studying at a café), drinks (ποτό, cocktail, wine, beer bar), club, live (συναυλία, μπουζούκια, live μουσική), dinner (φαγητό), trip (ταξίδι/εκδρομή of one or more nights), activity, gift, other. A night out ("πού να βγούμε", "έξοδος το βράδυ") is drinks, or live if music is the point, or club if dancing; use other only if nothing fits.
 - category: trip, food (dinner), entertainment (coffee, drinks, club, live), activity, gift or other.
 - city: the city where the group IS / starts from if the text states it (e.g. "είμαστε στη Θεσσαλονίκη" → Θεσσαλονίκη), else "". A local plan in Thessaloniki is local, not a trip.
 - area: the requested neighbourhood(s) for a local plan exactly as asked (e.g. "Ζωγράφου ή Ιλίσια", "Καμάρα ή Ναυαρίνου", "κέντρο"), else "".

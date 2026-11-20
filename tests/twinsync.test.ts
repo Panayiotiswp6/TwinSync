@@ -1,6 +1,6 @@
 // Offline tests (no network, ephemeral store — see vitest.config.ts).
 import { beforeEach, describe, expect, it } from 'vitest';
-import { contextFit, requestContext, spanDays } from '../shared/context';
+import { appliesToCategory, contextFit, requestContext, spanDays } from '../shared/context';
 import { checkRule, decide } from '../shared/decide';
 import { evaluateWithRules, extractWithRules, parseRequestWithRules } from '../shared/heuristics';
 import { messageFacts, templateMessage, ungroundedReason } from '../shared/messages';
@@ -567,5 +567,39 @@ describe('richer interview: places, music, area', () => {
     const hinted = decision.options.find((o) => o.artistHint);
     expect(hinted?.event?.note).toMatch(/Δείτε αν εμφανίζεται Μακρόπουλος — πρόγραμμα προς επιβεβαίωση/);
     expect(hinted?.event?.status).toBe('unconfirmed');
+  });
+});
+
+describe('shipped team group (server/data/team/group.json)', () => {
+  it('has the three team members, and every memory quote is an exact span of its source', async () => {
+    const { readFileSync, existsSync } = await import('node:fs');
+    const { containsQuote } = await import('../shared/text');
+    const file = new URL('../server/data/team/group.json', import.meta.url);
+    if (!existsSync(file)) return;
+    const g = JSON.parse(readFileSync(file, 'utf8'));
+    expect(g.personas.map((p: { name: string }) => p.name)).toEqual(['Παναγιώτης Κουζάρης', 'Παναγιώτης Τσακύρης', 'Γρηγόρης Πατέλης']);
+    const src = new Map(g.sources.map((s: { id: string; text: string }) => [s.id, s.text]));
+    for (const m of g.memory) for (const r of m.refs) expect(containsQuote(String(src.get(r.sourceId) ?? ''), r.quote), m.statement).toBe(true);
+    expect(JSON.stringify(g)).not.toMatch(/sk-proj|sk-ant-/);
+  });
+});
+
+describe('a night out is understood as one', async () => {
+  const { kindFromText } = await import('../shared/plan');
+  it('"πού να βγούμε… με μουσική" is live, a plain night out is drinks, and "other" filters no memory out', () => {
+    expect(kindFromText('Πού να βγούμε το Σάββατο βράδυ; Κάτι με μουσική, ως 40€')).toBe('live');
+    expect(kindFromText('Πού να βγούμε το Σάββατο;')).toBe('drinks');
+    const music: MemoryItem = { ...rule('max_cost', '0'), rule: undefined, hard: false, scope: 'profile', categories: ['entertainment', 'trip'] };
+    expect(appliesToCategory(music, 'other')).toBe(true);
+  });
+});
+
+describe('address grounding', () => {
+  it('rejects a street from one venue with the number of another', () => {
+    const half = opt({ id: 'h', title: 'Half Note', venue: { name: 'Half Note Jazz Club', kind: 'jazz', area: 'Μετς', city: 'Αθήνα', address: 'Τριβωνιανού 17' } });
+    const stav = opt({ id: 's', title: 'Σταυρός του Νότου', venue: { name: 'Σταυρός του Νότου', kind: 'live', area: 'Νέος Κόσμος', city: 'Αθήνα', address: 'Θαρύπου 37' } });
+    const facts = ['Επιλογή: Half Note Jazz Club (Μετς, Τριβωνιανού 17).', 'Επιλογή: Σταυρός του Νότου (Νέος Κόσμος, Θαρύπου 37).'];
+    expect(ungroundedReason('Πάμε Σταυρό, Τριβωνιανού 37', facts, [half, stav])).toMatch(/Τριβωνιανού 37|τριβωνιανου 37/);
+    expect(ungroundedReason('Πάμε Σταυρό, Θαρύπου 37 στις 21:00', facts.concat('Σάββατο 21/11 21:00'), [half, stav])).toBeNull();
   });
 });

@@ -49,6 +49,8 @@ export function kindFromText(text: string): RequestKind | null {
   if (/(φαγητ|φαμε|δειπν|εστιατορ|ταβερν|μεσημεριαν|τσιπουραδ|μεζε)/.test(n)) return 'dinner';
   if (/(ταξιδ|εκδρομ|διημερ|τριημερ|τετραημερ|πενθημερ|\d\s*-?\s*ημερ|σαββατοκυριακ|διακοπ|εξωτερικ)/.test(n)) return 'trip';
   if (/(δωρο|δωρα)/.test(n)) return 'gift';
+  // "Πού να βγούμε;", "έξοδος το βράδυ": a night out — live if music is the point, otherwise drinks.
+  if (/(βγουμε|βγαινουμε|εξοδο|βραδια εξω|βραδυ εξω|night out)/.test(n)) return /(μουσικ|τραγουδ|χορ)/.test(n) ? 'live' : 'drinks';
   return null;
 }
 
