@@ -54,7 +54,7 @@ function MemoryCard({ m, onOpen, onState, review }: { m: MemoryItem; onOpen: Ope
       )}
       <div className="mem-tags">
         {m.hard && <Badge tone="bad">Υποχρεωτικό</Badge>}
-        {m.rule && <Badge tone="info">{m.rule.metric === 'max_cost' ? `${m.hard ? '≤' : '~'} ${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</Badge>}
+        {m.rule && <Badge tone="info">{m.rule.metric === 'avoid_place' ? `όχι ξανά: ${m.rule.value.split('|').join(', ')}` : m.rule.metric === 'max_cost' ? `${m.hard ? '≤' : '~'} ${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</Badge>}
         {m.context && (m.context.where !== 'any' || m.context.days > 0) && (
           <Badge tone="neutral" title="Ισχύει μόνο σε αυτό το πλαίσιο· αλλού μόνο ως ένδειξη">
             {[{ local: '📍 πόλη', domestic: '🇬🇷 Ελλάδα', abroad: '✈️ εξωτερικό', any: '' }[m.context.where], m.context.days ? `${m.context.days} ${m.context.days === 1 ? 'μέρα' : 'μέρες'}` : ''].filter(Boolean).join(' · ')}

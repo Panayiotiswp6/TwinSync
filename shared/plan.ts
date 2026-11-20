@@ -344,7 +344,10 @@ export function prepareOptions(options: CandidateOption[], inp: PrepareInput): {
     }
     if (req.kind === 'live' && o.venue) {
       // We know the place, not who plays that night: never present it as a confirmed event.
-      o.event = { status: 'unconfirmed', note: 'Πρόγραμμα προς επιβεβαίωση για τη συγκεκριμένη ημερομηνία' };
+      o.event = {
+        status: 'unconfirmed',
+        note: o.artistHint ? `Δείτε αν εμφανίζεται ${o.artistHint} — πρόγραμμα προς επιβεβαίωση για τη συγκεκριμένη ημερομηνία` : 'Πρόγραμμα προς επιβεβαίωση για τη συγκεκριμένη ημερομηνία',
+      };
       o.title = `${o.venue.name} — πρόγραμμα προς επιβεβαίωση`;
     }
     o.costEstimated = true;

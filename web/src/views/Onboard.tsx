@@ -1,6 +1,6 @@
-import { ArrowLeft, ArrowRight, Check, Lock, Plus, Sparkles, Trash2 } from 'lucide-react';
+import { ArrowLeft, ArrowRight, Check, ChevronDown, ChevronUp, Lock, Plus, Sparkles, Trash2 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
-import { answerText, DM_SENDERS, NONE, SECTIONS, type Answer, type Answers, type MoneyAnswer, type OnboardBody, type Question } from '../../../shared/onboarding';
+import { answerText, DM_SENDERS, NONE, SECTIONS, type Answer, type Answers, type RankedAnswer, type MoneyAnswer, type OnboardBody, type Question } from '../../../shared/onboarding';
 import type { JobEvent, Persona } from '../../../shared/types';
 import { api, type AppState } from '../api';
 import { go } from '../components/Shell';
@@ -57,6 +57,7 @@ function QuestionField({ q, value, onChange, index }: { q: Question; value: Answ
       {q.help && <p className="tiny muted">{q.help}</p>}
       {q.type === 'text' && <textarea rows={2} value={(value as string) ?? ''} onChange={(e) => onChange(e.target.value)} placeholder={q.placeholder} />}
       {q.type === 'money' && <MoneyField value={value as MoneyAnswer | undefined} onChange={onChange} />}
+      {q.type === 'ranked' && <RankedField value={value as RankedAnswer | undefined} onChange={onChange} />}
       {(q.type === 'chips' || q.type === 'multi') && (
         <div className="ob-chips">
           {q.options!.map((o) => {
@@ -75,6 +76,46 @@ function QuestionField({ q, value, onChange, index }: { q: Question; value: Answ
             );
           })}
         </div>
+      )}
+    </div>
+  );
+}
+
+/** Ranked list: best first, each with why. Reorder with the arrows. */
+function RankedField({ value, onChange }: { value: RankedAnswer | undefined; onChange: (a: RankedAnswer) => void }) {
+  const items = value?.items?.length ? value.items : [{ place: '', why: '' }];
+  const set = (next: RankedAnswer['items']) => onChange({ items: next });
+  const move = (i: number, d: number) => {
+    const j = i + d;
+    if (j < 0 || j >= items.length) return;
+    const next = [...items];
+    [next[i], next[j]] = [next[j], next[i]];
+    set(next);
+  };
+  return (
+    <div className="ranked">
+      {items.map((x, i) => (
+        <div key={i} className="ranked-row">
+          <span className="ranked-n">{i + 1}</span>
+          <input value={x.place} onChange={(e) => set(items.map((y, k) => (k === i ? { ...y, place: e.target.value } : y)))} placeholder={i === 0 ? 'π.χ. Γεωργία' : 'χώρα ή μέρος'} aria-label={`Μέρος ${i + 1}`} />
+          <input value={x.why} onChange={(e) => set(items.map((y, k) => (k === i ? { ...y, why: e.target.value } : y)))} placeholder={i === 0 ? 'γιατί; π.χ. απίστευτη φύση, ωραίο κλίμα' : 'γιατί;'} aria-label={`Γιατί ${i + 1}`} />
+          <span className="ranked-btns">
+            <button type="button" className="icon-btn sm" onClick={() => move(i, -1)} aria-label="Πάνω" disabled={i === 0}>
+              <ChevronUp size={16} />
+            </button>
+            <button type="button" className="icon-btn sm" onClick={() => move(i, 1)} aria-label="Κάτω" disabled={i === items.length - 1}>
+              <ChevronDown size={16} />
+            </button>
+            <button type="button" className="icon-btn sm" onClick={() => set(items.filter((_, k) => k !== i))} aria-label="Αφαίρεση">
+              <Trash2 size={14} />
+            </button>
+          </span>
+        </div>
+      ))}
+      {items.length < 12 && (
+        <button type="button" className="btn btn-sm" onClick={() => set([...items, { place: '', why: '' }])}>
+          <Plus size={14} /> Πρόσθεσε μέρος
+        </button>
       )}
     </div>
   );
@@ -270,7 +311,7 @@ export function Onboard({ state, onState }: { state: AppState; onState: (s: AppS
       </button>
       <h2>Φτιάξε το Twin σου</h2>
       <p className="muted small">
-        Περίπου 5 λεπτά. Οι ερωτήσεις είναι διαλεγμένες για ό,τι χρειάζεται το Twin για να αποφασίζει και να γράφει σαν εσένα. Ό,τι πεις κρατιέται αυτούσιο ως πηγή, με το πλαίσιό του — π.χ. ένα ποσό για «διήμερο στην Ελλάδα» δεν γίνεται κανόνας για «4 μέρες στο εξωτερικό».
+        Περίπου 8 λεπτά. Οι ερωτήσεις είναι διαλεγμένες για ό,τι χρειάζεται το Twin για να αποφασίζει και να γράφει σαν εσένα. Ό,τι πεις κρατιέται αυτούσιο ως πηγή, με το πλαίσιό του — π.χ. ένα ποσό για «διήμερο στην Ελλάδα» δεν γίνεται κανόνας για «4 μέρες στο εξωτερικό».
       </p>
       <ol className="ob-steps">
         {steps.map((s, i) => (

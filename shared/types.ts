@@ -55,10 +55,10 @@ export interface SourceRef {
 }
 
 /** Machine-checkable part of a constraint. Checked in code, never by the model. */
-export type Metric = 'max_cost' | 'latest_end';
+export type Metric = 'max_cost' | 'latest_end' | 'avoid_place';
 export interface NumericRule {
   metric: Metric;
-  /** max_cost: euros per person. latest_end: ISO datetime, or "weekly:<0-6, Sunday=0>:HH:MM". */
+  /** max_cost: euros per person. latest_end: ISO datetime, or "weekly:<0-6, Sunday=0>:HH:MM". avoid_place: "Γεωργία|Ιταλία" (places not to go to again). */
   value: string;
 }
 
@@ -225,6 +225,8 @@ export interface CandidateOption {
   coverage?: WishCoverage[];
   /** Live music / event: the venue is known, the programme is not. */
   event?: { status: 'unconfirmed' | 'confirmed'; note: string };
+  /** A favourite artist of someone in the group who may play at this venue — never a confirmed date. */
+  artistHint?: string;
   /** Synthetic demo fixture (clearly labelled). */
   synthetic?: boolean;
 }

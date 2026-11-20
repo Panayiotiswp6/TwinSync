@@ -196,10 +196,11 @@ app.get('/api/jobs/:id', (req, res) => {
 // ---- In-app onboarding interview -> new twin ----
 const Money = z.object({ amount: z.number().nullable(), strict: z.boolean() });
 const Deadline = z.object({ day: z.number().int().min(0).max(6).nullable(), time: z.string().max(5), strict: z.boolean() });
+const Ranked = z.object({ items: z.array(z.object({ place: z.string().max(80), why: z.string().max(300) })).max(15) });
 const OnboardBody = z.object({
   name: z.string().trim().min(2).max(40),
   emoji: z.string().max(8).default('✨'),
-  answers: z.record(z.string().max(40), z.union([z.string().max(4000), z.array(z.string().max(80)).max(12), Money, Deadline])),
+  answers: z.record(z.string().max(40), z.union([z.string().max(4000), z.array(z.string().max(80)).max(12), Money, Deadline, Ranked])),
   holdouts: z
     .array(z.object({ question: z.string().max(200), options: z.array(z.object({ title: z.string().max(100), cost: z.number().nullable() })).max(4), chosen: z.number().int().min(0).max(3), why: z.string().max(300).default('') }))
     .max(3)

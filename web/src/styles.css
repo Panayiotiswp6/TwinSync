@@ -768,3 +768,8 @@ h3 { font-size: 16.5px; }
 .serve { max-width: 100%; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .not-covered { border: 1px solid color-mix(in srgb, var(--warn) 35%, var(--line)); background: var(--warn-bg); border-radius: 12px; padding: 10px 14px; display: flex; flex-direction: column; gap: 4px; }
 .not-covered .violation { color: var(--warn); }
+.ranked { display: flex; flex-direction: column; gap: 6px; }
+.ranked-row { display: grid; grid-template-columns: 26px minmax(0, 1fr) minmax(0, 1.6fr) auto; gap: 6px; align-items: center; }
+.ranked-n { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--ai-grad); }
+.ranked-btns { display: inline-flex; }
+@media (max-width: 640px) { .ranked-row { grid-template-columns: 26px 1fr auto; } .ranked-row input:nth-of-type(2) { grid-column: 2 / 4; } }

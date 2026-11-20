@@ -371,6 +371,9 @@ function demoOptions(req: GroupRequest, twins: TwinContext[]): CandidateOption[]
     const areas = areasOf(req.area);
     const inside = list.filter((v) => inArea(v, areas));
     for (const v of (inside.length ? inside : list).slice(0, 5)) out.push(venueOption(v, req, items));
+    // Live: a favourite artist of someone in the group is a reason to check a venue's programme (never "confirmed").
+    const fav = items.find((m) => m.statement.startsWith('Αγαπημένοι καλλιτέχνες'))?.keywords[0];
+    if (kind === 'live' && fav && out[0]) out[0] = { ...out[0], artistHint: fav };
   }
   if (kind === 'trip' && req.where === 'abroad') {
     for (const f of loadTripFixtures()) {
@@ -819,7 +822,7 @@ export async function relaxLimit(requestId: string, memoryId: string, optionId: 
   const d = store.decisionsFor(requestId).at(-1);
   const m = d?.inputs.find((x) => x.id === memoryId) ?? store.item(memoryId);
   const o = d?.options.find((x) => x.id === optionId);
-  if (!req || !d || !m || !o || !m.rule) throw new Error('Μόνο αριθμητικά όρια (κόστος, ώρα) αλλάζουν από εδώ.');
+  if (!req || !d || !m || !o || !m.rule || m.rule.metric === 'avoid_place') throw new Error('Μόνο αριθμητικά όρια (κόστος, ώρα) αλλάζουν από εδώ.');
   const value = m.rule.metric === 'max_cost' ? (o.costPerPerson === null ? null : String(o.costPerPerson)) : o.endsAt;
   if (!value) throw new Error('Η επιλογή δεν έχει γνωστό κόστος ή ώρα λήξης.');
   const label = m.rule.metric === 'max_cost' ? `${value}€ ανά άτομο` : formatWhen(value);
