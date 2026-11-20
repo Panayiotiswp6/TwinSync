@@ -191,8 +191,8 @@ export function decide(
     noCommonTime = timeWindowsDisjoint(results, options, binding);
     rationale.push(
       noCommonTime
-        ? `Δεν υπάρχει κοινή ώρα: το όριο ώρας ${[...new Set(chosen.violations.map((v) => name(v.personaId)))].join(', ')} λήγει πριν ξεκινήσει οποιαδήποτε επιλογή. Η πιο κοντινή είναι υποθετική: «${optName(chosen.optionId)}».`
-        : `Καμία επιλογή δεν περνά όλα τα αυστηρά όρια. Η πιο κοντινή σε όλους είναι υποθετική: «${optName(chosen.optionId)}» — θα χρειαζόταν αλλαγή από τον κάτοχο: ${chosen.violations.map((v) => `${name(v.personaId)} — ${v.text}`).join(' · ')}.`,
+        ? `Δεν υπάρχει κοινή ώρα: το όριο ώρας ${[...new Set(chosen.violations.map((v) => name(v.personaId)))].join(', ')} λήγει πριν ξεκινήσει οποιαδήποτε επιλογή. Η πιο κοντινή πρόταση είναι «${optName(chosen.optionId)}».`
+        : `Καμία επιλογή δεν χωράει σε όλα τα όρια, οπότε προτείνεται η πιο κοντινή σε όλους: «${optName(chosen.optionId)}». Δεν καλύπτει πλήρως: ${chosen.violations.map((v) => `${name(v.personaId)} — ${v.text}`).join(' · ')}.`,
     );
   }
   const chosenOpt = options.find((o) => o.id === chosen.optionId)!;
@@ -216,11 +216,11 @@ export function decide(
     }
     // A strict limit is never "accepted" by a twin: only its owner can change it.
     const breaches = chosen.violations.filter((x) => x.personaId === v.personaId);
-    for (const x of breaches) items.unshift(`Παραβιάζεται αυστηρό όριο: ${x.text} — μόνο ο κάτοχος μπορεί να το αλλάξει`);
+    for (const x of breaches) items.unshift(`Δεν καλύπτεται το όριό του: ${x.text} — το αποφασίζει ο ίδιος με την έγκρισή του`);
     const stance: Stance = breaches.length ? 'object' : stanceFor(finalScore);
     return { personaId: v.personaId, stance, finalScore, voteScore: v.score, items };
   });
-  const objecting = concessions.filter((c) => c.stance === 'object');
+  const objecting = concessions.filter((c) => c.finalScore < STANCE_THRESHOLDS.concede);
   if (objecting.length) rationale.push(`Προσοχή: ${objecting.map((c) => name(c.personaId)).join(', ')} κάτω από ${STANCE_THRESHOLDS.concede}/100 — χρειάζεται ανθρώπινη συζήτηση.`);
 
   const relaxations = status === 'compromise' ? relaxationsFor(results, options, inputs, name) : [];

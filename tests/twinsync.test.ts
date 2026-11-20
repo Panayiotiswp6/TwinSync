@@ -1,6 +1,6 @@
 // Offline tests (no network, ephemeral store — see vitest.config.ts).
 import { beforeEach, describe, expect, it } from 'vitest';
-import { contextFit, spanDays } from '../shared/context';
+import { contextFit, requestContext, spanDays } from '../shared/context';
 import { checkRule, decide } from '../shared/decide';
 import { evaluateWithRules, extractWithRules, parseRequestWithRules } from '../shared/heuristics';
 import { messageFacts, templateMessage, ungroundedReason } from '../shared/messages';
@@ -155,9 +155,9 @@ describe('end-to-end pipeline (demo mode, no network)', () => {
     expect(d2.outcome.status).toBe('compromise'); // nothing fits 60€ -> still a proposal, the closest one
     expect(d2.outcome.chosenOptionId).not.toBeNull();
     const geo = d2.outcome.concessions.find((c) => c.personaId === 'geo');
-    expect(geo?.items.join(' ')).toMatch(/Παραβιάζεται αυστηρό όριο/); // never "accepted" on the owner's behalf
+    expect(geo?.items.join(' ')).toMatch(/Δεν καλύπτεται το όριό του/); // never "accepted" by the twin itself
     expect(geo?.stance).toBe('object');
-    expect(d2.status).toBe('deadlock'); // cannot be approved until an owner changes a limit
+    expect(d2.status).toBe('awaiting_approval'); // still a proposal: the owner decides with their own approval
     expect(d2.diff?.changes.join(' ')).toMatch(/60€/);
   });
 
@@ -457,7 +457,7 @@ describe('four-day trip plan', async () => {
 });
 
 describe('incompatible times', () => {
-  it('no common time: never shown as feasible, cannot be approved, no twin "accepts" the breach', async () => {
+  it('no common time: still one closest proposal, never shown as feasible, no twin "accepts" the breach', async () => {
     store.reset();
     const { request } = await createRequest('Καφές στο Παγκράτι το Σάββατο στις 16:00', ['pan', 'pant'], {});
     const d1 = store.decisionsFor(request.id).at(-1)!;
@@ -470,10 +470,46 @@ describe('incompatible times', () => {
     expect(d.outcome.status).toBe('compromise');
     expect(d.outcome.noCommonTime).toBe(true);
     expect(d.outcome.results.every((r) => !r.feasible)).toBe(true);
-    expect(d.status).toBe('deadlock');
-    expect(() => store.approve(d.id, 'pan', 'approved')).toThrow();
+    expect(d.outcome.chosenOptionId).not.toBeNull(); // always at least one proposal
+    expect(d.status).toBe('awaiting_approval'); // the owner who is not covered decides with their own approval
     const panLines = d.chat!.lines.filter((l) => l.personaId === 'pan').map((l) => l.text).join(' ');
     expect(panLines).not.toMatch(/κάνω πίσω|δέχομαι|Οκ, πάμε/);
     expect(d.outcome.concessions.find((c) => c.personaId === 'pan')?.stance).toBe('object');
+  });
+});
+
+describe('flexibility for holidays and big trips', () => {
+  const s = loadSeed();
+  const geoReturn = s.memory.find((m) => m.id === 'mem-geo-01')!; // weekly: back by Sunday 21:00 (work on Monday)
+  const trip = (start: string, end: string, extra: Partial<CandidateOption> = {}) => opt({ id: 't', startsAt: start, endsAt: end, costPerPerson: 300, ...extra });
+
+  it('a routine weekly return limit does not override a Fri–Mon trip the group asked for', () => {
+    const ctx = requestContext({ periodStart: '2026-11-27T09:00:00+02:00', periodEnd: '2026-11-30T21:00:00+02:00', category: 'trip', where: 'abroad', days: 4 });
+    expect(contextFit(geoReturn, ctx).applies).toBe(false);
+    const out = decide([s.personas[2]], [geoReturn], [trip('2026-11-27T09:00:00+02:00', '2026-11-30T20:30:00+02:00')], [], 'trip', ctx);
+    expect(out.status).toBe('agreement');
+  });
+
+  it('…but it still holds for a normal weekend (even if the request says Sunday 23:59)', () => {
+    const ctx = requestContext({ periodStart: '2026-11-28T09:00:00+02:00', periodEnd: '2026-11-29T23:59:00+02:00', category: 'trip', where: 'domestic', days: 2 });
+    expect(contextFit(geoReturn, ctx).applies).toBe(true);
+    const out = decide([s.personas[2]], [geoReturn], [trip('2026-11-28T09:00:00+02:00', '2026-11-29T23:00:00+02:00')], [], 'trip', ctx);
+    expect(out.status).toBe('compromise');
+  });
+
+  it('everyday budgets are only a loose reference for a big trip outside Europe; the request budget still counts', () => {
+    const strict: MemoryItem = { ...rule('max_cost', '500'), scope: 'profile', context: { where: 'abroad', days: 4 } };
+    const ctx = requestContext({ periodStart: '2026-12-04T09:00:00+02:00', periodEnd: '2026-12-13T21:00:00+02:00', category: 'trip', where: 'abroad', days: 10, text: 'Ταξίδι ζωής εκτός Ευρώπης, Ιαπωνία' });
+    expect(ctx.longHaul).toBe(true);
+    expect(decide([s.personas[2]], [strict], [opt({ id: 'j', costPerPerson: 1900 })], [], 'trip', ctx).status).toBe('agreement');
+    const wish = rule('max_cost', '1500'); // said for THIS trip
+    expect(decide([s.personas[2]], [strict, wish], [opt({ id: 'j', costPerPerson: 1900 })], [], 'trip', ctx).status).toBe('compromise');
+  });
+
+  it('there is always at least one option to show, even when nothing matches the requested area', async () => {
+    store.reset();
+    const { decision } = await createRequest('Club στη Θεσσαλονίκη το Σάββατο', ['pan', 'geo'], {});
+    expect(decision.options.length).toBeGreaterThan(0);
+    expect(decision.outcome.chosenOptionId).not.toBeNull();
   });
 });

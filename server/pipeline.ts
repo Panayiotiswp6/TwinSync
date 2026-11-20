@@ -271,7 +271,7 @@ export function venueCatalogue(): Venue[] {
   return allVenues().map((v) => ({ name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt }));
 }
 
-const KIND_VENUES: Partial<Record<RequestKind, VenueEntry['kind'][]>> = { coffee: ['coffee'], drinks: ['drinks'], club: ['club'], live: ['live'], dinner: ['dinner'] };
+const KIND_VENUES: Partial<Record<RequestKind, VenueEntry['kind'][]>> = { coffee: ['coffee'], drinks: ['drinks'], club: ['club', 'drinks'], live: ['live'], dinner: ['dinner'] };
 
 /** Venues of the requested kind in the group's city, those inside the requested area first. */
 export function catalogueFor(req: Pick<GroupRequest, 'kind' | 'city' | 'area'>): VenueEntry[] {
@@ -378,9 +378,31 @@ function demoOptions(req: GroupRequest, twins: TwinContext[]): CandidateOption[]
       if (o) out.push(o);
     }
   }
-  // A coffee/drinks/live request never falls back to unrelated synthetic outings.
-  if (out.length >= 2 || (LOCAL_KINDS.includes(kind) && kind !== 'dinner')) return out;
-  return [...out, ...catalogOptions(req.category, req.periodStart, req.periodEnd)];
+  if (out.length >= 2) return out;
+  // The synthetic catalogue is set in Athens: only use it there (or for trips/other kinds).
+  const athens = normalizeGreek(req.city || DEFAULT_CITY).startsWith('αθην');
+  if (LOCAL_KINDS.includes(kind) && !athens) return out;
+  return [...out, ...catalogOptions(req.category, req.periodStart, req.periodEnd).filter((o) => !LOCAL_KINDS.includes(kind) || kind === 'dinner' || o.features.some((f) => /(μπαρ|club|κλαμπ|live|ποτ|cocktail)/i.test(f)))];
+}
+
+/** Absolute last resort, so a request never ends with nothing: an honest placeholder to fill in. */
+function placeholderOption(req: GroupRequest): CandidateOption {
+  const kind = req.kind ?? 'other';
+  const where = [req.area, req.city || DEFAULT_CITY].filter(Boolean).join(', ');
+  return {
+    id: 'placeholder-1',
+    title: `${KIND_LABEL[kind]} — ${where}`,
+    emoji: '📍',
+    summary: 'Δεν βρέθηκε επώνυμη πρόταση σε αυτή την πόλη/περιοχή. Η ώρα και το πλαίσιο ισχύουν· το μαγαζί το διαλέγετε εσείς.',
+    location: where,
+    costPerPerson: null,
+    costNote: 'άγνωστο',
+    startsAt: req.periodStart,
+    endsAt: req.periodEnd,
+    features: [],
+    origin: 'catalog',
+    synthetic: true,
+  };
 }
 
 export async function runDecision(requestId: string, opts: { regenerateOptions?: boolean; parseStep?: PipelineStep; emit?: Emit }): Promise<Decision> {
@@ -414,14 +436,14 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
   let optMode: PipelineStep['mode'] = 'demo';
   let optDetail = '';
   const groupItem = (m: MemoryItem) => m.refs.some((r) => store.source(r.sourceId)?.personaId === 'group');
-  const prep = (list: CandidateOption[]) =>
-    prepareOptions(list, {
-      req,
-      items: inputs,
-      wishes: planWishes(inputs, groupItem, req.kind === 'trip'),
-      wishText: inputs.filter((m) => m.scope === 'request').map((m) => m.statement).join(' '),
-      catalogue: venueCatalogue(),
-    });
+  const prepInput = () => ({
+    req,
+    items: inputs,
+    wishes: planWishes(inputs, groupItem, req.kind === 'trip'),
+    wishText: inputs.filter((m) => m.scope === 'request').map((m) => m.statement).join(' '),
+    catalogue: venueCatalogue(),
+  });
+  const prep = (list: CandidateOption[]) => prepareOptions(list, prepInput());
   if (previous && !opts.regenerateOptions) {
     options = previous.options;
     optMode = 'code';
@@ -446,7 +468,11 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
       }
     }
     if (!got.valid.length) {
-      const demo = prep(demoOptions(req, twins));
+      const list = demoOptions(req, twins);
+      let demo = prep(list);
+      // Never show nothing: keep a named place outside the area (flagged), then a clearly marked placeholder.
+      if (!demo.valid.length) demo = { valid: prepareOptions(list, { ...prepInput(), lenient: true }).valid, rejected: demo.rejected };
+      if (!demo.valid.length) demo = { valid: prep([placeholderOption(req)]).valid, rejected: demo.rejected };
       got = { valid: demo.valid, rejected: [...got.rejected, ...demo.rejected] };
       optMode = 'demo';
       note = note ? `${note} — κατάλογος/fixtures demo` : 'κατάλογος επώνυμων μαγαζιών & συνθετικά fixtures (demo)';
@@ -506,8 +532,8 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     outcome,
     steps,
     approvals: Object.fromEntries(personas.map((p) => [p.id, 'pending'])),
-    // Only a plan that passes every strict limit can be approved; otherwise an owner must change something first.
-    status: outcome.status === 'agreement' ? 'awaiting_approval' : 'deadlock',
+    // There is always a proposal to approve. If it does not cover someone's limit, that person decides with their own approval.
+    status: outcome.chosenOptionId ? 'awaiting_approval' : 'deadlock',
     rejectedOptions: rejected,
     aiModel: live ? aiModel() : null,
   });

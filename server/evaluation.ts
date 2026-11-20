@@ -165,7 +165,7 @@ export function runScenarios() {
   });
   const stuck = run([...base, limit('geo', 80)], 'trip');
   results.push({
-    name: 'Όριο 80€: τίποτα δεν χωράει — η πιο κοντινή επιλογή μένει υποθετική, με την αλλαγή ορίου που θα την άνοιγε',
+    name: 'Όριο 80€: τίποτα δεν χωράει — πάντα η πιο κοντινή πρόταση, με ό,τι δεν καλύπτει και την αλλαγή που θα άνοιγε άλλες',
     pass: stuck.out.status === 'compromise' && !!stuck.out.chosenOptionId && stuck.out.relaxations.length > 0,
     detail: `${title(stuck)} · ${stuck.out.relaxations.map((r) => r.text).join(' | ')}`,
   });

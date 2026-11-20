@@ -28,9 +28,10 @@ export function messageFacts(d: Decision, req: GroupRequest, personaId: PersonaI
   if (mine) facts.push(`Η δική μου πρώτη επιλογή ήταν: ${mine.title}.`);
   const chosen = opt(d.outcome.chosenOptionId);
   if (chosen && d.outcome.status === 'compromise') {
-    facts.push(`${d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα για όλους' : 'Δεν υπάρχει πρόταση που να χωράει σε όλα τα αυστηρά όρια'}. Η πιο κοντινή (υποθετική) επιλογή: ${chosen.title}.`);
+    facts.push(`${d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα για όλους' : 'Καμία επιλογή δεν χωράει σε όλα τα όρια'}. Η πιο κοντινή πρόταση για όλους: ${chosen.venue ? placeLine(chosen) : chosen.title}.`);
+    if (chosen.costPerPerson !== null) facts.push(`Κόστος περίπου ${chosen.costPerPerson}€ το άτομο.`);
     const mineBreach = d.outcome.results.find((r) => r.optionId === chosen.id)?.violations.filter((v) => v.personaId === personaId) ?? [];
-    for (const v of mineBreach) facts.push(`Αυτή η επιλογή παραβιάζει το όριό μου: ${v.text}. Το αποφασίζω εγώ αν θα το αλλάξω.`);
+    for (const v of mineBreach) facts.push(`Δεν καλύπτει το όριό μου: ${v.text}. Αν το δεχτώ, το αποφασίζω εγώ με την έγκρισή μου.`);
     for (const r of d.outcome.relaxations.slice(0, 2)) facts.push(`Θα άνοιγε επιλογές: ${r.text}`);
   } else if (chosen) {
     facts.push(`Κοινή πρόταση: ${placeLine(chosen)}.`);
@@ -62,7 +63,7 @@ export function templateMessage(d: Decision, personaId: PersonaId): string {
   const chosen = d.options.find((o) => o.id === d.outcome.chosenOptionId);
   if (chosen && d.outcome.status === 'compromise') {
     const breach = d.outcome.results.find((r) => r.optionId === chosen.id)?.violations.find((v) => v.personaId === personaId);
-    return breach ? `Με αυτά που ισχύουν δεν βγαίνει για μένα (${breach.text}). Να το ξαναδούμε;` : 'Δεν βγαίνει κάτι που να χωράει σε όλους. Να αλλάξουμε κάτι;';
+    return breach ? `Για ${chosen.title}: δεν καλύπτει το όριό μου (${breach.text}). Θα το δω και θα πω.` : `Πάμε για ${chosen.title}; Είναι η πιο κοντινή επιλογή για όλους.`;
   }
   if (!chosen) {
     const mine = d.outcome.relaxations.find((r) => r.personaId === personaId);
@@ -102,7 +103,7 @@ export function chatFacts(d: Decision, req: GroupRequest, personas: Persona[]): 
   const chosen = opt(d.outcome.chosenOptionId);
   const shared = [`Αίτημα: ${req.title}.`, ...d.options.map((o) => `Επιλογή: ${o.venue ? placeLine(o) : o.title}${o.venue ? '' : o.location ? ` (${o.location})` : ''}${o.costPerPerson !== null ? `, ~${o.costPerPerson}€/άτομο` : ''}${o.endsAt ? `, ως ${formatWhen(o.endsAt)}` : ''}.`)];
   if (chosen && d.outcome.status === 'compromise') {
-    shared.push(`${d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα.' : 'Καμία επιλογή δεν χωράει σε όλα τα αυστηρά όρια.'} Η πιο κοντινή είναι υποθετική (${chosen.title}) και χρειάζεται απόφαση των κατόχων — κανείς δεν έχει δεχτεί παραβίαση.`);
+    shared.push(`${d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα.' : 'Καμία επιλογή δεν χωράει σε όλα τα όρια.'} Η πιο κοντινή πρόταση για όλους: ${chosen.venue ? placeLine(chosen) : chosen.title}. Όποιος δεν καλύπτεται το αποφασίζει ο ίδιος με την έγκρισή του — κανένα Twin δεν το δέχεται για λογαριασμό του.`);
     for (const r of d.outcome.relaxations.slice(0, 2)) shared.push(`Θα άνοιγε επιλογές: ${r.text}`);
   } else if (chosen) shared.push(`Τελική κοινή πρόταση: ${chosen.venue ? placeLine(chosen) : chosen.title}.`);
   if (chosen?.itinerary) for (const day of chosen.itinerary.days) shared.push(`Πρόγραμμα ${day.title || day.date}: ${day.slots.map((x) => `${x.start} ${x.title}`).join(' · ')}.`);
@@ -119,7 +120,7 @@ export function chatFacts(d: Decision, req: GroupRequest, personas: Persona[]): 
       for (const r of ev?.reasons.slice(0, 2) ?? []) f.push(`Για την τελική πρόταση — ${r.effect === 'for' ? 'υπέρ' : 'κατά'}: ${r.text}`);
     }
     const c = d.outcome.concessions.find((x) => x.personaId === p.id);
-    for (const item of c?.items.slice(0, 3) ?? []) f.push(item.startsWith('Παραβιάζεται') ? `${item}. Δεν το δέχομαι μόνος μου, ρωτάω τον κάτοχο.` : `Παραχώρηση: ${item}`);
+    for (const item of c?.items.slice(0, 3) ?? []) f.push(item.startsWith('Δεν καλύπτεται') ? `${item}. Το Twin δεν το δέχεται μόνο του· ο κάτοχος αποφασίζει με την έγκρισή του.` : `Παραχώρηση: ${item}`);
     for (const day of chosen?.itinerary?.days ?? []) for (const x of day.slots) if (x.serves.some((sv) => sv.personaId === p.id)) f.push(`Στο πρόγραμμα για μένα: ${day.title || day.date} ${x.start} — ${x.title}`);
     for (const w of chosen?.why?.filter((x) => x.personaId === p.id).slice(0, 2) ?? []) f.push(`Γιατί μου ταιριάζει: ${w.text}`);
     if (c) f.push(c.stance === 'agree' ? 'Συμφωνώ με την τελική πρόταση.' : c.stance === 'agree_with_concession' ? 'Τη δέχομαι με παραχώρηση.' : 'Δεν με βολεύει η τελική πρόταση, θέλω να το συζητήσουμε.');
@@ -144,7 +145,8 @@ export function templateChat(d: Decision, personas: Persona[]): ChatLine[] {
     const r = d.outcome.results.find((x) => x.optionId === chosen.id);
     for (const p of personas) {
       const breach = r?.violations.find((v) => v.personaId === p.id);
-      if (breach) lines.push({ personaId: p.id, text: `Με ${chosen.title} δεν βγαίνει για μένα: ${breach.text}. Πρέπει να το αποφασίσω εγώ αν αλλάζω κάτι.` });
+      if (breach) lines.push({ personaId: p.id, text: `Με ${chosen.title} δεν καλύπτεται το όριό μου: ${breach.text}. Θα το αποφασίσω εγώ με την έγκρισή μου.` });
+      else lines.push({ personaId: p.id, text: `Για μένα το ${chosen.title} είναι οκ.` });
     }
     const relax = d.outcome.relaxations[0];
     if (relax) lines.push({ personaId: personas[0].id, text: `Ιδέα: ${relax.text}` });
