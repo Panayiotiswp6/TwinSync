@@ -640,3 +640,12 @@ describe('private chat sounds human', () => {
     expect(varyAddress('Ναι πάμε, τι ώρα λες;', 'Καλά ρε μπρο εσύ;')).toBe('Ναι πάμε, τι ώρα λες;');
   });
 });
+
+describe('private chat does not paste lines from other conversations', () => {
+  it('detects a reply that is really a writing sample', async () => {
+    const { copiesSample } = await import('../server/privateChat');
+    const samples = ['Πολύ νωρίς ρε αλλά αν είναι να το προλάβουμε πάμε', 'Κλείσε οπωσδήποτε μπρο, πάμε λίγοο'];
+    expect(copiesSample('Πολύ νωρίς ρε φίλε, αλλά πάμε άμα είναι να το προλάβουμε!', samples)).toBe(true);
+    expect(copiesSample('Δευτέρα στις 10 έχω σχολή, πάμε μετά τις 2;', samples)).toBe(false);
+  });
+});

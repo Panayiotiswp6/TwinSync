@@ -25,6 +25,21 @@ export function withRoutines(relevant: MemoryItem[], profile: MemoryItem[]): Mem
   return [...relevant, ...routines.slice(0, 12)];
 }
 
+const words = (t: string) => new Set(normalizeGreek(t).split(/[^a-zα-ω0-9]+/).filter((w) => w.length >= 3));
+
+/** Is the reply (nearly) a sample line from another conversation? */
+export function copiesSample(reply: string, samples: string[]): boolean {
+  const r = words(reply);
+  if (r.size < 3) return false;
+  return samples.some((line) => {
+    const l = words(line);
+    if (l.size < 4) return false;
+    let common = 0;
+    for (const w of l) if (r.has(w)) common++;
+    return common / Math.min(l.size, r.size) >= 0.7;
+  });
+}
+
 const ADDRESS = ['ρε φίλε', 'ρε μπρο', 'ρε μάγκα', 'φίλε', 'μπρο', 'μάγκα', 'αδερφέ', 'ρε'];
 
 /** A real person does not say "ρε φίλε" in every message: drop an address word the previous reply already used. */
@@ -65,7 +80,10 @@ export async function privateChat(personaId: string, turns: ChatTurn[]): Promise
   if (liveAi()) {
     try {
       const samples = styleSamples(store.sources, personaId).flatMap((s) => s.text.split('\n')).map((l) => l.trim()).filter((l) => l.length > 1).slice(0, 14);
-      const r = await privateReply(persona, items.filter((m) => m.kind !== 'style'), samples, turns.slice(-12));
+      const mem = items.filter((m) => m.kind !== 'style');
+      let r = await privateReply(persona, mem, samples, turns.slice(-12));
+      // A reply that is really a sample from another conversation ("…να το προλάβουμε") gets one rewrite.
+      if (copiesSample(r.reply, samples)) r = await privateReply(persona, mem, samples, turns.slice(-12), new Date(), r.reply);
       const previous = turns.filter((t) => t.role === 'twin').at(-1)?.text ?? '';
       return { reply: varyAddress(r.reply, previous), used: pick(r.usedMemoryIds), mode: 'live', model: aiModel() };
     } catch (e) {
