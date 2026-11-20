@@ -16,6 +16,15 @@ export interface PrivateChatResult {
   note?: string;
 }
 
+const ROUTINE = /(σχολ|μαθημ|εργαστηρ|γυμναστ|τζιμ|gym|προπονη|δουλει|εργαζ|δευτερα|τριτη|τεταρτη|πεμπτη|παρασκευη|σαββατο|κυριακη|καθημεριν|\d{1,2}[:.]\d{2}|\d{1,2}\s*[–-]\s*\d{1,2})/;
+
+/** A person's weekly routines (classes, gym, work) always come along, so the twin can judge a proposed time. */
+export function withRoutines(relevant: MemoryItem[], profile: MemoryItem[]): MemoryItem[] {
+  const ids = new Set(relevant.map((m) => m.id));
+  const routines = profile.filter((m) => !ids.has(m.id) && m.kind !== 'style' && (m.domain === 'schedule' || ROUTINE.test(normalizeGreek(m.statement))));
+  return [...relevant, ...routines.slice(0, 12)];
+}
+
 /** Demo mode: the closest memory item, said plainly (no AI). */
 function demoReply(items: MemoryItem[], text: string): { reply: string; used: MemoryItem[] } {
   const words = new Set(normalizeGreek(text).split(/[^a-zα-ω0-9]+/).filter((w) => w.length > 3).map((w) => w.slice(0, 5)));
@@ -31,7 +40,9 @@ export async function privateChat(personaId: string, turns: ChatTurn[]): Promise
   if (!persona) throw new Error('not found');
   const last = turns.filter((t) => t.role === 'user').at(-1)?.text ?? '';
   const context = turns.slice(-4).map((t) => t.text).join(' ');
-  const { items } = await retrieve(`${last} ${context}`, store.profile(personaId), []);
+  const profile = store.profile(personaId);
+  const { items: relevant } = await retrieve(`${last} ${context}`, profile, []);
+  const items = withRoutines(relevant, profile);
   const pick = (ids: string[]) => ids.map((id) => items.find((m) => m.id === id)!).filter(Boolean).map((m) => ({ id: m.id, statement: m.statement, refs: m.refs }));
   if (liveAi()) {
     try {

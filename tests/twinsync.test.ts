@@ -617,3 +617,15 @@ describe('private chat with one twin', () => {
     expect(JSON.stringify({ s: store.sources.length, m: store.memory.length, r: store.requests.length })).toBe(before);
   });
 });
+
+describe('private chat sees the weekly routine', () => {
+  it('routines (gym, classes) always come along so the twin can judge a proposed time', async () => {
+    const { withRoutines } = await import('../server/privateChat');
+    const base: MemoryItem = { ...rule('max_cost', '0'), rule: undefined, hard: false, scope: 'profile', domain: 'social', statement: 'x' };
+    const gym: MemoryItem = { ...base, id: 'gym', domain: 'other', statement: 'Πηγαίνει γυμναστήριο 16:00–18:00.' };
+    const school: MemoryItem = { ...base, id: 'school', domain: 'schedule', statement: 'Σχολή Δευτέρα έως Παρασκευή' };
+    const music: MemoryItem = { ...base, id: 'music', statement: 'Ακούει λαϊκά' };
+    const out = withRoutines([music], [music, gym, school]);
+    expect(out.map((m) => m.id)).toEqual(['music', 'gym', 'school']);
+  });
+});
