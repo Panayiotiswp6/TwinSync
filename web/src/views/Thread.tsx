@@ -108,7 +108,7 @@ function Wishes({ req, d, people, state, onState, onOpen }: { req: AppState['req
             <span key={m.id} className={`wish-chip ${m.hard ? 'hard' : ''}`}>
               {p && <Avatar persona={p} size={20} />}
               {m.statement}
-              {m.rule && <b className="tiny"> {m.rule.metric === 'max_cost' ? `≤${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</b>}
+              {m.rule && <b className="tiny"> {m.rule.metric === 'avoid_place' ? `όχι ξανά: ${m.rule.value.split('|').join(', ')}` : m.rule.metric === 'max_cost' ? `≤${m.rule.value}€` : `έως ${describeDeadline(m.rule.value)}`}</b>}
               <Cite refs={m.refs} onOpen={onOpen} />
               <button className="chip-x" aria-label="Αφαίρεση" onClick={() => run('remove', () => api.removeItem(req.id, m.id))}>
                 <X size={12} />
@@ -390,7 +390,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
                         return (
                           <li key={r.memoryId + r.optionId}>
                             → {r.text}{' '}
-                            {m?.rule && owner && (
+                            {m?.rule && m.rule.metric !== 'avoid_place' && owner && (
                               <button className="btn btn-sm" disabled={!!busy} onClick={() => relax(r.memoryId, r.optionId)} title="Αλλάζει μόνο για αυτό το αίτημα, από τον ίδιο τον κάτοχο">
                                 <Avatar persona={owner} size={18} /> Το αλλάζω εγώ, μόνο για αυτό
                               </button>

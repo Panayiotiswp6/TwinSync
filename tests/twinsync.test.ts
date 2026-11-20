@@ -528,3 +528,44 @@ describe('team twins are locked', () => {
     expect(loadTeamSeed()).toBeNull(); // tests run on the synthetic group (TWINSYNC_SEED=synthetic)
   });
 });
+
+describe('richer interview: places, music, area', () => {
+  beforeEach(() => store.reset('empty'));
+  const answers = {
+    travel_visited: { items: [{ place: 'Γεωργία', why: 'απίστευτη φύση και πολύ ωραίο κλίμα' }, { place: 'Ιταλία', why: 'φαγητό και πόλεις' }, { place: 'Βουλγαρία', why: '' }] },
+    travel_repeat: 'Όχι, θέλω μόνο καινούργια μέρη',
+    travel_pace: 'Χαλαρά, χωρίς άγχος',
+    music_genres: ['Ελληνικά λαϊκά / μπουζούκια', 'House / Techno / EDM'],
+    music_artists: 'Μακρόπουλος, Βέρτης',
+    me_about: 'ΗΜΜΥ, μπάσκετ και ταξίδια',
+    me_area: 'Αθήνα, Ζωγράφου',
+  };
+  it('ranked places become trip preferences (best first), and "no repeats" a code-checked rule', async () => {
+    const { onboard } = await import('../server/onboarding');
+    const r = await onboard({ name: 'Δοκιμή Ταξιδιώτης', emoji: '✨', answers, holdouts: [] }, () => {});
+    const mem = store.memory.filter((m) => m.personaId === r.personaId);
+    for (const m of mem) expect(store.source(m.refs[0].sourceId)?.text).toContain(m.refs[0].quote);
+    const ranked = mem.find((m) => m.statement.startsWith('Μέρη που έχει πάει, από το αγαπημένο: 1. Γεωργία'))!;
+    expect(ranked.keywords).toEqual(expect.arrayContaining(['Γεωργία', 'Ιταλία', 'φύση', 'κλίμα']));
+    const noRepeat = mem.find((m) => m.rule?.metric === 'avoid_place')!;
+    expect(noRepeat.rule!.value).toBe('Γεωργία|Ιταλία|Βουλγαρία');
+    const persona = store.persona(r.personaId)!;
+    const tbilisi = opt({ id: 'tb', title: 'Τιφλίδα, Γεωργία', location: 'Τιφλίδα, Γεωργία', costPerPerson: 400 });
+    const lisbon = opt({ id: 'li', title: 'Λισαβόνα, Πορτογαλία', location: 'Λισαβόνα, Πορτογαλία', costPerPerson: 400 });
+    const out = decide([persona], [noRepeat], [tbilisi, lisbon], [], 'trip');
+    expect(out.results.find((x) => x.optionId === 'tb')?.violations[0]).toMatchObject({ checkedBy: 'code' });
+    expect(out.chosenOptionId).toBe('li');
+  });
+  it('music decides the kind of place, and a favourite artist is a hint to check a live venue — never a confirmed date', async () => {
+    const { onboard } = await import('../server/onboarding');
+    const r = await onboard({ name: 'Δοκιμή Μουσική', emoji: '✨', answers, holdouts: [] }, () => {});
+    const mem = store.memory.filter((m) => m.personaId === r.personaId);
+    expect(mem.find((m) => m.statement.startsWith('Ακούει ελληνικά λαϊκά'))?.keywords).toContain('μπουζούκια');
+    expect(mem.find((m) => m.statement.startsWith('Αγαπημένοι καλλιτέχνες'))?.keywords).toEqual(['Μακρόπουλος', 'Βέρτης']);
+    const r2 = await onboard({ name: 'Δοκιμή Φίλος', emoji: '✨', answers: { money_evening: { amount: 30, strict: false } }, holdouts: [] }, () => {});
+    const { decision } = await createRequest('Live μουσική το Σάββατο μετά τις 22:00', [r.personaId, r2.personaId], {});
+    const hinted = decision.options.find((o) => o.artistHint);
+    expect(hinted?.event?.note).toMatch(/Δείτε αν εμφανίζεται Μακρόπουλος — πρόγραμμα προς επιβεβαίωση/);
+    expect(hinted?.event?.status).toBe('unconfirmed');
+  });
+});

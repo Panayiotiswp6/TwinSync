@@ -423,6 +423,7 @@ const READING_RULES = `How to read each person's memory:
 - Items marked ΑΙΤΗΜΑ are what the person asked for THIS plan. They override any profile item on the same topic.
 - Profile items are general tendencies from what the person told us, each said in a specific context (duration, Greece vs abroad, evening vs trip). Apply an item only as far as its context matches this plan. Typical amounts are references, not limits: scale them to the plan (e.g. "~200€ for 2 days in Greece" says little about 4 days abroad; extrapolate per day and allow for higher prices abroad, flights included).
 - Items "από προηγούμενη απόφαση" come from how the person actually decided before — they are better evidence than general statements.
+- Ranked places someone has visited ("#1 … — why") show the TYPE of trip they love: prefer destinations with the same qualities. A place they never want to visit again is a strict "avoid".
 - Routine obligations (e.g. "back by Sunday 21:00, work on Monday") do not override dates the group explicitly asked for: whoever joins a Friday–Monday trip has arranged it.
 - For big trips outside Europe (once-in-a-while experiences), everyday money amounts are only a loose reference; the request's own budget, if any, is what counts.
 - If nothing in the memory covers an aspect, do not penalise it: infer cautiously from similar items, or stay neutral and mention it in unknowns.`;
@@ -475,6 +476,7 @@ ${
     ? `- Each option is ONE specific, NAMED place (its real name) of the requested kind, in ${city}${req.area ? ` and inside the requested area: ${req.area}` : ''}. Never "κάπου στα …", "ένα καφέ κοντά στο …", "ένα από τα μπαρ της οδού …".
 - Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well; it will be shown as "to verify".
 - coffee: cafés only. drinks: follow the asked type (cocktail bar, quiet bar, wine bar, beer). club: a club. live: a venue for live music — do NOT state an artist, programme, start time or ticket price as fact; say the programme must be confirmed.
+- Use what people listen to: their genres decide the TYPE of place (λαϊκά → μπουζούκια/πίστα, house/pop → club, jazz → jazz club, rock → rock bar/live). If someone's favourite artist usually plays at a kind of venue, propose such a venue and put that artist in artistHint (it will be shown as "δείτε αν εμφανίζεται", never as a confirmed date). artistHint "" otherwise.
 - startsAt/endsAt: the proposed time window inside the requested period (ISO with the Athens offset). One evening past midnight is one outing.
 - costPerPerson: honest estimate per person for what they will order/pay (-1 if unknown); costNote: what it includes.
 - features: 3-5 short Greek facts that help judging (quiet or loud, comfortable tables, music, distance to metro…).`
@@ -493,7 +495,7 @@ ${
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['title', 'emoji', 'summary', 'venueName', 'venueKind', 'area', 'city', 'address', 'costPerPerson', 'costNote', 'startsAt', 'endsAt', 'features', 'why'],
+            required: ['title', 'emoji', 'summary', 'venueName', 'venueKind', 'area', 'city', 'address', 'costPerPerson', 'costNote', 'startsAt', 'endsAt', 'features', 'why', 'artistHint'],
             properties: {
               title: { type: 'string' },
               emoji: { type: 'string' },
@@ -509,6 +511,7 @@ ${
               endsAt: { type: 'string' },
               features: { type: 'array', items: { type: 'string' } },
               why: LINKS,
+              artistHint: { type: 'string' },
             },
           },
         },
@@ -534,6 +537,7 @@ ${
           endsAt: z.string(),
           features: z.array(z.string()),
           why: z.array(RawLink),
+          artistHint: z.string().catch(''),
         }),
       ),
     })
@@ -554,6 +558,7 @@ ${
       ? { venue: { name: clean(o.venueName).slice(0, 80), kind: clean(o.venueKind).slice(0, 40), area: clean(o.area).slice(0, 60), city: clean(o.city).slice(0, 40) || city, ...(o.address.trim() ? { address: clean(o.address).slice(0, 80) } : {}) } satisfies Venue }
       : {}),
     why: o.why.map((w) => ({ ...w, text: clean(w.text).slice(0, 160) })),
+    ...(o.artistHint.trim() ? { artistHint: clean(o.artistHint).slice(0, 60) } : {}),
   }));
 }
 

@@ -11,6 +11,7 @@
 // group negotiation rules (re-implemented, no code copied — see THIRD_PARTY_NOTICES.md).
 
 import { bindingHard, costLimit, softReferences, type Fit, type RequestContext } from './context';
+import { normalizeGreek } from './text';
 import { deadlineFor, describeDeadline, formatWhen, parseIso } from './time';
 import type {
   CandidateOption,
@@ -42,6 +43,10 @@ export function activeHard(items: MemoryItem[], category: Category): MemoryItem[
 /** Code check of a numeric rule. Returns a violation text, or null if satisfied / not checkable. */
 export function checkRule(item: MemoryItem, o: CandidateOption, fit?: Fit): string | null {
   if (!item.rule) return null;
+  if (item.rule.metric === 'avoid_place') {
+    const hit = placeHit(item.rule.value, o);
+    return hit ? `πρόταση στο/στη ${hit}, όπου έχει ήδη πάει` : null;
+  }
   if (item.rule.metric === 'max_cost') {
     const max = fit ? costLimit(item, fit) : Number(item.rule.value);
     if (o.costPerPerson === null || max === null || !Number.isFinite(max)) return null;
@@ -242,10 +247,21 @@ function timeWindowsDisjoint(results: OptionResult[], options: CandidateOption[]
   });
 }
 
+/** A place from "Γεωργία|Ιταλία" that the option's destination names (declension-tolerant). */
+export function placeHit(list: string, o: CandidateOption): string | null {
+  const where = normalizeGreek([o.itinerary?.destination, o.itinerary?.country, o.location, o.title].filter(Boolean).join(' '));
+  for (const place of list.split('|').map((x) => x.trim()).filter(Boolean)) {
+    const n = normalizeGreek(place);
+    const stem = n.slice(0, Math.max(4, n.length - 2));
+    if (stem.length >= 4 && where.includes(stem)) return place;
+  }
+  return null;
+}
+
 /** How far an option is from a limit: cost overshoot ratio, hours late / 24, judged = 1. */
 function severity(v: Violation, o: CandidateOption, binding: { item: MemoryItem; fit: Fit }[]): number {
   const b = binding.find((r) => r.item.id === v.memoryId);
-  if (!b?.item.rule) return 1;
+  if (!b?.item.rule || b.item.rule.metric === 'avoid_place') return 1;
   if (b.item.rule.metric === 'max_cost') {
     const max = costLimit(b.item, b.fit);
     return max && o.costPerPerson !== null ? Math.max(0, (o.costPerPerson - max) / max) : 1;
@@ -266,6 +282,7 @@ function relaxationsFor(results: OptionResult[], options: CandidateOption[], inp
     let change: string;
     if (m?.rule?.metric === 'max_cost' && o.costPerPerson !== null) change = `ανέβαζε το όριο κόστους στα ${o.costPerPerson}€`;
     else if (m?.rule?.metric === 'latest_end') change = `δεχόταν λήξη ${formatWhen(o.endsAt)}`;
+    else if (m?.rule?.metric === 'avoid_place') change = `δεχόταν να ξαναπάει (${o.location})`;
     else change = `χαλάρωνε το «${m?.statement ?? v.text}»`;
     out.push({ personaId: v.personaId, memoryId: v.memoryId, optionId: o.id, text: `${name(v.personaId)}: αν ${change} → «${o.title}» γίνεται εφικτό.` });
   }

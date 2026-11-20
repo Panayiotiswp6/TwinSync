@@ -7,7 +7,7 @@
 import type { MemoryDraft } from './heuristics';
 import type { Category, Where } from './types';
 
-export type QType = 'text' | 'money' | 'chips' | 'multi' | 'deadline' | 'dm';
+export type QType = 'text' | 'money' | 'chips' | 'multi' | 'deadline' | 'dm' | 'ranked';
 
 export interface Question {
   id: string;
@@ -38,7 +38,11 @@ export interface DeadlineAnswer {
   time: string;
   strict: boolean;
 }
-export type Answer = string | string[] | MoneyAnswer | DeadlineAnswer;
+/** A ranked list, e.g. countries visited, best first, each with why. */
+export interface RankedAnswer {
+  items: { place: string; why: string }[];
+}
+export type Answer = string | string[] | MoneyAnswer | DeadlineAnswer | RankedAnswer;
 export type Answers = Record<string, Answer>;
 
 export const WEEKDAY_NAMES = ['Κυριακή', 'Δευτέρα', 'Τρίτη', 'Τετάρτη', 'Πέμπτη', 'Παρασκευή', 'Σάββατο'];
@@ -51,8 +55,11 @@ export const SECTIONS: Section[] = [
     emoji: '👋',
     intro: 'Λίγα βασικά για να σε γνωρίσει το Twin σου.',
     questions: [
+      { id: 'me_about', q: 'Πες μας λίγα λόγια για σένα: τι σπουδάζεις ή τι δουλεύεις, τι κάνεις στον ελεύθερο χρόνο σου, τι σε ενθουσιάζει;', type: 'text', placeholder: 'π.χ. «ΗΜΜΥ στο 3ο έτος, παίζω μπάσκετ, λατρεύω αυτοκίνητα και ταξίδια με φίλους»' },
       { id: 'me_friend', q: 'Πώς θα σε περιέγραφε ένας κολλητός σου με μία πρόταση;', type: 'text', placeholder: 'π.χ. «ο πρώτος που λέει ναι σε όλα, αλλά πάντα αργεί»' },
-      { id: 'me_daily', q: 'Τι κάνεις στην καθημερινότητά σου (δουλειά, σχολή) και πότε είσαι συνήθως ελεύθερος/η;', type: 'text', placeholder: 'π.χ. δουλεύω Δευ–Παρ 9–5, τα ΣΚ είμαι ελεύθερος' },
+      { id: 'me_daily', q: 'Πότε είσαι συνήθως ελεύθερος/η μέσα στην εβδομάδα;', type: 'text', placeholder: 'π.χ. δουλεύω Δευ–Παρ 9–5, τα ΣΚ είμαι ελεύθερος' },
+      { id: 'me_area', q: 'Σε ποια πόλη και περιοχή μένεις ή κινείσαι συνήθως;', type: 'text', placeholder: 'π.χ. Αθήνα, Ζωγράφου', help: 'Βοηθά να προτείνει μέρη κοντά σε όλους.' },
+      { id: 'me_move', q: 'Πώς κινείσαι στην πόλη;', type: 'multi', options: ['Αυτοκίνητο (οδηγώ)', 'Μετρό / ΜΜΜ', 'Μηχανάκι', 'Ποδήλατο / περπάτημα', 'Ταξί'] },
     ],
   },
   {
@@ -100,6 +107,11 @@ export const SECTIONS: Section[] = [
       { id: 'travel_like', q: 'Τι σε τραβάει σε ένα ταξίδι;', type: 'multi', options: ['Θάλασσα & παραλίες', 'Βουνό & πεζοπορία', 'Πόλη & μουσεία', 'Φαγητό & κρασί', 'Νυχτερινή ζωή', 'Χαλάρωση', 'Περιπέτεια & σπορ'] },
       { id: 'travel_stay_no', q: 'Ποια διαμονή δεν δέχεσαι;', type: 'multi', options: ['Σκηνή / κάμπινγκ', 'Κοινόχρηστο μπάνιο', 'Κοινό δωμάτιο με αγνώστους (hostel)', 'Καναπές σε σπίτι φίλων', NONE] },
       { id: 'travel_move_no', q: 'Τι μετακίνηση σε κουράζει;', type: 'multi', options: ['Πάνω από 4 ώρες στο αυτοκίνητο', 'Πλοίο (ζαλίζομαι)', 'Πτήσεις', 'Να οδηγώ εγώ', NONE] },
+      { id: 'travel_visited', q: 'Χώρες (ή μέρη) που έχεις πάει, από την αγαπημένη σου προς τα κάτω — και γιατί;', type: 'ranked', optional: true, help: 'Η σειρά λέει στο Twin τι τύπο ταξιδιού προτιμάς (π.χ. 1. Γεωργία — απίστευτη φύση και ωραίο κλίμα).' },
+      { id: 'travel_repeat', q: 'Θα ξαναπήγαινες σε μέρος που έχεις ήδη πάει;', type: 'chips', options: ['Ναι, ευχαρίστως', 'Μόνο στα αγαπημένα μου', 'Όχι, θέλω μόνο καινούργια μέρη'] },
+      { id: 'travel_bucket', q: 'Τρία μέρη που θέλεις οπωσδήποτε να πας και γιατί;', type: 'text', optional: true, placeholder: 'π.χ. «Ιαπωνία για την κουλτούρα, Ισλανδία για το βόρειο σέλας, Μαρόκο για το φαγητό»' },
+      { id: 'travel_pace', q: 'Τι ρυθμό θέλεις σε ένα ταξίδι;', type: 'chips', options: ['Γεμάτο πρόγραμμα, να δούμε τα πάντα', 'Ισορροπία', 'Χαλαρά, χωρίς άγχος'] },
+      { id: 'travel_climate', q: 'Τι καιρό προτιμάς στις διακοπές;', type: 'multi', options: ['Ζέστη & ήλιος', 'Δροσιά', 'Χιόνι & χειμώνας', 'Δεν με νοιάζει'] },
       { id: 'travel_best', q: 'Το καλύτερο ταξίδι με φίλους που έχεις κάνει: τι ακριβώς το έκανε τέλειο;', type: 'text', placeholder: 'πού, με τι διαμονή, τι κάνατε, τι θυμάσαι' },
       { id: 'travel_worst', q: 'Κι ένα που δεν σου άρεσε — τι πήγε στραβά;', type: 'text', optional: true },
     ],
@@ -112,7 +124,18 @@ export const SECTIONS: Section[] = [
     questions: [
       { id: 'social_like', q: 'Η ιδανική βραδιά με την παρέα;', type: 'multi', options: ['Ταβέρνα & κουβέντα', 'Ήσυχο μπαρ / κρασί', 'Club & χορός', 'Live μουσική', 'Σινεμά / θέατρο', 'Επιτραπέζια στο σπίτι', 'Καφές & βόλτα'] },
       { id: 'social_people', q: 'Νέα άτομα στην παρέα;', type: 'chips', options: ['Τα λατρεύω', 'Λίγα, οκ', 'Προτιμώ τους δικούς μας'] },
-      { id: 'social_music', q: 'Τι μουσική δεν αντέχεις και τι σε σηκώνει να χορέψεις;', type: 'text', optional: true },
+    ],
+  },
+  {
+    id: 'music',
+    title: 'Μουσική',
+    emoji: '🎵',
+    intro: 'Με αυτό το Twin σου διαλέγει σωστό μαγαζί: club, μπουζούκια, live ή ήσυχο μπαρ — και ψάχνει πού εμφανίζονται οι καλλιτέχνες που αγαπάς.',
+    questions: [
+      { id: 'music_genres', q: 'Τι ακούς;', type: 'multi', options: ['Ελληνικά λαϊκά / μπουζούκια', 'Έντεχνο', 'Ελληνικό ροκ / indie', 'Ελληνικό rap / trap', 'Pop (mainstream)', 'House / Techno / EDM', 'Reggaeton / Latin', 'Rock / Metal', 'Jazz / Blues', 'Indie / Alternative'] },
+      { id: 'music_artists', q: 'Αγαπημένοι καλλιτέχνες ή συγκροτήματα;', type: 'text', optional: true, placeholder: 'π.χ. Μακρόπουλος, Βέρτης, Πλιάτσικας — ή αντίγραψε τους top artists από το Spotify' },
+      { id: 'music_live', q: 'Πόσο συχνά πας σε live, συναυλίες ή μπουζούκια;', type: 'chips', options: ['Συχνά', 'Πού και πού', 'Σπάνια'] },
+      { id: 'music_no', q: 'Τι μουσική δεν αντέχεις;', type: 'text', optional: true },
     ],
   },
   {
@@ -158,6 +181,10 @@ export function answerText(q: Question, a: Answer | undefined): string {
     if (d.day === null || d.day < 0 || d.day > 6 || !/^\d{1,2}:\d{2}$/.test(d.time)) return '';
     return `${WEEKDAY_NAMES[d.day]} ${d.time} — ${d.strict ? 'αυστηρό, πρέπει να έχω γυρίσει' : 'κατά προτίμηση'}`;
   }
+  if (q.type === 'ranked') {
+    const items = ((a as RankedAnswer).items ?? []).filter((x) => x.place?.trim());
+    return items.map((x, i) => `${i + 1}. ${x.place.trim()}${x.why?.trim() ? ` — ${x.why.trim()}` : ''}`).join('\n');
+  }
   if (Array.isArray(a)) return a.filter(Boolean).join(', ');
   return String(a).trim();
 }
@@ -175,7 +202,7 @@ export function sectionText(s: Section, answers: Answers): string {
 /** Only the free-text Q/As of a section — what the AI analyses (clear-cut answers become memory in code). */
 export function freeText(s: Section, answers: Answers): string {
   return s.questions
-    .filter((q) => (q.type === 'text' || q.type === 'dm') && q.id !== 'voice_paste')
+    .filter((q) => (q.type === 'text' || q.type === 'dm' || q.type === 'ranked') && q.id !== 'voice_paste')
     .map((q) => ({ q, a: answerText(q, answers[q.id]) }))
     .filter((x) => x.a.length >= 2)
     .map((x) => `Ε: ${x.q.type === 'dm' ? `(μήνυμα στην παρέα) ${x.q.q}` : x.q.q}\nΑ: ${x.a}`)
@@ -213,6 +240,27 @@ const MOVE_NO: Record<string, { statement: string; keywords: string[] }> = {
   Πτήσεις: { statement: 'Αποφεύγει τις πτήσεις', keywords: ['πτήση', 'αεροπλάνο'] },
   'Να οδηγώ εγώ': { statement: 'Δεν θέλει να οδηγεί ο ίδιος/η ίδια', keywords: ['οδήγηση'] },
 };
+const MUSIC: Record<string, { keywords: string[]; note?: string }> = {
+  'Ελληνικά λαϊκά / μπουζούκια': { keywords: ['μπουζούκια', 'λαϊκά', 'πίστα', 'live'], note: 'του/της ταιριάζουν μπουζούκια και λαϊκά live' },
+  Έντεχνο: { keywords: ['έντεχνο', 'μουσική σκηνή', 'live'], note: 'μουσικές σκηνές με έντεχνο' },
+  'Ελληνικό ροκ / indie': { keywords: ['rock', 'indie', 'live', 'μουσική σκηνή'] },
+  'Ελληνικό rap / trap': { keywords: ['hip hop', 'trap', 'rap', 'club'], note: 'club με hip hop / trap' },
+  'Pop (mainstream)': { keywords: ['pop', 'club', 'dj', 'πάρτι'], note: 'mainstream club / πάρτι' },
+  'House / Techno / EDM': { keywords: ['house', 'techno', 'club', 'dj'], note: 'club με ηλεκτρονική μουσική' },
+  'Reggaeton / Latin': { keywords: ['latin', 'reggaeton', 'club', 'χορός'], note: 'latin / reggaeton club' },
+  'Rock / Metal': { keywords: ['rock', 'metal', 'live', 'μπαρ'], note: 'rock μπαρ και live' },
+  'Jazz / Blues': { keywords: ['jazz', 'blues', 'live'], note: 'jazz club / ήσυχο live' },
+  'Indie / Alternative': { keywords: ['indie', 'alternative', 'live', 'μπαρ'] },
+};
+
+/** Content words of a short reason ("απίστευτη φύση και ωραίο κλίμα" → φύση, κλίμα, απίστευτη…). */
+function normalizeWords(t: string): string[] {
+  return t
+    .split(/[\s,.;—-]+/)
+    .map((w) => w.trim())
+    .filter((w) => w.length >= 4 && !/^(πολύ|πάρα|ήταν|είχε|γιατί|επειδή|αλλά|όμως|όλα|τόσο|πολλή|πολλά)$/i.test(w));
+}
+
 const LIKES: Record<string, { statement: string; keywords: string[]; domain: MemoryDraft['domain'] }> = {
   'Θάλασσα & παραλίες': { statement: 'Σε ταξίδι τον/την τραβάει η θάλασσα', keywords: ['θάλασσα', 'παραλία', 'νησί', 'βουτιά'], domain: 'activities' },
   'Βουνό & πεζοπορία': { statement: 'Σε ταξίδι τον/την τραβάει το βουνό και η πεζοπορία', keywords: ['βουνό', 'πεζοπορία', 'μονοπάτι'], domain: 'activities' },
@@ -288,6 +336,74 @@ export function structuredDrafts(answers: Answers): MemoryDraft[] {
       if (f) out.push(draft({ statement: f.statement, domain: f.domain, strength: 0.7, categories: id === 'travel_like' ? ['trip'] : ['entertainment', 'food', 'activity'], keywords: f.keywords, quote: text(id) }));
     }
   }
+
+  // Places visited, best first: the rank says which TYPE of trip they love (and, if they say so, where not to go again).
+  const visited = ((answers.travel_visited as RankedAnswer | undefined)?.items ?? []).filter((x) => x.place?.trim());
+  // One ranked summary in code (the order + what the top places have in common); the AI reads each "why",
+  // so a low-ranked "φθηνή αλλά βαρετή" is understood as a negative, not as a like.
+  if (visited.length) {
+    const top = visited.slice(0, 3);
+    out.push(
+      draft({
+        kind: 'preference',
+        statement: `Μέρη που έχει πάει, από το αγαπημένο: ${top.map((x, i) => `${i + 1}. ${x.place.trim()}${x.why?.trim() ? ` (${x.why.trim()})` : ''}`).join(', ')}`.slice(0, 200),
+        domain: 'travel',
+        polarity: 'likes',
+        strength: 0.85,
+        categories: ['trip'],
+        keywords: [...top.slice(0, 2).map((x) => x.place.trim()), ...top.slice(0, 2).flatMap((x) => normalizeWords(x.why ?? '').slice(0, 4))],
+        quote: text('travel_visited'),
+      }),
+    );
+  }
+  const repeat = text('travel_repeat');
+  if (repeat && visited.length) {
+    if (repeat.startsWith('Όχι')) {
+      out.push(
+        draft({
+          kind: 'constraint',
+          statement: `Δεν θέλει να ξαναπάει σε μέρη που έχει ήδη πάει: ${visited.map((x) => x.place.trim()).join(', ')}`,
+          domain: 'travel',
+          polarity: 'avoids',
+          strength: 1,
+          hard: true,
+          rule: { metric: 'avoid_place', value: visited.map((x) => x.place.trim()).join('|') },
+          categories: ['trip'],
+          keywords: visited.map((x) => x.place.trim()),
+          quote: repeat,
+        }),
+      );
+    } else if (repeat.startsWith('Μόνο') && visited.length > 2) {
+      const rest = visited.slice(2).map((x) => x.place.trim());
+      out.push(draft({ statement: `Θα ξαναπήγαινε μόνο στα αγαπημένα του/της — προτιμά νέα μέρη αντί για: ${rest.join(', ')}`, domain: 'travel', polarity: 'avoids', strength: 0.6, categories: ['trip'], keywords: rest, quote: repeat }));
+    }
+  }
+  const bucket = text('travel_bucket');
+  if (bucket) out.push(draft({ statement: `Θέλει οπωσδήποτε να πάει: ${bucket}`.slice(0, 200), domain: 'travel', polarity: 'likes', strength: 0.9, categories: ['trip'], keywords: bucket.split(/[,.;\n]/).map((x) => x.trim().split(/\s+/)[0]).filter((x) => x.length >= 3).slice(0, 5), quote: bucket }));
+  const pace = text('travel_pace');
+  if (pace) out.push(draft({ kind: 'preference', statement: `Ρυθμός ταξιδιού: ${pace.toLowerCase()}`, domain: 'travel', polarity: 'neutral', strength: 0.7, categories: ['trip'], keywords: pace.startsWith('Γεμάτο') ? ['γεμάτο πρόγραμμα', 'αξιοθέατα'] : pace.startsWith('Χαλαρά') ? ['χαλαρό', 'ξεκούραση'] : [], quote: pace }));
+  for (const c of list('travel_climate').filter((x) => x !== 'Δεν με νοιάζει')) {
+    out.push(draft({ statement: `Στις διακοπές προτιμά: ${c.toLowerCase()}`, domain: 'travel', strength: 0.6, categories: ['trip'], keywords: c === 'Ζέστη & ήλιος' ? ['ζέστη', 'ήλιος', 'θάλασσα'] : c === 'Χιόνι & χειμώνας' ? ['χιόνι', 'σκι', 'χειμώνας'] : ['δροσιά', 'βουνό'], quote: text('travel_climate') }));
+  }
+
+  // Music: which venue fits (club, bouzoukia, live, quiet bar) and whose artist to look for.
+  for (const g of list('music_genres')) {
+    const m = MUSIC[g];
+    if (m) out.push(draft({ statement: `Ακούει ${g.toLowerCase()}${m.note ? ` — ${m.note}` : ''}`, domain: 'social', polarity: 'likes', strength: 0.7, categories: ['entertainment', 'trip'], keywords: m.keywords, quote: text('music_genres') }));
+  }
+  const artists = text('music_artists');
+  if (artists) {
+    const names = artists.split(/[,;\n]|\sκαι\s/).map((x) => x.trim()).filter((x) => x.length >= 3).slice(0, 8);
+    out.push(draft({ statement: `Αγαπημένοι καλλιτέχνες: ${names.join(', ')} — αν εμφανίζονται κάπου, είναι λόγος για έξοδο`, domain: 'social', polarity: 'likes', strength: 0.8, categories: ['entertainment', 'trip'], keywords: names, quote: artists }));
+  }
+  const live = text('music_live');
+  if (live) out.push(draft({ statement: `Πηγαίνει σε live / μπουζούκια: ${live.toLowerCase()}`, domain: 'social', polarity: live === 'Σπάνια' ? 'neutral' : 'likes', strength: live === 'Συχνά' ? 0.8 : 0.5, categories: ['entertainment'], keywords: live === 'Σπάνια' ? [] : ['live', 'συναυλία', 'μπουζούκια'], quote: live }));
+
+  // Where they live and how they move: closer places for local plans, metro/car for the way back.
+  const area = text('me_area');
+  if (area) out.push(draft({ kind: 'fact', statement: `Μένει / κινείται συνήθως: ${area}`, domain: 'other', polarity: 'neutral', strength: 0.5, categories: ['entertainment', 'food'], keywords: area.split(/[,\s]+/).filter((x) => x.length >= 4).slice(0, 3), quote: area }));
+  const move = list('me_move');
+  if (move.length) out.push(draft({ kind: 'fact', statement: `Στην πόλη κινείται με: ${move.join(', ').toLowerCase()}`, domain: 'travel', polarity: 'neutral', strength: 0.5, categories: ['entertainment', 'food'], keywords: move.some((m) => m.startsWith('Μετρό')) ? ['μετρό'] : [], quote: text('me_move') }));
 
   const people = text('social_people');
   if (people) out.push(draft({ statement: people === 'Τα λατρεύω' ? 'Του/της αρέσει να γνωρίζει νέα άτομα' : people === 'Λίγα, οκ' ? 'Δέχεται λίγα νέα άτομα στην παρέα' : 'Προτιμά την κλειστή παρέα, χωρίς νέα άτομα', domain: 'social', polarity: people === 'Προτιμώ τους δικούς μας' ? 'avoids' : 'likes', strength: 0.5, keywords: ['γνωριμίες', 'νέα άτομα', 'κόσμος'], quote: people }));
