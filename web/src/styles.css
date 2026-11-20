@@ -914,3 +914,13 @@ h3 { font-size: 16.5px; }
 .pick-row p { margin: 2px 0 0; }
 .pick-field input { width: 270px; max-width: 60vw; }
 .age-input { width: 120px; border: 1px solid var(--line-2); border-radius: 12px; padding: 10px 12px; background: var(--surface-solid); color: var(--ink); font: inherit; }
+
+/* ---------- the twins' thoughts: a cloud next to each twin, not bubbles in the chat ---------- */
+.dm-thinkers { display: flex; flex-wrap: wrap; gap: 6px; padding: 8px 12px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.thinker { display: inline-flex; align-items: center; gap: 5px; padding: 2px 4px 2px 3px; border-radius: 999px; border: 1px solid var(--line); background: var(--surface-solid); }
+.infotip.cloud { width: 26px; height: 26px; margin: 0; font-size: 15px; line-height: 1; background: var(--ai-bg); }
+.infotip.cloud.pulse { animation: think 1.4s ease-in-out infinite; }
+@keyframes think { 0%, 100% { opacity: 1; transform: scale(1); } 50% { opacity: 0.45; transform: scale(0.88); } }
+.tip-bullets { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 5px; }
+.tip-bullets li::marker { color: var(--accent); }
+@media (prefers-reduced-motion: reduce) { .infotip.cloud.pulse { animation: none; } }

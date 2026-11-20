@@ -137,7 +137,7 @@ type Pos = { left: number; width: number; top?: number; bottom?: number; maxHeig
  * A small ⓘ that keeps explanations out of the way: hover (mouse) or tap to read them.
  * The panel is rendered in a portal, so cards with overflow:hidden never clip it.
  */
-export function InfoTip({ children, title, label = 'Λεπτομέρειες', tone, size = 15, wide }: { children: ReactNode; title?: ReactNode; label?: string; tone?: 'warn' | 'bad'; size?: number; wide?: boolean }) {
+export function InfoTip({ children, title, label = 'Λεπτομέρειες', tone, size = 15, wide, trigger, className }: { children: ReactNode; title?: ReactNode; label?: string; tone?: 'warn' | 'bad'; size?: number; wide?: boolean; trigger?: ReactNode; className?: string }) {
   const [open, setOpen] = useState<null | 'hover' | 'pin'>(null);
   const [pos, setPos] = useState<Pos | null>(null);
   const btn = useRef<HTMLButtonElement>(null);
@@ -192,7 +192,7 @@ export function InfoTip({ children, title, label = 'Λεπτομέρειες', t
       <button
         ref={btn}
         type="button"
-        className={`infotip ${tone ? `infotip-${tone}` : ''} ${open ? 'on' : ''}`}
+        className={`infotip ${tone ? `infotip-${tone}` : ''} ${open ? 'on' : ''} ${className ?? ''}`}
         aria-label={label}
         aria-expanded={!!open}
         onClick={(e) => {
@@ -203,7 +203,7 @@ export function InfoTip({ children, title, label = 'Λεπτομέρειες', t
         onPointerEnter={(e) => mouse(e) && later(() => setOpen((o) => o ?? 'hover'), 120)}
         onPointerLeave={(e) => mouse(e) && later(() => setOpen((o) => (o === 'hover' ? null : o)), 180)}
       >
-        <Info size={size} />
+        {trigger ?? <Info size={size} />}
       </button>
       {open &&
         createPortal(

@@ -81,12 +81,42 @@ function renderEvents(events: JobEvent[], people: Persona[]) {
   return out;
 }
 
+/** Each twin with a small thought cloud: it pulses while they think; tap it to read what they remember. */
+function Thinkers({ people, thoughts, thinking }: { people: Persona[]; thoughts: Record<string, string[]>; thinking: boolean }) {
+  const who = people.filter((p) => thoughts[p.id]?.length);
+  if (!who.length) return null;
+  return (
+    <div className="dm-thinkers">
+      {who.map((p) => (
+        <span key={p.id} className="thinker">
+          <Avatar persona={p} size={22} />
+          <span className="tiny">{p.name.split(' ')[0]}</span>
+          <InfoTip
+            className={`cloud ${thinking ? 'pulse' : ''}`}
+            trigger={<span aria-hidden>💭</span>}
+            label={`Τι σκέφτεται ${p.name}`}
+            title={`${p.name.split(' ')[0]} — τι θυμάται`}
+            wide
+          >
+            <ul className="tip-bullets">
+              {thoughts[p.id].map((t, i) => (
+                <li key={i}>{t.replace(/^Θυμάμαι:\s*/, '')}</li>
+              ))}
+            </ul>
+          </InfoTip>
+        </span>
+      ))}
+    </div>
+  );
+}
+
 /** Live: polls a job and plays its events as a group DM, with typing indicators. */
 export function LiveTwinChat({ jobId, people, onDone, onError }: { jobId: string; people: Persona[]; onDone: (state: AppState, result: Record<string, string>) => void; onError: (msg: string) => void }) {
   const [queue, setQueue] = useState<JobEvent[]>([]);
   const [shown, setShown] = useState<JobEvent[]>([]);
   const [typing, setTyping] = useState<Persona | null>(null);
   const [done, setDone] = useState<{ state: AppState; result: Record<string, string> } | null>(null);
+  const [thoughts, setThoughts] = useState<Record<string, string[]>>({});
   const since = useRef(0);
   const box = useRef<HTMLDivElement>(null);
   const fail = useRef(onError);
@@ -101,7 +131,18 @@ export function LiveTwinChat({ jobId, people, onDone, onError }: { jobId: string
         const j = await api.job(jobId, since.current);
         if (!alive) return;
         since.current = j.total;
-        if (j.events.length) setQueue((q) => [...q, ...j.events]);
+        if (j.events.length) {
+          // Thoughts ("Θυμάμαι: …") do not go into the chat: they gather behind each twin's thought cloud.
+          const think = j.events.filter((e) => e.kind === 'think' && e.who !== 'system');
+          if (think.length)
+            setThoughts((t) => {
+              const n = { ...t };
+              for (const e of think) n[e.who] = [...(n[e.who] ?? []), e.text];
+              return n;
+            });
+          const rest = j.events.filter((e) => !(e.kind === 'think' && e.who !== 'system'));
+          if (rest.length) setQueue((q) => [...q, ...rest]);
+        }
         if (j.status === 'done' && j.state) return setDone({ state: j.state, result: j.result ?? {} });
         if (j.status === 'error') return fail.current(j.error ?? 'Σφάλμα');
       } catch (e) {
@@ -147,6 +188,7 @@ export function LiveTwinChat({ jobId, people, onDone, onError }: { jobId: string
   return (
     <div className="dm">
       <DmHead people={people} live={!finished} sub={finished ? 'ολοκληρώθηκε' : 'τα Twins συζητούν τώρα'} />
+      <Thinkers people={people} thoughts={thoughts} thinking={!finished} />
       <div className="dm-body" ref={box}>
         {renderEvents(shown, people)}
         {typing && <Typing p={typing} />}
