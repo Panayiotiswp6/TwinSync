@@ -109,6 +109,9 @@ export interface MemoryItem {
   createdAt: string;
 }
 
+/** What exactly was asked: finer than Category, decides what a concrete proposal must contain. */
+export type RequestKind = 'coffee' | 'drinks' | 'club' | 'live' | 'dinner' | 'trip' | 'activity' | 'gift' | 'other';
+
 export interface GroupRequest {
   id: string;
   text: string;
@@ -121,8 +124,80 @@ export interface GroupRequest {
   days?: number;
   /** local = in the home city, domestic = elsewhere in Greece, abroad. */
   where?: Exclude<Where, 'any'>;
+  /** Trip destination if named. */
   place?: string;
+  kind?: RequestKind;
+  /** City the group is in / starts from. */
+  city?: string;
+  /** true = the city was not stated, the app assumed it (shown, editable in the form). */
+  cityAssumed?: boolean;
+  /** Requested neighbourhood(s) for a local plan, e.g. "Ζωγράφου ή Ιλίσια". */
+  area?: string;
   createdAt: string;
+}
+
+/** What is known about one critical detail of a proposal. */
+export type CheckStatus = 'confirmed' | 'estimated' | 'to_check';
+export interface OptionCheck {
+  field: 'existence' | 'open' | 'program' | 'price' | 'route' | 'availability';
+  status: CheckStatus;
+  text: string;
+  source?: string;
+  url?: string;
+  date?: string;
+}
+
+/** A concrete place. Catalogue entries carry a public reference; AI names are marked for checking. */
+export interface Venue {
+  name: string;
+  kind: string;
+  area: string;
+  city: string;
+  address?: string;
+  catalogId?: string;
+  source?: string;
+  url?: string;
+  checkedAt?: string;
+}
+
+/** Why a proposal (or a slot of a plan) fits: tied to one twin's memory item. */
+export interface WishLink {
+  personaId: PersonaId;
+  memoryId: string;
+  text: string;
+}
+
+export interface PlanSlot {
+  /** Local start/end, "HH:MM". */
+  start: string;
+  end: string;
+  part: 'morning' | 'afternoon' | 'evening' | 'night';
+  title: string;
+  place: string;
+  serves: { personaId: PersonaId; memoryId: string }[];
+  /** Fallback if this does not run (e.g. winter cable car). */
+  alternative?: string;
+  /** Depends on something (weather, booking). */
+  conditional?: string;
+}
+export interface Itinerary {
+  origin: string;
+  destination: string;
+  country: string;
+  depart: { at: string; mode: string };
+  /** Back at the origin. */
+  return: { at: string; mode: string };
+  stay: { name: string; area: string; note: string };
+  days: { date: string; title: string; slots: PlanSlot[] }[];
+  /** EUR per person. */
+  cost: { transport: number; stay: number; food: number; activities: number; total: number };
+}
+export interface WishCoverage {
+  personaId: PersonaId;
+  memoryId: string;
+  statement: string;
+  status: 'covered' | 'conditional' | 'uncovered';
+  where?: string;
 }
 
 export interface CandidateOption {
@@ -138,6 +213,18 @@ export interface CandidateOption {
   endsAt: string | null;
   features: string[];
   origin: 'ai' | 'catalog';
+  venue?: Venue;
+  /** Human-readable suggested time, e.g. "Σάββατο 16:30–18:30". */
+  when?: string;
+  costEstimated?: boolean;
+  why?: WishLink[];
+  itinerary?: Itinerary;
+  checks?: OptionCheck[];
+  coverage?: WishCoverage[];
+  /** Live music / event: the venue is known, the programme is not. */
+  event?: { status: 'unconfirmed' | 'confirmed'; note: string };
+  /** Synthetic demo fixture (clearly labelled). */
+  synthetic?: boolean;
 }
 
 export interface Reason {
@@ -175,6 +262,8 @@ export interface OptionResult {
   scores: Record<PersonaId, number>;
   min: number;
   avg: number;
+  /** Strict limits that could not be checked (unknown cost / end time): feasibility not verified. */
+  unverified?: string[];
 }
 
 export interface TwinVote {
@@ -213,6 +302,8 @@ export interface Outcome {
   concessions: Concession[];
   relaxations: Relaxation[];
   rationale: string[];
+  /** The time windows do not intersect: no option can work for everyone without a change. */
+  noCommonTime?: boolean;
 }
 
 export interface TwinMessage {
@@ -252,6 +343,8 @@ export interface Decision {
   messagesNote?: string;
   /** The twins' negotiation, as a group DM in each owner's style. */
   chat?: TwinChat;
+  /** Options that failed validation before voting (generic place, wrong area, broken plan). */
+  rejectedOptions?: { title: string; reason: string }[];
   aiModel: string | null;
 }
 

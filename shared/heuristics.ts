@@ -2,8 +2,9 @@
 // so the app always runs. Clearly labelled as "demo" everywhere in the UI.
 
 import { clamp, normalizeGreek, sentences } from './text';
-import { upcomingWeekend } from './time';
-import type { CandidateOption, Category, Domain, Evaluation, MemoryContext, MemoryItem, MemoryKind, NumericRule, Polarity } from './types';
+import { areaFromText, cityFromText, KIND_CATEGORY, kindFromText } from './plan';
+import { athensIso, localParts, upcomingWeekend } from './time';
+import type { CandidateOption, Category, Domain, Evaluation, MemoryContext, MemoryItem, MemoryKind, NumericRule, Polarity, RequestKind } from './types';
 
 export interface MemoryDraft {
   kind: MemoryKind;
@@ -101,7 +102,7 @@ export function extractWithRules(text: string): MemoryDraft[] {
     const quote = s.replace(/[.!;;]+$/, '');
 
     const budget =
-      n.match(/(οριο|μεχρι|εωσ|το πολυ|max|budget)\D{0,15}?(\d{2,4})(?:\s*-\s*(\d{2,4}))?\s*(€|ευρω)/) ??
+      n.match(/(οριο|μεχρι|εωσ|το πολυ|max|budget|≤|<=)\D{0,15}?(\d{1,4})(?:\s*-\s*(\d{1,4}))?\s*(€|ευρω)/) ??
       (neg ? n.match(/(πανω απο|παραπανω απο)\D{0,5}?(\d{2,4})()\s*(€|ευρω)/) : null);
     if (budget) {
       // A sentence about a money limit is not a statement about the topic itself ("όχι πάνω από 30€ για φαγητό").
@@ -120,9 +121,12 @@ export function extractWithRules(text: string): MemoryDraft[] {
       out.push({ kind: 'preference', statement: 'Προτιμά χαμηλό κόστος', domain: 'money', polarity: 'likes', strength: 0.6, hard: false, categories: [], keywords: ['φθηνό', 'οικονομικό'], quote, confidence: 0.6 });
     }
 
-    if (/(πισω|επιστροφ|γυρισ|γυρνα|να ειμαι αθηνα|στην αθηνα)/.test(n)) {
+    // "μετά τις 21:30" is when a plan STARTS and "γυρνάμε με μετρό" is HOW, not a return deadline.
+    const deadlineWord = /(μεχρι|ωσ|εωσ|πριν|αργοτερ\S*)\s+(τισ\s+|την?\s+|το\s+)?(\d{1,2}[:.]\d{2}|δευτερ|τριτ|τεταρτ|πεμπτ|παρασκευ|σαββατ|κυριακ)/.test(n);
+    const notDeadline = !deadlineWord && (/μετα (τισ|απο)/.test(n) || /(γυρναμε|επιστροφη|γυρισμα) με/.test(n));
+    if (/(πισω|επιστροφ|γυρισ|γυρνα|να ειμαι αθηνα|στην αθηνα)/.test(n) && !notDeadline) {
       const wd = weekdayIn(n);
-      const t = n.match(/(\d{1,2})[:.](\d{2})/);
+      const t = n.match(/(?:μεχρι|ωσ|εωσ|πριν|αργοτερο)\D{0,20}(\d{1,2})[:.](\d{2})/) ?? n.match(/(\d{1,2})[:.](\d{2})/);
       if (wd !== null) {
         const hh = t ? Number(t[1]) : 23;
         const mm = t ? Number(t[2]) : 59;
@@ -150,21 +154,65 @@ export function extractWithRules(text: string): MemoryDraft[] {
   return out.filter((d) => (seen.has(d.statement) ? false : (seen.add(d.statement), true)));
 }
 
-/** Demo request understanding: category + planning window. */
-export function parseRequestWithRules(text: string, now: Date): { title: string; category: Category; periodStart: string; periodEnd: string } {
+const MONTHS = ['ιανουαρ', 'φεβρουαρ', 'μαρτ', 'απριλ', 'μαι', 'ιουν', 'ιουλ', 'αυγουστ', 'σεπτεμβρ', 'οκτωβρ', 'νοεμβρ', 'δεκεμβρ'];
+const START_TIME: Partial<Record<RequestKind, [number, number, number]>> = {
+  // start hh, mm, duration in minutes
+  coffee: [17, 0, 120],
+  drinks: [21, 30, 180],
+  club: [23, 30, 240],
+  live: [21, 30, 180],
+  dinner: [21, 0, 150],
+};
+
+/** Explicit dates: "12 Δεκεμβρίου", "4–7 Δεκεμβρίου". */
+function datesIn(n: string, now: Date): { from: [number, number, number]; to?: [number, number, number] } | null {
+  const m = n.match(/(\d{1,2})(?:\s*(?:-|–|εως|μεχρι)\s*(\d{1,2}))?\s+(ιανουαρ|φεβρουαρ|μαρτ|απριλ|μαι|ιουν|ιουλ|αυγουστ|σεπτεμβρ|οκτωβρ|νοεμβρ|δεκεμβρ)/);
+  if (!m) return null;
+  const month = MONTHS.indexOf(m[3]) + 1;
+  const p = localParts(now);
+  const year = month < p.m || (month === p.m && Number(m[1]) < p.d) ? p.y + 1 : p.y;
+  return { from: [year, month, Number(m[1])], to: m[2] ? [year, month, Number(m[2])] : undefined };
+}
+
+/** Demo request understanding: kind, category, city/area and the planning window. */
+export function parseRequestWithRules(
+  text: string,
+  now: Date,
+): { title: string; category: Category; kind: RequestKind; periodStart: string; periodEnd: string; city: string | null; area: string } {
   const n = normalizeGreek(text);
   const title = text.trim().replace(/\s+/g, ' ').slice(0, 70);
+  const kind = kindFromText(text) ?? 'activity';
+  const category = KIND_CATEGORY[kind];
   const c = contextOf(n);
-  if (c.days >= 2 || /(ταξιδ|εκδρομ|σαββατοκυριακ|σκ\b|διακοπ|εξωτερικ)/.test(n)) {
+  const explicit = datesIn(n, now);
+  if (kind === 'trip') {
+    if (explicit?.to) {
+      const [y, m, d] = explicit.from;
+      const [y2, m2, d2] = explicit.to;
+      return { title, category, kind, periodStart: athensIso(y, m, d, 9, 0), periodEnd: athensIso(y2, m2, d2, 21, 0), city: null, area: '' };
+    }
     const days = c.days >= 2 ? Math.min(c.days, 7) : c.where === 'abroad' ? 4 : 2;
     const w = upcomingWeekend(now, days);
-    return { title, category: 'trip', periodStart: w.start, periodEnd: w.end };
+    return { title, category, kind, periodStart: w.start, periodEnd: w.end, city: null, area: '' };
   }
-  const fri = upcomingWeekend(now, 3).start.replace('T18:00', 'T21:00');
-  if (/(φαγητ|φαμε|δειπν|εστιατορ|ταβερν|μεσημεριαν)/.test(n)) return { title, category: 'food', periodStart: fri, periodEnd: fri };
-  if (/(δωρο|δωρα)/.test(n)) return { title, category: 'gift', periodStart: fri, periodEnd: fri };
-  if (/(ταινι|σινεμα|εξοδο|ποτο|μπαρ|βραδια|παρτι|κλαμπ)/.test(n)) return { title, category: 'entertainment', periodStart: fri, periodEnd: fri };
-  return { title, category: 'activity', periodStart: fri, periodEnd: fri };
+  const [dh, dm, dur] = START_TIME[kind] ?? [21, 0, 150];
+  const t = n.match(/(?:στισ|μετα τισ|απο τισ|γυρω στισ)\s*(\d{1,2})(?:[:.](\d{2}))?/);
+  const hh = t ? Number(t[1]) : dh;
+  const mm = t?.[2] ? Number(t[2]) : t ? 0 : dm;
+  const p = localParts(now);
+  let day: Date;
+  if (explicit) day = new Date(Date.UTC(explicit.from[0], explicit.from[1] - 1, explicit.from[2]));
+  else if (/(αποψε|σημερα)/.test(n)) day = new Date(Date.UTC(p.y, p.m - 1, p.d));
+  else if (/αυριο/.test(n)) day = new Date(Date.UTC(p.y, p.m - 1, p.d + 1));
+  else {
+    const wd = weekdayIn(n) ?? (kind === 'coffee' ? 6 : 5);
+    const off = (wd - p.weekday + 7) % 7 || 7;
+    day = new Date(Date.UTC(p.y, p.m - 1, p.d + off));
+  }
+  const start = athensIso(day.getUTCFullYear(), day.getUTCMonth() + 1, day.getUTCDate(), hh, mm);
+  const end = new Date(new Date(start).getTime() + dur * 60000);
+  const e = localParts(end);
+  return { title, category, kind, periodStart: start, periodEnd: athensIso(e.y, e.m, e.d, e.hh, e.mm), city: cityFromText(text), area: areaFromText(text) };
 }
 
 /** Demo evaluator: keyword match between a twin's memory and an option's text. */

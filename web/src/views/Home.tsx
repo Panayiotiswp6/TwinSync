@@ -50,8 +50,8 @@ function Welcome({ state, onState }: { state: AppState; onState: (s: AppState) =
           <Plus size={17} /> Φτιάξε το πρώτο Twin
         </button>
         {state.personas.length === 0 && (
-          <button className="btn" onClick={async () => onState(await api.reset(false))}>
-            Δοκίμασε με συνθετική παρέα
+          <button className="btn" onClick={async () => onState(await api.reset(state.status.teamSeed ? 'team' : 'synthetic'))}>
+            {state.status.teamSeed ? 'Δοκίμασε με την παρέα μας' : 'Δοκίμασε με συνθετική παρέα'}
           </button>
         )}
       </div>
@@ -108,13 +108,19 @@ export function Home({ state, onState }: { state: AppState; onState: (s: AppStat
                     </>
                   ) : (
                     <>
-                      <span className="eyebrow light">{d?.outcome.status === 'compromise' ? 'Συμβιβασμός των Twins' : 'Πρόταση των Twins'}</span>
-                      <h3>{chosen?.title ?? '—'}</h3>
+                      <span className="eyebrow light">{d?.outcome.status === 'compromise' ? (d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα' : 'Χρειάζεται αλλαγή ορίου') : 'Πρόταση των Twins'}</span>
+                      <h3>{chosen?.venue?.name ?? chosen?.title ?? '—'}</h3>
+                      {chosen && (chosen.venue || chosen.itinerary) && (
+                        <span className="tiny muted">
+                          {chosen.venue ? [chosen.venue.area, chosen.venue.city].filter(Boolean).join(', ') : `${chosen.itinerary!.destination}, ${chosen.itinerary!.country} · ${chosen.itinerary!.days.length} μέρες`}
+                          {chosen.startsAt ? ` · ${formatWhen(chosen.startsAt)}` : ''}
+                        </span>
+                      )}
                       {chosen && (
                         <span className="cover-chips">
-                          {chosen.costPerPerson !== null && <span>{chosen.costPerPerson}€/άτομο</span>}
+                          {chosen.costPerPerson !== null && <span>≈{chosen.costPerPerson}€/άτομο</span>}
                           {chosen.endsAt && <span>έως {formatWhen(chosen.endsAt)}</span>}
-                          {chosen.location && <span>{chosen.location}</span>}
+                          {chosen.location && !chosen.venue && !chosen.itinerary && <span>{chosen.location}</span>}
                         </span>
                       )}
                     </>

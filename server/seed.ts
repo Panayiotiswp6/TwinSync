@@ -2,11 +2,11 @@
 // with a small front-matter block), persona metadata and the pre-extracted profile.
 // Every citation is verified against its source text; a mismatch stops the server.
 
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { containsQuote } from '../shared/text';
-import type { CandidateOption, Category, MemoryItem, Persona, Source, SourceKind } from '../shared/types';
+import type { CandidateOption, Category, HeldOutCase, MemoryItem, Persona, Source, SourceKind } from '../shared/types';
 import { stamp } from './memory';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -82,4 +82,105 @@ export function loadSeed(): Seed {
   for (const p of personas) for (const r of p.style?.phrases ?? []) check(r.sourceId, r.quote, `${p.id}.style`);
   const { options: catalog } = readJson<{ options: CatalogEntry[] }>('catalog.json');
   return { personas, sources, memory, catalog };
+}
+
+// ---------------------------------------------------------------------------
+// The team's own twins (with consent), exported from the app ("Εξαγωγή παρέας")
+// and committed as server/data/team/group.json. When present, it is the default
+// starting group; the synthetic group stays available (and is what tests use).
+// ---------------------------------------------------------------------------
+
+export interface GroupExport {
+  format: 'twinsync-group';
+  version: 1;
+  exportedAt: string;
+  personas: Persona[];
+  sources: Source[];
+  memory: MemoryItem[];
+  holdouts: HeldOutCase[];
+}
+
+const TEAM_FILE = () => path.join(DATA_SEED_DIR, 'team', 'group.json');
+
+export function hasTeamSeed(): boolean {
+  return process.env.TWINSYNC_SEED !== 'synthetic' && existsSync(TEAM_FILE());
+}
+
+/** Loads the team group. Memory whose quote is not an exact span of its source is dropped. */
+export function loadTeamSeed(): GroupExport | null {
+  if (!hasTeamSeed()) return null;
+  try {
+    const g = JSON.parse(readFileSync(TEAM_FILE(), 'utf8')) as GroupExport;
+    if (g.format !== 'twinsync-group') return null;
+    const sources = new Map(g.sources.map((s) => [s.id, s]));
+    const memory = g.memory.filter((m) => m.refs.every((r) => containsQuote(sources.get(r.sourceId)?.text ?? '', r.quote)));
+    return { ...g, memory };
+  } catch (e) {
+    console.warn('[seed] could not read team/group.json:', (e as Error).message);
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Curated venues (real, public listings) and synthetic demo trip plans.
+// ---------------------------------------------------------------------------
+
+export interface VenueEntry {
+  id: string;
+  name: string;
+  kind: 'coffee' | 'drinks' | 'live' | 'club' | 'dinner';
+  subtype: string;
+  city: string;
+  area: string;
+  address?: string;
+  quiet?: boolean;
+  priceHint?: number;
+  source: string;
+  url: string;
+  checkedAt: string;
+  features: string[];
+}
+
+export function loadVenues(): VenueEntry[] {
+  try {
+    return readJson<{ venues: VenueEntry[] }>('venues.json').venues;
+  } catch {
+    return [];
+  }
+}
+
+export interface FixtureSlot {
+  start: string;
+  end: string;
+  part: 'morning' | 'afternoon' | 'evening' | 'night';
+  title: string;
+  place: string;
+  tags: string[];
+  alternative?: string;
+  conditional?: string;
+}
+export interface TripFixture {
+  id: string;
+  title: string;
+  emoji: string;
+  summary: string;
+  destination: string;
+  country: string;
+  where: 'abroad' | 'domestic';
+  depart: { time: string; mode: string };
+  return: { time: string; mode: string };
+  stay: { name: string; area: string; note: string };
+  cost: { transport: number; stayPerNight: number; foodPerDay: number; activitiesPerDay: number };
+  features: string[];
+  first: { title: string; slots: FixtureSlot[] };
+  middle: { title: string; slots: FixtureSlot[] }[];
+  last: { title: string; slots: FixtureSlot[] };
+}
+
+export function loadTripFixtures(): TripFixture[] {
+  try {
+    return readJson<{ trips: TripFixture[] }>('trip-fixtures.json').trips;
+  } catch {
+    return [];
+  }
 }

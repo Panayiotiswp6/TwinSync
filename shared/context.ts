@@ -7,7 +7,8 @@
 // general profile on the same metric.
 
 import { localParts, parseIso } from './time';
-import type { Category, GroupRequest, MemoryItem, Where } from './types';
+import { normalizeGreek } from './text';
+import type { Category, Domain, GroupRequest, MemoryItem, RequestKind, Where } from './types';
 
 export interface RequestContext {
   days: number;
@@ -26,6 +27,8 @@ export function spanDays(start: string | null | undefined, end: string | null | 
   const s = parseIso(start ?? null);
   const e = parseIso(end ?? null);
   if (!s || !e || e < s) return 1;
+  // One outing that runs past midnight is ONE outing (budget is not doubled).
+  if (e.getTime() - s.getTime() <= 20 * 3600 * 1000) return 1;
   const a = localParts(s);
   const b = localParts(e);
   const da = Date.UTC(a.y, a.m - 1, a.d);
@@ -121,4 +124,43 @@ export function contextHint(m: MemoryItem, ctx?: RequestContext | null): string 
   }
   if (m.rule && !m.hard) parts.push('ενδεικτικό, όχι όριο');
   return parts.join(' · ');
+}
+
+// ---------------------------------------------------------------------------
+// Relevance: which memory a request should even look at (retrieval + recall).
+// ---------------------------------------------------------------------------
+
+const STAY = /(σκην|καμπινγκ|camping|διαμον|δωματι|μπανιο|ξενοδοχ|hostel|καναπ|airbnb|κρεβατ|διανυκτερ)/;
+const TRAVEL_ONLY = /(πτησ|αεροπλαν|πλοιο|καραβι|φερι|ωρες στο αυτοκινητο|ωρες δρομο|οδηγ)/;
+const CORE: Partial<Record<RequestKind, Domain[]>> = {
+  coffee: ['money', 'schedule', 'social', 'comfort', 'food'],
+  drinks: ['money', 'schedule', 'social', 'comfort', 'food'],
+  club: ['money', 'schedule', 'social'],
+  live: ['money', 'schedule', 'social'],
+  dinner: ['money', 'schedule', 'social', 'comfort', 'food'],
+};
+
+/**
+ * Should this memory item be considered for this request at all?
+ *  - category and context must fit (a trip budget is not about an evening, and vice versa);
+ *  - accommodation / long-distance travel items only matter for trips;
+ *  - request-only wishes always count.
+ */
+export function relevantTo(m: MemoryItem, kind: RequestKind | undefined, category: Category, ctx?: RequestContext | null): boolean {
+  if (m.scope === 'request') return true;
+  if (!appliesToCategory(m, category)) return false;
+  const trip = (ctx?.where ?? (category === 'trip' ? 'domestic' : 'local')) !== 'local';
+  const w = m.context?.where;
+  if (w && w !== 'any' && (w === 'local') === trip) return false; // trip budget for an evening, or evening budget for a trip
+  if (!trip) {
+    const text = normalizeGreek(`${m.statement} ${m.keywords.join(' ')}`);
+    if (STAY.test(text) || TRAVEL_ONLY.test(text) || m.domain === 'travel') return false;
+  }
+  return true;
+}
+
+/** Domains that matter for a local kind even without keyword overlap. */
+export function coreDomain(m: MemoryItem, kind: RequestKind | undefined): boolean {
+  const core = kind ? CORE[kind] : undefined;
+  return !core || core.includes(m.domain);
 }

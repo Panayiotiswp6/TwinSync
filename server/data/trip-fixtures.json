@@ -1,0 +1,76 @@
+{
+  "_notice": "DEMO MODE ONLY — synthetic trip plans used when no AI key is configured (clearly labelled 'συνθετικό' in the UI). Landmarks are real places, but times, prices and stays are illustrative, not quotes or bookings. Day templates: first, middle (repeated for longer trips), last.",
+  "trips": [
+    {
+      "id": "fx-ljubljana",
+      "title": "Λιουμπλιάνα & Λίμνη Μπλεντ, Σλοβενία",
+      "emoji": "🏞️",
+      "summary": "Πρωτεύουσα με ζωντανό κέντρο και μία μέρα φύσης στις Ιουλιανές Άλπεις.",
+      "destination": "Λιουμπλιάνα",
+      "country": "Σλοβενία",
+      "where": "abroad",
+      "depart": { "time": "08:30", "mode": "πτήση Αθήνα → Λιουμπλιάνα (με ανταπόκριση)" },
+      "return": { "time": "19:30", "mode": "πτήση Λιουμπλιάνα → Αθήνα (άφιξη Αθήνα)" },
+      "stay": { "name": "Διαμέρισμα στο κέντρο", "area": "Παλιά πόλη", "note": "δωμάτια με ιδιωτικό μπάνιο" },
+      "cost": { "transport": 190, "stayPerNight": 45, "foodPerDay": 30, "activitiesPerDay": 12 },
+      "features": ["φύση και λίμνη", "νυχτερινή σκηνή", "ιδιωτικό μπάνιο", "μουσεία"],
+      "first": { "title": "άφιξη", "slots": [
+        { "start": "08:30", "end": "13:30", "part": "morning", "title": "Πτήση και μεταφορά στο κέντρο", "place": "Αεροδρόμιο → Λιουμπλιάνα", "tags": ["μετακίνηση"] },
+        { "start": "15:00", "end": "18:00", "part": "afternoon", "title": "Βόλτα στην Παλιά Πόλη και στο Κάστρο της Λιουμπλιάνας", "place": "Κάστρο Λιουμπλιάνας", "tags": ["πόλη", "μουσείο", "αξιοθέατα", "ιστορία"] },
+        { "start": "20:30", "end": "22:30", "part": "evening", "title": "Δείπνο στην Πρέσερνοβα", "place": "Πλατεία Πρέσερνοβα", "tags": ["φαγητό", "ταβέρνα", "χορτοφαγικά πιάτα"] }
+      ] },
+      "middle": [
+        { "title": "φύση", "slots": [
+          { "start": "08:00", "end": "09:30", "part": "morning", "title": "Λεωφορείο για Μπλεντ", "place": "Σταθμός λεωφορείων → Μπλεντ", "tags": ["μετακίνηση"] },
+          { "start": "10:00", "end": "14:00", "part": "morning", "title": "Πεζοπορία γύρω από τη λίμνη και στο φαράγγι Vintgar", "place": "Λίμνη Μπλεντ / Vintgar", "tags": ["πεζοπορία", "βουνό", "φύση", "μονοπάτι", "λίμνη"], "alternative": "αν το φαράγγι είναι κλειστό τον χειμώνα: γύρος της λίμνης (6 χλμ.) και άνοδος στο Ojstrica", "conditional": "καιρός" },
+          { "start": "16:00", "end": "17:30", "part": "afternoon", "title": "Επιστροφή στη Λιουμπλιάνα", "place": "Μπλεντ → Λιουμπλιάνα", "tags": ["μετακίνηση"] },
+          { "start": "23:00", "end": "03:00", "part": "night", "title": "Club βραδιά στη Metelkova", "place": "Metelkova", "tags": ["club", "κλαμπ", "νυχτερινή ζωή", "dj", "πάρτι"], "alternative": "ήσυχη εναλλακτική: wine bar στην όχθη του Ljubljanica" }
+        ] },
+        { "title": "πόλη", "slots": [
+          { "start": "10:30", "end": "13:00", "part": "morning", "title": "Κεντρική αγορά και Εθνική Πινακοθήκη", "place": "Κέντρο", "tags": ["μουσείο", "πόλη", "αγορά"] },
+          { "start": "14:00", "end": "17:00", "part": "afternoon", "title": "Πάρκο Tivoli και λόφος Rožnik", "place": "Tivoli", "tags": ["φύση", "περίπατος", "πάρκο"] },
+          { "start": "20:30", "end": "23:30", "part": "evening", "title": "Ποτό σε μπαρ δίπλα στο ποτάμι", "place": "Όχθη Ljubljanica", "tags": ["μπαρ", "ποτό", "κόσμος"] }
+        ] }
+      ],
+      "last": { "title": "επιστροφή", "slots": [
+        { "start": "10:00", "end": "12:30", "part": "morning", "title": "Πρωινό και τελευταία βόλτα", "place": "Παλιά πόλη", "tags": ["πόλη"] },
+        { "start": "14:00", "end": "19:30", "part": "afternoon", "title": "Μεταφορά στο αεροδρόμιο και πτήση επιστροφής", "place": "Λιουμπλιάνα → Αθήνα", "tags": ["μετακίνηση"] }
+      ] }
+    },
+    {
+      "id": "fx-sofia",
+      "title": "Σόφια & Βίτοσα, Βουλγαρία",
+      "emoji": "🏔️",
+      "summary": "Οικονομική πρωτεύουσα με βουνό δίπλα στην πόλη και έντονη νυχτερινή ζωή.",
+      "destination": "Σόφια",
+      "country": "Βουλγαρία",
+      "where": "abroad",
+      "depart": { "time": "07:00", "mode": "πούλμαν Αθήνα → Σόφια" },
+      "return": { "time": "18:30", "mode": "πτήση Σόφια → Αθήνα (άφιξη Αθήνα)" },
+      "stay": { "name": "Ξενοδοχείο στο κέντρο", "area": "Vitosha Blvd", "note": "δίκλινα με ιδιωτικό μπάνιο" },
+      "cost": { "transport": 120, "stayPerNight": 35, "foodPerDay": 25, "activitiesPerDay": 10 },
+      "features": ["βουνό Βίτοσα", "φθηνό", "club", "ιδιωτικό μπάνιο"],
+      "first": { "title": "άφιξη", "slots": [
+        { "start": "07:00", "end": "15:30", "part": "morning", "title": "Πούλμαν προς Σόφια", "place": "Αθήνα → Σόφια", "tags": ["μετακίνηση"] },
+        { "start": "17:00", "end": "19:00", "part": "afternoon", "title": "Καθεδρικός Αλεξάντερ Νιέφσκι και κέντρο", "place": "Κέντρο Σόφιας", "tags": ["πόλη", "αξιοθέατα", "ιστορία"] },
+        { "start": "20:30", "end": "22:30", "part": "evening", "title": "Δείπνο με βουλγάρικη κουζίνα", "place": "Vitosha Blvd", "tags": ["φαγητό", "ταβέρνα", "φθηνό"] }
+      ] },
+      "middle": [
+        { "title": "βουνό", "slots": [
+          { "start": "08:30", "end": "15:00", "part": "morning", "title": "Πεζοπορία στη Βίτοσα (Aleko → Cherni Vrah)", "place": "Βίτοσα", "tags": ["πεζοπορία", "βουνό", "φύση", "μονοπάτι"], "alternative": "αν το λιφτ/μονοπάτι κλείσει λόγω χιονιού: μονοπάτι Boyana Waterfall", "conditional": "καιρός" },
+          { "start": "16:00", "end": "17:30", "part": "afternoon", "title": "Εκκλησία Μπογιάνα", "place": "Μπογιάνα", "tags": ["ιστορία", "αξιοθέατα", "μουσείο"] },
+          { "start": "23:30", "end": "03:30", "part": "night", "title": "Club βραδιά στο κέντρο", "place": "Κέντρο Σόφιας", "tags": ["club", "κλαμπ", "νυχτερινή ζωή", "dj"], "alternative": "ήσυχη εναλλακτική: wine bar στην οδό Shishman" }
+        ] },
+        { "title": "πόλη", "slots": [
+          { "start": "10:30", "end": "13:00", "part": "morning", "title": "Αγορά Ζένσκι Παζάρ και περίπατος", "place": "Κέντρο", "tags": ["πόλη", "αγορά"] },
+          { "start": "14:00", "end": "16:30", "part": "afternoon", "title": "Εθνικό Ιστορικό Μουσείο", "place": "Μπογιάνα", "tags": ["μουσείο", "ιστορία"] },
+          { "start": "20:30", "end": "23:00", "part": "evening", "title": "Ποτό σε μπαρ της Shishman", "place": "Shishman", "tags": ["μπαρ", "ποτό"] }
+        ] }
+      ],
+      "last": { "title": "επιστροφή", "slots": [
+        { "start": "10:00", "end": "12:00", "part": "morning", "title": "Πρωινό και ψώνια", "place": "Vitosha Blvd", "tags": ["πόλη"] },
+        { "start": "13:30", "end": "18:30", "part": "afternoon", "title": "Μεταφορά στο αεροδρόμιο και πτήση επιστροφής", "place": "Σόφια → Αθήνα", "tags": ["μετακίνηση"] }
+      ] }
+    }
+  ]
+}

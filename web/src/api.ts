@@ -1,6 +1,8 @@
 import type { OnboardBody } from '../../shared/onboarding';
 import type { Decision, GroupRequest, Job, MemoryItem, Persona, Source, StyleCard, Usage } from '../../shared/types';
 
+export type StartGroup = 'team' | 'synthetic' | 'empty';
+
 export interface AppStatus {
   aiMode: 'live' | 'demo';
   provider: 'openai' | 'anthropic' | 'demo';
@@ -8,6 +10,8 @@ export interface AppStatus {
   embeddings: boolean;
   dataset: 'synthetic';
   usage: Usage;
+  /** The team's own group is committed (server/data/team/group.json). */
+  teamSeed?: boolean;
 }
 
 export interface AppState {
@@ -38,8 +42,10 @@ async function call<T>(method: string, url: string, body?: unknown): Promise<T> 
 
 export const api = {
   state: () => call<AppState>('GET', '/api/state'),
-  reset: (empty = false) => call<AppState>('POST', `/api/reset${empty ? '?empty=1' : ''}`),
-  createRequestAsync: (text: string, participants: string[], wishes: Record<string, string>) => call<{ jobId: string }>('POST', '/api/requests?async=1', { text, participants, wishes }),
+  reset: (kind: StartGroup) => call<AppState>('POST', `/api/reset${kind === 'empty' ? '?empty=1' : kind === 'team' ? '?seed=team' : ''}`),
+  createRequestAsync: (text: string, participants: string[], wishes: Record<string, string>, city?: string, cityAssumed?: boolean) =>
+    call<{ jobId: string }>('POST', '/api/requests?async=1', { text, participants, wishes, city, cityAssumed }),
+  relax: (requestId: string, memoryId: string, optionId: string) => call<{ decisionId: string; state: AppState }>('POST', `/api/requests/${requestId}/relax`, { memoryId, optionId }),
   job: (id: string, since: number) => call<Job & { total: number; state?: AppState }>('GET', `/api/jobs/${id}?since=${since}`),
   onboard: (body: OnboardBody) => call<{ jobId: string }>('POST', '/api/onboard', body),
   createPersona: (name: string, bio: string, emoji?: string) => call<{ persona: Persona; state: AppState }>('POST', '/api/personas', { name, bio, emoji }),
@@ -52,8 +58,8 @@ export const api = {
   refreshStyle: (personaId: string) => call<{ style: StyleCard; mode: string; state: AppState }>('POST', `/api/personas/${personaId}/style`),
   createRequest: (text: string, participants: string[], wishes: Record<string, string>) =>
     call<{ requestId: string; decisionId: string; state: AppState }>('POST', '/api/requests', { text, participants, wishes }),
-  addWish: (requestId: string, personaId: string, text: string, scope: 'request' | 'profile') =>
-    call<{ decisionId: string; created: number; state: AppState }>('POST', `/api/requests/${requestId}/wishes`, { personaId, text, scope }),
+  addWish: (requestId: string, personaId: string, text: string, scope: 'request' | 'profile', regenerate = false) =>
+    call<{ decisionId: string; created: number; state: AppState }>('POST', `/api/requests/${requestId}/wishes`, { personaId, text, scope, regenerate }),
   setLimit: (requestId: string, personaId: string, value: number) => call<{ decisionId: string; state: AppState }>('POST', `/api/requests/${requestId}/limit`, { personaId, value }),
   removeItem: (requestId: string, memoryId: string) => call<{ decisionId: string; state: AppState }>('DELETE', `/api/requests/${requestId}/items/${memoryId}`),
   rerunAsync: (requestId: string, regenerateOptions: boolean) => call<{ jobId: string }>('POST', `/api/requests/${requestId}/rerun?async=1`, { regenerateOptions }),
@@ -101,6 +107,7 @@ export interface EvalReport {
   heuristic: HoldoutReport;
   live: HoldoutReport | null;
   scenarios: { name: string; pass: boolean; detail: string }[];
+  planChecks?: { name: string; pass: boolean; detail: string }[];
   integrity: { personas: number; sources: number; memoryItems: number; verifiedQuotes: number };
   measures: string[];
 }

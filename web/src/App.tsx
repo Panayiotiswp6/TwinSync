@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { SourceRef } from '../../shared/types';
-import { api, type AppState } from './api';
+import { api, type AppState, type StartGroup } from './api';
 import { Composer } from './components/Composer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { Shell, parseRoute, type Route } from './components/Shell';
@@ -42,12 +42,15 @@ export function App() {
 
   if (!state) return <div className="boot">{error ? `Σφάλμα: ${error}` : <span className="spinner" />}</div>;
 
-  const reset = async (empty: boolean) => {
-    const msg = empty
-      ? 'Διαγραφή ΟΛΩΝ των Twins, πηγών, αναμνήσεων και αποφάσεων; Η εφαρμογή θα ξεκινήσει άδεια για να φτιάξετε τα δικά σας Twins. Δεν αναιρείται.'
-      : 'Αντικατάσταση όλων των δεδομένων με τη συνθετική demo παρέα; Ό,τι προσθέσατε θα χαθεί.';
+  const reset = async (kind: StartGroup) => {
+    const msg =
+      kind === 'empty'
+        ? 'Διαγραφή ΟΛΩΝ των Twins, πηγών, αναμνήσεων και αποφάσεων; Η εφαρμογή θα ξεκινήσει άδεια για να φτιάξετε τα δικά σας Twins. Δεν αναιρείται.'
+        : kind === 'team'
+          ? 'Επαναφορά στην παρέα της ομάδας (όπως είναι στο repo); Ό,τι προσθέσατε εδώ θα χαθεί.'
+          : 'Αντικατάσταση όλων των δεδομένων με τη συνθετική demo παρέα; Ό,τι προσθέσατε θα χαθεί.';
     if (!window.confirm(msg)) return;
-    setState(await api.reset(empty));
+    setState(await api.reset(kind));
     window.location.hash = '/';
   };
 

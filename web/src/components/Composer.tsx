@@ -6,12 +6,20 @@ import { LiveTwinChat } from './TwinChat';
 import { Avatar } from './ui';
 
 const IDEAS = [
-  { emoji: '🧳', text: 'Βρείτε μας ένα τριήμερο για τις 4–6 Δεκεμβρίου' },
+  { emoji: '☕', text: 'Καφές στο Παγκράτι το Σάββατο στις 16:30, ως 8€, κάπου ήσυχο' },
+  { emoji: '🍸', text: 'Ποτό στο κέντρο την Παρασκευή μετά τις 21:30, ως 25€' },
+  { emoji: '🧳', text: 'Τετραήμερο στο εξωτερικό 4–7 Δεκεμβρίου, ως 450€' },
+  { emoji: '🎶', text: 'Live μουσική το Σάββατο 12 Δεκεμβρίου μετά τις 21:00, ως 30€' },
   { emoji: '🏞️', text: 'Βρες μας ένα διήμερο αυτό το ΣΚ' },
-  { emoji: '🍽️', text: 'Πού να φάμε την Παρασκευή το βράδυ;' },
-  { emoji: '🎉', text: 'Έξοδος για ποτό το Σάββατο, κάτι διαφορετικό' },
-  { emoji: '🎁', text: 'Τι δώρο να πάρουμε μαζί στη Μαρία για τα γενέθλιά της;' },
 ];
+const CITY_KEY = 'twinsync.city';
+const readCity = () => {
+  try {
+    return localStorage.getItem(CITY_KEY) || '';
+  } catch {
+    return '';
+  }
+};
 
 export const PIPELINE = ['Κατανόηση αιτήματος', 'Ανάκτηση μνήμης', 'Υποψήφιες επιλογές', 'Τα Twins αξιολογούν', 'Κοινή απόφαση'];
 
@@ -46,6 +54,7 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
   const [wishes, setWishes] = useState<Record<string, string>>({});
   const [showWishes, setShowWishes] = useState(!compact);
   const [busy, setBusy] = useState(false);
+  const [city, setCity] = useState(readCity);
   const [jobId, setJobId] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
 
@@ -53,7 +62,12 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
     setBusy(true);
     setErr(null);
     try {
-      setJobId((await api.createRequestAsync(text, participants, wishes)).jobId);
+      try {
+        if (city.trim()) localStorage.setItem(CITY_KEY, city.trim());
+      } catch {
+        /* remembered city is only a convenience */
+      }
+      setJobId((await api.createRequestAsync(text, participants, wishes, city.trim() || 'Αθήνα', !city.trim())).jobId);
     } catch (e) {
       setErr((e as Error).message);
       setBusy(false);
@@ -117,6 +131,10 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
             );
           })}
         </div>
+        <label className="city-field small" title="Πού βρίσκεται η παρέα. Αν το γράψει το αίτημα («είμαστε στη Θεσσαλονίκη»), μετράει εκείνο.">
+          📍
+          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Αθήνα (παραδοχή)" aria-label="Πόλη της παρέας" />
+        </label>
         <button className="link-btn small" onClick={() => setShowWishes((s) => !s)}>
           {showWishes ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Προσωρινές επιθυμίες
         </button>

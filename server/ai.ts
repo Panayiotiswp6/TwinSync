@@ -11,10 +11,18 @@ import Anthropic from '@anthropic-ai/sdk';
 import OpenAI from 'openai';
 import { z } from 'zod';
 import type { MemoryDraft } from '../shared/heuristics';
-import { CATEGORIES, DOMAINS, type CandidateOption, type Category, type Evaluation, type MemoryItem, type Persona, type StyleCard } from '../shared/types';
+import { CATEGORIES, DOMAINS, type CandidateOption, type Category, type Evaluation, type Itinerary, type MemoryItem, type Persona, type RequestKind, type StyleCard, type Venue } from '../shared/types';
 import { contextHint, type RequestContext, WHERE_LABEL } from '../shared/context';
+import { KIND_CATEGORY, KIND_LABEL, LOCAL_KINDS } from '../shared/plan';
 import { containsQuote, clamp } from '../shared/text';
-import { parseIso } from '../shared/time';
+import { athensIso, localParts, parseIso } from '../shared/time';
+
+const KINDS: RequestKind[] = ['coffee', 'drinks', 'club', 'live', 'dinner', 'trip', 'activity', 'gift', 'other'];
+/** "2026-11-20T14:05:00+02:00" in Athens local time (correct offset, DST included). */
+function athensNow(now: Date): string {
+  const p = localParts(now);
+  return athensIso(p.y, p.m, p.d, p.hh, p.mm);
+}
 import { store } from './store';
 
 export type Provider = 'openai' | 'anthropic' | 'demo';
@@ -298,31 +306,43 @@ export interface ParsedRequest {
   periodEnd: string | null;
   where: 'local' | 'domestic' | 'abroad' | null;
   place: string;
+  kind: RequestKind;
+  /** City the group is in, if the text says so ('' otherwise). */
+  city: string;
+  area: string;
   groupDrafts: MemoryDraft[];
   wishDrafts: Record<string, MemoryDraft[]>;
 }
 
-export async function parseRequest(text: string, now: Date, wishes: { personaId: string; name: string; text: string }[]): Promise<ParsedRequest> {
+export async function parseRequest(text: string, now: Date, wishes: { personaId: string; name: string; text: string }[], groupCity = 'Αθήνα', participants = 2): Promise<ParsedRequest> {
   const data = await completeJSON({
     name: 'group_request',
-    system: `You read a Greek group request from friends in Athens, plus each person's one-off wishes for THIS request only.
-Today is ${now.toISOString()} (Europe/Athens, UTC+02:00).
-- category: trip, food, entertainment, activity, gift or other.
-- where: local (in Athens), domestic (elsewhere in Greece) or abroad; place: the destination if named, else "".
+    system: `You read a Greek group request from ${participants} friends, plus each person's one-off wishes for THIS request only.
+Unless the text says otherwise the group is in ${groupCity}. Today is ${athensNow(now)} (Europe/Athens local time; use the real Athens UTC offset for every datetime: +02:00 in winter, +03:00 in summer).
+- kind: what exactly is asked — coffee (καφές, also studying at a café), drinks (ποτό, cocktail, wine, beer bar), club, live (συναυλία, μπουζούκια, live μουσική), dinner (φαγητό), trip (ταξίδι/εκδρομή of one or more nights), activity, gift, other.
+- category: trip, food (dinner), entertainment (coffee, drinks, club, live), activity, gift or other.
+- city: the city where the group IS / starts from if the text states it (e.g. "είμαστε στη Θεσσαλονίκη" → Θεσσαλονίκη), else "". A local plan in Thessaloniki is local, not a trip.
+- area: the requested neighbourhood(s) for a local plan exactly as asked (e.g. "Ζωγράφου ή Ιλίσια", "Καμάρα ή Ναυαρίνου", "κέντρο"), else "".
+- where: local (in the group's city), domestic (elsewhere in Greece) or abroad; place: the trip destination if named, else "".
+- One evening that runs past midnight is ONE outing.
 - period: the concrete start and end (ISO with +02:00) the request implies; if vague, choose the nearest sensible window (e.g. "αυτό το ΣΚ" = coming Saturday 09:00 to Sunday 21:00, "τριήμερο" = Friday evening to Sunday night unless a day is named).
 - groupItems: limits stated in the request text itself that apply to everyone (e.g. "μέχρι 100€").
 - wishes: for each person, turn their one-off wish text into memory items (scope: this request). Quotes must come from THAT person's wish text.
 ${MEMORY_RULES}
 - For one-off deadlines use latest_end with an ISO datetime inside or right after the period.
-- Wishes are what the person wants for THIS plan: a budget written in a wish is the person's limit for the whole plan (hard=true if stated as a limit).`,
+- Wishes are what the person wants for THIS plan: a budget written in a wish is the person's limit for the whole plan (hard=true if stated as a limit: "≤", "μέχρι", "όχι πάνω από"; soft if a target: "γύρω στα", "περίπου").
+- max_cost is EUR PER PERSON. If an amount is clearly for the whole group ("όλοι μαζί", "συνολικά για την παρέα"), divide by ${participants}.`,
     user: `Request: """${text}"""\n\n${wishes.map((w) => `Wish of ${w.name} (personaId ${w.personaId}): """${w.text}"""`).join('\n') || 'No one-off wishes.'}`,
     schema: {
       type: 'object',
       additionalProperties: false,
-      required: ['title', 'category', 'where', 'place', 'periodStart', 'periodEnd', 'groupItems', 'wishes'],
+      required: ['title', 'kind', 'category', 'city', 'area', 'where', 'place', 'periodStart', 'periodEnd', 'groupItems', 'wishes'],
       properties: {
         title: { type: 'string', description: 'short Greek title, max 60 chars' },
+        kind: { type: 'string', enum: KINDS },
         category: { type: 'string', enum: CATEGORIES },
+        city: { type: 'string' },
+        area: { type: 'string' },
         where: { type: 'string', enum: ['local', 'domestic', 'abroad'] },
         place: { type: 'string' },
         periodStart: { type: 'string' },
@@ -340,6 +360,9 @@ ${MEMORY_RULES}
     .object({
       title: z.string(),
       category: z.string(),
+      kind: z.enum(KINDS as [RequestKind, ...RequestKind[]]).catch('other'),
+      city: z.string().catch(''),
+      area: z.string().catch(''),
       where: z.enum(['local', 'domestic', 'abroad']).catch('local'),
       place: z.string().catch(''),
       periodStart: z.string(),
@@ -355,11 +378,14 @@ ${MEMORY_RULES}
   }
   return {
     title: p.title.trim().slice(0, 70) || text.slice(0, 60),
-    category: (CATEGORIES as string[]).includes(p.category) ? (p.category as Category) : 'other',
+    category: p.kind !== 'other' ? KIND_CATEGORY[p.kind] : (CATEGORIES as string[]).includes(p.category) ? (p.category as Category) : 'other',
     periodStart: parseIso(p.periodStart) ? p.periodStart : null,
     periodEnd: parseIso(p.periodEnd) ? p.periodEnd : null,
     where: p.where,
     place: clean(p.place).slice(0, 60),
+    kind: p.kind,
+    city: clean(p.city).slice(0, 40),
+    area: clean(p.area).slice(0, 80),
     groupDrafts: p.groupItems.map(toDraft).filter((d): d is MemoryDraft => !!d && containsQuote(text, d.quote)),
     wishDrafts,
   };
@@ -399,17 +425,62 @@ const READING_RULES = `How to read each person's memory:
 - Items "από προηγούμενη απόφαση" come from how the person actually decided before — they are better evidence than general statements.
 - If nothing in the memory covers an aspect, do not penalise it: infer cautiously from similar items, or stay neutral and mention it in unknowns.`;
 
-export async function generateOptions(req: { title: string; text: string; category: Category; periodStart: string | null; periodEnd: string | null; place?: string }, twins: TwinContext[], ctx?: RequestContext | null): Promise<CandidateOption[]> {
+/** A catalogue venue as given to the model (public listing; hours/programme never verified). */
+export interface CatalogueVenue {
+  name: string;
+  subtype: string;
+  area: string;
+  address?: string;
+  quiet?: boolean;
+  priceHint?: number;
+}
+
+export interface PlanRequest {
+  title: string;
+  text: string;
+  category: Category;
+  periodStart: string | null;
+  periodEnd: string | null;
+  place?: string;
+  kind?: RequestKind;
+  city?: string;
+  area?: string;
+}
+
+const LINKS = {
+  type: 'array',
+  items: { type: 'object', additionalProperties: false, required: ['personaId', 'memoryId', 'text'], properties: { personaId: { type: 'string' }, memoryId: { type: 'string' }, text: { type: 'string', description: 'short Greek: which wish this serves and how' } } },
+};
+const RawLink = z.object({ personaId: z.string(), memoryId: z.string(), text: z.string() });
+
+function memoryBlock(twins: TwinContext[], ctx?: RequestContext | null) {
+  return twins.map((t) => `${t.persona.name} (personaId ${t.persona.id}):\n${describeItems(t.items, ctx, t.learned) || '  (no memory)'}`).join('\n\n');
+}
+
+/** Candidate plans. Local kinds: one named venue each. Trips: full itineraries. */
+export async function generateOptions(req: PlanRequest, twins: TwinContext[], ctx?: RequestContext | null, catalogue: CatalogueVenue[] = [], feedback: string[] = []): Promise<CandidateOption[]> {
+  const city = req.city || 'Αθήνα';
+  const retry = feedback.length ? `\n\nA previous attempt was REJECTED by the validator for: ${feedback.slice(0, 6).join('; ')}. Fix these.` : '';
+  if (req.kind === 'trip') return generateTrips(req, twins, ctx, city, retry);
+  const local = !!req.kind && LOCAL_KINDS.includes(req.kind);
   const data = await completeJSON({
     name: 'candidate_options',
-    system: `You propose concrete options for a group of friends based in Athens, Greece.
-Use what each person's twin memory says; make the options DIFFERENT from each other so the group has a real choice, and try to include at least one option that satisfies every HARD item that applies and is as close as possible to everyone's wishes.
+    system: `You propose concrete, followable plans for a group of friends who are in ${city}. Request kind: ${req.kind ? KIND_LABEL[req.kind] : 'other'}.
 ${READING_RULES}
-- 5 options, realistic for Greece (real places are fine), with an honest estimated cost per person in euros (include transport/stay/food for trips; use -1 if you cannot estimate).
-- startsAt / endsAt: ISO datetimes with +02:00 inside the requested period; endsAt = when they are back / the plan ends.
-- features: 3-6 short Greek phrases that let each twin judge the option (e.g. accommodation type, private bathroom, vegetarian dishes, sea, hiking hours, music volume, crowd).
-- These are suggestions with estimated prices, not bookings. Write every text field in Greek only (place names may be in Latin script).`,
-    user: `Request (${req.category}): ${req.title}\nOriginal text: """${req.text}"""\nPeriod: ${req.periodStart ?? '?'} → ${req.periodEnd ?? '?'} (${describeContext(ctx)}${req.place ? `, ${req.place}` : ''})\n\n${twins.map((t) => `${t.persona.name} (${t.persona.id}):\n${describeItems(t.items, ctx, t.learned) || '  (no memory)'}`).join('\n\n')}`,
+- 5 options, DIFFERENT from each other, each answering the request as asked. Include at least one option that satisfies every strict item that applies, and as close as possible to everyone's wishes. Do not add things nobody asked for (no extra walk or snack).
+${
+  local
+    ? `- Each option is ONE specific, NAMED place (its real name) of the requested kind, in ${city}${req.area ? ` and inside the requested area: ${req.area}` : ''}. Never "κάπου στα …", "ένα καφέ κοντά στο …", "ένα από τα μπαρ της οδού …".
+- Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well; it will be shown as "to verify".
+- coffee: cafés only. drinks: follow the asked type (cocktail bar, quiet bar, wine bar, beer). club: a club. live: a venue for live music — do NOT state an artist, programme, start time or ticket price as fact; say the programme must be confirmed.
+- startsAt/endsAt: the proposed time window inside the requested period (ISO with the Athens offset). One evening past midnight is one outing.
+- costPerPerson: honest estimate per person for what they will order/pay (-1 if unknown); costNote: what it includes.
+- features: 3-5 short Greek facts that help judging (quiet or loud, comfortable tables, music, distance to metro…).`
+    : `- Concrete options with real place names where relevant; startsAt/endsAt inside the requested period (ISO with the Athens offset); honest cost per person (-1 if unknown); 3-5 features. venueName: the main place ("" if none), area/city where it is.`
+}
+- why: 1-3 links per option to memory item ids WITH the personaId of the twin that owns the item — only wishes the option really serves (say so in the text; a wish it does NOT serve is not a why-link).
+- Greek text only (place names may be in Latin script).`,
+    user: `Request: ${req.title}\nOriginal text: """${req.text}"""\nPeriod: ${req.periodStart ?? '?'} → ${req.periodEnd ?? '?'} (${describeContext(ctx)})\nCity: ${city}${req.area ? ` · area: ${req.area}` : ''}\n\nCATALOGUE (${city}):\n${catalogue.map((v) => `- ${v.name} · ${v.subtype} · ${v.area}${v.address ? `, ${v.address}` : ''}${v.quiet ? ' · ήσυχο' : ''}${v.priceHint ? ` · ~${v.priceHint}€` : ''}`).join('\n') || '(none for this city/kind)'}\n\n${memoryBlock(twins, ctx)}${retry}`,
     schema: {
       type: 'object',
       additionalProperties: false,
@@ -420,17 +491,22 @@ ${READING_RULES}
           items: {
             type: 'object',
             additionalProperties: false,
-            required: ['title', 'emoji', 'summary', 'location', 'costPerPerson', 'costNote', 'startsAt', 'endsAt', 'features'],
+            required: ['title', 'emoji', 'summary', 'venueName', 'venueKind', 'area', 'city', 'address', 'costPerPerson', 'costNote', 'startsAt', 'endsAt', 'features', 'why'],
             properties: {
               title: { type: 'string' },
               emoji: { type: 'string' },
               summary: { type: 'string' },
-              location: { type: 'string' },
+              venueName: { type: 'string' },
+              venueKind: { type: 'string', description: 'e.g. specialty café, cocktail bar, wine bar, club, live venue, taverna' },
+              area: { type: 'string' },
+              city: { type: 'string' },
+              address: { type: 'string', description: 'street address only if you are sure, else ""' },
               costPerPerson: { type: 'number' },
               costNote: { type: 'string' },
               startsAt: { type: 'string' },
               endsAt: { type: 'string' },
               features: { type: 'array', items: { type: 'string' } },
+              why: LINKS,
             },
           },
         },
@@ -438,20 +514,201 @@ ${READING_RULES}
     },
     maxTokens: 7000,
   });
-  const p = z.object({ options: z.array(z.object({ title: z.string(), emoji: z.string(), summary: z.string(), location: z.string(), costPerPerson: z.number(), costNote: z.string(), startsAt: z.string(), endsAt: z.string(), features: z.array(z.string()) })) }).parse(data);
+  const p = z
+    .object({
+      options: z.array(
+        z.object({
+          title: z.string(),
+          emoji: z.string(),
+          summary: z.string(),
+          venueName: z.string(),
+          venueKind: z.string(),
+          area: z.string(),
+          city: z.string(),
+          address: z.string(),
+          costPerPerson: z.number(),
+          costNote: z.string(),
+          startsAt: z.string(),
+          endsAt: z.string(),
+          features: z.array(z.string()),
+          why: z.array(RawLink),
+        }),
+      ),
+    })
+    .parse(data);
   return p.options.slice(0, 6).map((o, i) => ({
     id: `opt-${i + 1}`,
-    title: clean(o.title).slice(0, 80),
+    title: clean(o.title).slice(0, 90),
     emoji: [...o.emoji].slice(0, 2).join('') || '✨',
-    summary: clean(o.summary).slice(0, 300),
-    location: clean(o.location).slice(0, 80),
+    summary: clean(o.summary).slice(0, 400),
+    location: clean([o.area, o.city].filter(Boolean).join(', ')).slice(0, 80),
     costPerPerson: o.costPerPerson >= 0 ? Math.round(o.costPerPerson) : null,
     costNote: clean(o.costNote).slice(0, 160),
     startsAt: parseIso(o.startsAt) ? o.startsAt : null,
     endsAt: parseIso(o.endsAt) ? o.endsAt : null,
     features: o.features.slice(0, 7).map((f) => clean(f).slice(0, 80)),
-    origin: 'ai',
+    origin: 'ai' as const,
+    ...(o.venueName.trim()
+      ? { venue: { name: clean(o.venueName).slice(0, 80), kind: clean(o.venueKind).slice(0, 40), area: clean(o.area).slice(0, 60), city: clean(o.city).slice(0, 40) || city, ...(o.address.trim() ? { address: clean(o.address).slice(0, 80) } : {}) } satisfies Venue }
+      : {}),
+    why: o.why.map((w) => ({ ...w, text: clean(w.text).slice(0, 160) })),
   }));
+}
+
+const SLOT = {
+  type: 'object',
+  additionalProperties: false,
+  required: ['start', 'end', 'part', 'title', 'place', 'serves', 'alternative', 'conditional'],
+  properties: {
+    start: { type: 'string', description: 'HH:MM local time' },
+    end: { type: 'string', description: 'HH:MM local time' },
+    part: { type: 'string', enum: ['morning', 'afternoon', 'evening', 'night'] },
+    title: { type: 'string', description: 'specific stop, e.g. a named trail, museum, club, restaurant street' },
+    place: { type: 'string' },
+    serves: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['personaId', 'memoryId'], properties: { personaId: { type: 'string' }, memoryId: { type: 'string' } } } },
+    alternative: { type: 'string', description: 'fallback if it does not run (weather, season, closed) or ""' },
+    conditional: { type: 'string', description: 'what it depends on (booking, weather) or ""' },
+  },
+};
+const RawSlot = z.object({ start: z.string(), end: z.string(), part: z.enum(['morning', 'afternoon', 'evening', 'night']), title: z.string(), place: z.string(), serves: z.array(z.object({ personaId: z.string(), memoryId: z.string() })), alternative: z.string(), conditional: z.string() });
+
+async function generateTrips(req: PlanRequest, twins: TwinContext[], ctx: RequestContext | null | undefined, origin: string, retry: string): Promise<CandidateOption[]> {
+  const dates: string[] = [];
+  const s = parseIso(req.periodStart);
+  const e = parseIso(req.periodEnd);
+  if (s && e) for (let t = s.getTime(); dates.length < 10; t += 86400000) {
+    const p = localParts(new Date(t));
+    const d = `${p.y}-${String(p.m).padStart(2, '0')}-${String(p.d).padStart(2, '0')}`;
+    if (dates.at(-1) !== d) dates.push(d);
+    const pe = localParts(e);
+    if (d === `${pe.y}-${String(pe.m).padStart(2, '0')}-${String(pe.d).padStart(2, '0')}`) break;
+  }
+  const where = ctx?.where === 'abroad' ? 'abroad (any country that fits; it does NOT have to be in Greece)' : ctx?.where === 'domestic' ? 'in Greece' : 'anywhere that fits';
+  const data = await completeJSON({
+    name: 'trip_plans',
+    system: `You plan complete group trips that people can actually follow. The group starts from ${origin}. Destination: ${where}${req.place ? `, the request names: ${req.place}` : ''}.
+${READING_RULES}
+- 3 DIFFERENT plans, each ONE destination city and country.
+- itinerary.days: one entry for EVERY date in ${JSON.stringify(dates)} (date as YYYY-MM-DD, title like "Πέμπτη — άφιξη"), each with 2-4 slots in time order, no overlaps (HH:MM local time). First day starts with the departure transfer, last day ends with the return.
+- Slots are SPECIFIC: a named trail/peak, museum, market, a named club or bar for the night, a restaurant area. Realistic transfer times and a safety buffer before the return. In winter, if a cable car / trail / beach may not run, give an "alternative".
+- serves: the memory ids (with the owner's personaId) each slot really serves. Cover every person's wishes somewhere if possible; strict needs (e.g. private bathroom) go into stay.note.
+- depart.at / return.at: ISO datetimes with the Athens offset; return.at = arrival back in ${origin}, respecting every return deadline in the memory.
+- cost per person in EUR: transport + stay + food + activities = total (estimates, flights/bus included).
+- Greek text only (place names may be in Latin script).`,
+    user: `Request: ${req.title}\nOriginal text: """${req.text}"""\nPeriod: ${req.periodStart ?? '?'} → ${req.periodEnd ?? '?'} (${describeContext(ctx)})\n\n${memoryBlock(twins, ctx)}${retry}`,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['options'],
+      properties: {
+        options: {
+          type: 'array',
+          items: {
+            type: 'object',
+            additionalProperties: false,
+            required: ['title', 'emoji', 'summary', 'destination', 'country', 'features', 'why', 'itinerary'],
+            properties: {
+              title: { type: 'string', description: 'city, country — short hook' },
+              emoji: { type: 'string' },
+              summary: { type: 'string', description: 'two sentences' },
+              destination: { type: 'string' },
+              country: { type: 'string' },
+              features: { type: 'array', items: { type: 'string' } },
+              why: LINKS,
+              itinerary: {
+                type: 'object',
+                additionalProperties: false,
+                required: ['depart', 'return', 'stay', 'days', 'cost'],
+                properties: {
+                  depart: { type: 'object', additionalProperties: false, required: ['at', 'mode'], properties: { at: { type: 'string' }, mode: { type: 'string' } } },
+                  return: { type: 'object', additionalProperties: false, required: ['at', 'mode'], properties: { at: { type: 'string' }, mode: { type: 'string' } } },
+                  stay: { type: 'object', additionalProperties: false, required: ['name', 'area', 'note'], properties: { name: { type: 'string' }, area: { type: 'string' }, note: { type: 'string' } } },
+                  days: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['date', 'title', 'slots'], properties: { date: { type: 'string' }, title: { type: 'string' }, slots: { type: 'array', items: SLOT } } } },
+                  cost: {
+                    type: 'object',
+                    additionalProperties: false,
+                    required: ['transport', 'stay', 'food', 'activities', 'total'],
+                    properties: { transport: { type: 'number' }, stay: { type: 'number' }, food: { type: 'number' }, activities: { type: 'number' }, total: { type: 'number' } },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+    maxTokens: 16000,
+  });
+  const p = z
+    .object({
+      options: z.array(
+        z.object({
+          title: z.string(),
+          emoji: z.string(),
+          summary: z.string(),
+          destination: z.string(),
+          country: z.string(),
+          features: z.array(z.string()),
+          why: z.array(RawLink),
+          itinerary: z.object({
+            depart: z.object({ at: z.string(), mode: z.string() }),
+            return: z.object({ at: z.string(), mode: z.string() }),
+            stay: z.object({ name: z.string(), area: z.string(), note: z.string() }),
+            days: z.array(z.object({ date: z.string(), title: z.string(), slots: z.array(RawSlot) })),
+            cost: z.object({ transport: z.number(), stay: z.number(), food: z.number(), activities: z.number(), total: z.number() }),
+          }),
+        }),
+      ),
+    })
+    .parse(data);
+  return p.options.slice(0, 4).map((o, i): CandidateOption => {
+    const it: Itinerary = {
+      origin,
+      destination: clean(o.destination).slice(0, 60),
+      country: clean(o.country).slice(0, 40),
+      depart: { at: o.itinerary.depart.at, mode: clean(o.itinerary.depart.mode).slice(0, 80) },
+      return: { at: o.itinerary.return.at, mode: clean(o.itinerary.return.mode).slice(0, 80) },
+      stay: { name: clean(o.itinerary.stay.name).slice(0, 80), area: clean(o.itinerary.stay.area).slice(0, 60), note: clean(o.itinerary.stay.note).slice(0, 160) },
+      days: o.itinerary.days.slice(0, 10).map((d) => ({
+        date: d.date.slice(0, 10),
+        title: clean(d.title).slice(0, 60),
+        slots: d.slots.slice(0, 6).map((x) => ({
+          start: x.start,
+          end: x.end,
+          part: x.part,
+          title: clean(x.title).slice(0, 120),
+          place: clean(x.place).slice(0, 80),
+          serves: x.serves,
+          ...(x.alternative.trim() ? { alternative: clean(x.alternative).slice(0, 140) } : {}),
+          ...(x.conditional.trim() ? { conditional: clean(x.conditional).slice(0, 120) } : {}),
+        })),
+      })),
+      cost: { transport: Math.round(o.itinerary.cost.transport), stay: Math.round(o.itinerary.cost.stay), food: Math.round(o.itinerary.cost.food), activities: Math.round(o.itinerary.cost.activities), total: Math.round(o.itinerary.cost.total) },
+    };
+    return {
+      id: `opt-${i + 1}`,
+      title: clean(o.title).slice(0, 90),
+      emoji: [...o.emoji].slice(0, 2).join('') || '🧳',
+      summary: clean(o.summary).slice(0, 400),
+      location: `${it.destination}, ${it.country}`,
+      costPerPerson: it.cost.total,
+      costNote: `μετακίνηση ${it.cost.transport}€ + διαμονή ${it.cost.stay}€ + φαγητό ${it.cost.food}€ + δραστηριότητες ${it.cost.activities}€`,
+      startsAt: parseIso(it.depart.at) ? it.depart.at : null,
+      endsAt: parseIso(it.return.at) ? it.return.at : null,
+      features: o.features.slice(0, 6).map((f) => clean(f).slice(0, 80)),
+      origin: 'ai',
+      why: o.why.map((w) => ({ ...w, text: clean(w.text).slice(0, 160) })),
+      itinerary: it,
+    };
+  });
+}
+
+/** One line per option for the evaluator: the SAME validated plan the group will see. */
+export function describeOption(o: CandidateOption): string {
+  const head = `- ${o.id}: ${o.title}${o.venue ? ` | ${o.venue.name} (${o.venue.kind}), ${o.venue.area}` : ` | ${o.location}`} | ${o.costPerPerson ?? '?'}€/άτομο | ${o.startsAt ?? '?'} → ${o.endsAt ?? '?'} | ${o.features.join('; ')}${o.event ? ' | πρόγραμμα ΜΗ επιβεβαιωμένο' : ''} | ${o.summary}`;
+  if (!o.itinerary) return head;
+  const it = o.itinerary;
+  return `${head}\n    διαμονή: ${it.stay.name}, ${it.stay.area} (${it.stay.note})\n${it.days.map((d) => `    ${d.date} ${d.title}: ${d.slots.map((x) => `${x.start}-${x.end} ${x.title}${x.alternative ? ` [εναλλακτική: ${x.alternative}]` : ''}`).join(' · ')}`).join('\n')}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -470,9 +727,7 @@ ${READING_RULES}
 - violations: ONLY for HARD items without a numeric rule (e.g. vegetarian, no tent) whose context applies to this plan and that the option itself clearly breaks; cite the memoryId. Something true of every option because of the requested dates (e.g. "works on Saturdays") is not a violation of an option — mention it in unknowns. Numeric limits (cost, time) are checked by code — do not list them.
 - unknowns: what you cannot judge because the memory or the option lacks information. Never invent facts about the person.
 - verdict: a few Greek words in the person's voice.`,
-    user: `PLAN: ${request ?? ''} (${describeContext(ctx)})\n\nOPTIONS:\n${options
-      .map((o) => `- ${o.id}: ${o.title} | ${o.location} | ${o.costPerPerson ?? '?'}€/άτομο | ${o.startsAt ?? '?'} → ${o.endsAt ?? '?'} | ${o.features.join('; ')} | ${o.summary}`)
-      .join('\n')}\n\nPEOPLE:\n${twins.map((t) => `${t.persona.name} (personaId ${t.persona.id}):\n${describeItems(t.items, ctx, t.learned) || '  (no memory)'}`).join('\n\n')}`,
+    user: `PLAN: ${request ?? ''} (${describeContext(ctx)})\n\nOPTIONS:\n${options.map(describeOption).join('\n')}\n\nPEOPLE:\n${twins.map((t) => `${t.persona.name} (personaId ${t.persona.id}):\n${describeItems(t.items, ctx, t.learned) || '  (no memory)'}`).join('\n\n')}`,
     schema: {
       type: 'object',
       additionalProperties: false,
@@ -591,7 +846,8 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
 - Learn each voice only from that person's WRITING SAMPLES and style notes: length, slang, accents or not, punctuation, emoji, typical words. The voices must be clearly different.
 - Show how each person thinks: what they want first (their vote), why (their facts), what bothers them, what they are willing to give up. Disagree where the votes differ, then converge to the SHARED outcome (if it is a compromise, the person who gives something up says so in their own way).
 - 6-10 messages in total, each person at least once, natural order (not strictly round-robin). Each message max 160 characters, casual Greek chat, first person. No "Twin", "AI", "memory", "score" or numbers out of 100.
-- Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.`,
+- Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.
+- A twin NEVER accepts breaking its own strict limit and never changes a limit on its owner's behalf. If the SHARED facts say no option fits everyone, the conversation explains the conflict, the person whose limit is broken says what blocks them, and they ask their owner / the group what to change — no "οκ, κάνω πίσω".`,
     user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
       .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${b.style ? `${b.style.summary} | ${b.style.traits.join('; ')}` : 'unknown — write plainly'}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
       .join('\n\n')}`,
