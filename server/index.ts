@@ -7,7 +7,7 @@ import { aiModel, aiProvider, embeddingsEnabled } from './ai';
 import { evaluationReport, holdoutLive } from './evaluation';
 import { getJob, startJob } from './jobs';
 import { onboard } from './onboarding';
-import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, learnFromDecision, refreshStyle, removeItemAndRerun, runDecision, setLimit } from './pipeline';
+import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, learnFromDecision, refreshStyle, relaxLimit, removeItemAndRerun, runDecision, setLimit } from './pipeline';
 import { hasTeamSeed, parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
 
@@ -162,18 +162,27 @@ app.post(
 app.post(
   '/api/requests',
   wrap(async (req, res) => {
-    const b = z.object({ text: z.string().trim().min(3).max(1000), participants: z.array(z.string()).min(2), wishes: z.record(z.string(), z.string().max(1000)).default({}) }).parse(req.body);
+    const b = z
+      .object({
+        text: z.string().trim().min(3).max(1000),
+        participants: z.array(z.string()).min(2),
+        wishes: z.record(z.string(), z.string().max(1000)).default({}),
+        city: z.string().trim().max(40).optional(),
+        cityAssumed: z.boolean().optional(),
+      })
+      .parse(req.body);
+    const form = { city: b.city, cityAssumed: b.cityAssumed };
     const participants = b.participants.filter((id) => store.persona(id));
     if (participants.length < 2) return res.status(400).json({ error: 'Χρειάζονται τουλάχιστον δύο Twins' });
     if (req.query.async === '1') {
       // Long AI run: return a job id at once; the browser shows the twins' chat while it works.
       const job = startJob('request', async (emit) => {
-        const r = await createRequest(b.text, participants, b.wishes, emit);
+        const r = await createRequest(b.text, participants, b.wishes, emit, form);
         return { requestId: r.request.id, decisionId: r.decision.id };
       });
       return res.json({ jobId: job.id });
     }
-    const r = await createRequest(b.text, participants, b.wishes);
+    const r = await createRequest(b.text, participants, b.wishes, undefined, form);
     res.json({ requestId: r.request.id, decisionId: r.decision.id, state: snapshot() });
   }),
 );
@@ -206,8 +215,8 @@ app.post(
 app.post(
   '/api/requests/:id/wishes',
   wrap(async (req, res) => {
-    const b = z.object({ personaId: z.string(), text: z.string().trim().min(3).max(1000), scope: z.enum(['request', 'profile']) }).parse(req.body);
-    const r = await addWish(req.params.id, b.personaId, b.text, b.scope);
+    const b = z.object({ personaId: z.string(), text: z.string().trim().min(3).max(1000), scope: z.enum(['request', 'profile']), regenerate: z.boolean().default(false) }).parse(req.body);
+    const r = await addWish(req.params.id, b.personaId, b.text, b.scope, b.regenerate);
     res.json({ decisionId: r.decision.id, created: r.created.length, state: snapshot() });
   }),
 );
@@ -216,6 +225,14 @@ app.post(
   wrap(async (req, res) => {
     const b = z.object({ personaId: z.string(), value: z.number().positive().max(100000) }).parse(req.body);
     const d = await setLimit(req.params.id, b.personaId, 'max_cost', Math.round(b.value));
+    res.json({ decisionId: d.id, state: snapshot() });
+  }),
+);
+app.post(
+  '/api/requests/:id/relax',
+  wrap(async (req, res) => {
+    const b = z.object({ memoryId: z.string(), optionId: z.string() }).parse(req.body);
+    const d = await relaxLimit(req.params.id, b.memoryId, b.optionId);
     res.json({ decisionId: d.id, state: snapshot() });
   }),
 );

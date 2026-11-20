@@ -108,13 +108,19 @@ export function Home({ state, onState }: { state: AppState; onState: (s: AppStat
                     </>
                   ) : (
                     <>
-                      <span className="eyebrow light">{d?.outcome.status === 'compromise' ? 'Συμβιβασμός των Twins' : 'Πρόταση των Twins'}</span>
-                      <h3>{chosen?.title ?? '—'}</h3>
+                      <span className="eyebrow light">{d?.outcome.status === 'compromise' ? (d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα' : 'Χρειάζεται αλλαγή ορίου') : 'Πρόταση των Twins'}</span>
+                      <h3>{chosen?.venue?.name ?? chosen?.title ?? '—'}</h3>
+                      {chosen && (chosen.venue || chosen.itinerary) && (
+                        <span className="tiny muted">
+                          {chosen.venue ? [chosen.venue.area, chosen.venue.city].filter(Boolean).join(', ') : `${chosen.itinerary!.destination}, ${chosen.itinerary!.country} · ${chosen.itinerary!.days.length} μέρες`}
+                          {chosen.startsAt ? ` · ${formatWhen(chosen.startsAt)}` : ''}
+                        </span>
+                      )}
                       {chosen && (
                         <span className="cover-chips">
-                          {chosen.costPerPerson !== null && <span>{chosen.costPerPerson}€/άτομο</span>}
+                          {chosen.costPerPerson !== null && <span>≈{chosen.costPerPerson}€/άτομο</span>}
                           {chosen.endsAt && <span>έως {formatWhen(chosen.endsAt)}</span>}
-                          {chosen.location && <span>{chosen.location}</span>}
+                          {chosen.location && !chosen.venue && !chosen.itinerary && <span>{chosen.location}</span>}
                         </span>
                       )}
                     </>

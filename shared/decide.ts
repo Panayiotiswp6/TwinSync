@@ -84,12 +84,13 @@ export function decide(
   const results: OptionResult[] = options.map((o) => {
     const violations: Violation[] = [];
     const warnings: string[] = [];
+    const unverified: string[] = [];
     for (const { item: m, fit } of binding) {
       if (m.rule) {
         const v = checkRule(m, o, fit);
         if (v) violations.push({ personaId: m.personaId, memoryId: m.id, text: v, checkedBy: 'code', scope: m.scope });
         const u = ruleUnknown(m, o);
-        if (u) warnings.push(`${name(m.personaId)}: ${u} — δεν μπορεί να ελεγχθεί το «${m.statement}»`);
+        if (u) unverified.push(`${name(m.personaId)}: ${u} — η εφικτότητα για «${m.statement}» δεν επαληθεύτηκε`);
       } else {
         const judged = evalOf(m.personaId, o.id)?.violations.find((v) => v.memoryId === m.id);
         if (judged) violations.push({ personaId: m.personaId, memoryId: m.id, text: judged.text, checkedBy: 'judged', scope: m.scope });
@@ -107,6 +108,7 @@ export function decide(
       feasible: violations.length === 0,
       violations,
       warnings: [...new Set(warnings)],
+      unverified: [...new Set(unverified)],
       scores,
       min: vals.length ? Math.min(...vals) : 0,
       avg: Math.round(vals.reduce((a, b) => a + b, 0) / Math.max(vals.length, 1)),
@@ -162,10 +164,14 @@ export function decide(
   }
 
   let status: Outcome['status'] = 'agreement';
+  let noCommonTime = false;
   let chosen: OptionResult;
   if (feasible.length) {
-    const ranked = [...feasible].sort((a, b) => b.min - a.min || b.avg - a.avg || price(a.optionId) - price(b.optionId));
+    // Verified-feasible first: an unknown cost/end time against a strict limit is not "feasible for sure".
+    const unv = (r: OptionResult) => (r.unverified?.length ? 1 : 0);
+    const ranked = [...feasible].sort((a, b) => unv(a) - unv(b) || b.min - a.min || b.avg - a.avg || price(a.optionId) - price(b.optionId));
     chosen = ranked[0];
+    if (chosen.unverified?.length) rationale.push(`Προσοχή: η εφικτότητα δεν επαληθεύτηκε — ${chosen.unverified.join(' · ')}.`);
     if (ranked.length > 1) {
       const second = ranked[1];
       const lowest = Object.entries(second.scores).sort((a, b) => a[1] - b[1])[0];
@@ -182,8 +188,11 @@ export function decide(
     const people = (r: OptionResult) => new Set(r.violations.map((v) => v.personaId)).size;
     const ranked = [...results].sort((a, b) => people(a) - people(b) || a.violations.length - b.violations.length || sev(a) - sev(b) || b.min - a.min || b.avg - a.avg || price(a.optionId) - price(b.optionId));
     chosen = ranked[0];
+    noCommonTime = timeWindowsDisjoint(results, options, binding);
     rationale.push(
-      `Καμία επιλογή δεν περνά όλα τα όρια — προτείνεται η πιο κοντινή σε όλους: «${optName(chosen.optionId)}». Χρειάζεται να δεχτεί: ${chosen.violations.map((v) => `${name(v.personaId)} — ${v.text}`).join(' · ')}.`,
+      noCommonTime
+        ? `Δεν υπάρχει κοινή ώρα: το όριο ώρας ${[...new Set(chosen.violations.map((v) => name(v.personaId)))].join(', ')} λήγει πριν ξεκινήσει οποιαδήποτε επιλογή. Η πιο κοντινή είναι υποθετική: «${optName(chosen.optionId)}».`
+        : `Καμία επιλογή δεν περνά όλα τα αυστηρά όρια. Η πιο κοντινή σε όλους είναι υποθετική: «${optName(chosen.optionId)}» — θα χρειαζόταν αλλαγή από τον κάτοχο: ${chosen.violations.map((v) => `${name(v.personaId)} — ${v.text}`).join(' · ')}.`,
     );
   }
   const chosenOpt = options.find((o) => o.id === chosen.optionId)!;
@@ -205,16 +214,32 @@ export function decide(
       const against = evalOf(v.personaId, chosen.optionId)?.reasons.filter((r) => r.effect === 'against') ?? [];
       for (const r of against.slice(0, 2)) items.push(r.text);
     }
-    const mustAccept = chosen.violations.filter((x) => x.personaId === v.personaId);
-    for (const x of mustAccept) items.unshift(`Πρέπει να δεχτεί: ${x.text}`);
-    const stance = mustAccept.length && stanceFor(finalScore) === 'agree' ? 'agree_with_concession' : stanceFor(finalScore);
+    // A strict limit is never "accepted" by a twin: only its owner can change it.
+    const breaches = chosen.violations.filter((x) => x.personaId === v.personaId);
+    for (const x of breaches) items.unshift(`Παραβιάζεται αυστηρό όριο: ${x.text} — μόνο ο κάτοχος μπορεί να το αλλάξει`);
+    const stance: Stance = breaches.length ? 'object' : stanceFor(finalScore);
     return { personaId: v.personaId, stance, finalScore, voteScore: v.score, items };
   });
   const objecting = concessions.filter((c) => c.stance === 'object');
   if (objecting.length) rationale.push(`Προσοχή: ${objecting.map((c) => name(c.personaId)).join(', ')} κάτω από ${STANCE_THRESHOLDS.concede}/100 — χρειάζεται ανθρώπινη συζήτηση.`);
 
   const relaxations = status === 'compromise' ? relaxationsFor(results, options, inputs, name) : [];
-  return { status, chosenOptionId: chosen.optionId, results, votes, concessions, relaxations, rationale };
+  return { status, chosenOptionId: chosen.optionId, results, votes, concessions, relaxations, rationale, ...(noCommonTime ? { noCommonTime } : {}) };
+}
+
+/** Every option breaks a time limit that ends before the option even starts: the windows do not intersect. */
+function timeWindowsDisjoint(results: OptionResult[], options: CandidateOption[], binding: { item: MemoryItem; fit: Fit }[]): boolean {
+  const timeRules = binding.filter((b) => b.item.rule?.metric === 'latest_end');
+  if (!timeRules.length) return false;
+  return results.every((r) => {
+    const o = options.find((x) => x.id === r.optionId)!;
+    const start = parseIso(o.startsAt);
+    return r.violations.some((v) => {
+      const b = timeRules.find((t) => t.item.id === v.memoryId);
+      const deadline = b ? deadlineFor(b.item.rule!.value, start) : null;
+      return !!(deadline && start && deadline.getTime() <= start.getTime());
+    });
+  });
 }
 
 /** How far an option is from a limit: cost overshoot ratio, hours late / 24, judged = 1. */

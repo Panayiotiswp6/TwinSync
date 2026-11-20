@@ -11,7 +11,10 @@ import { athensIso } from '../shared/time';
 import { containsQuote } from '../shared/text';
 import type { CandidateOption, Category, Evaluation, MemoryItem, Persona } from '../shared/types';
 import { aiErrorReason, aiModel, evaluateOptions, liveAi } from './ai';
-import { loadSeed, type CatalogEntry } from './seed';
+import { loadSeed, loadTripFixtures, type CatalogEntry } from './seed';
+import { fixtureOption, venueCatalogue } from './pipeline';
+import { prepareOptions, validateItinerary } from '../shared/plan';
+import { spanDays } from '../shared/context';
 import { store } from './store';
 
 interface HoldoutCase {
@@ -162,7 +165,7 @@ export function runScenarios() {
   });
   const stuck = run([...base, limit('geo', 80)], 'trip');
   results.push({
-    name: 'Όριο 80€: τίποτα δεν χωράει — προτείνεται πάντα η πιο κοντινή επιλογή, με τι πρέπει να δεχτεί ο καθένας',
+    name: 'Όριο 80€: τίποτα δεν χωράει — η πιο κοντινή επιλογή μένει υποθετική, με την αλλαγή ορίου που θα την άνοιγε',
     pass: stuck.out.status === 'compromise' && !!stuck.out.chosenOptionId && stuck.out.relaxations.length > 0,
     detail: `${title(stuck)} · ${stuck.out.relaxations.map((r) => r.text).join(' | ')}`,
   });
@@ -173,6 +176,28 @@ export function runScenarios() {
   const pantVote = empty.out.votes.find((v) => v.personaId === 'pant')!;
   results.push({ name: 'Χωρίς δεδομένα: ουδέτερη βαθμολογία και χαμηλή βεβαιότητα, όχι εικασία', pass: pantVote.confidence === 'low' && Object.values(empty.out.results[0].scores).includes(50), detail: `βεβαιότητα: ${pantVote.confidence}` });
   return results;
+}
+
+/** Proposal quality, offline: are local plans named places in the right area, trips full and consistent plans? */
+export function planChecks() {
+  const out: { name: string; pass: boolean; detail: string }[] = [];
+  const cat = venueCatalogue();
+  const coffee = { kind: 'coffee' as const, city: 'Αθήνα', area: 'Ζωγράφου ή Ιλίσια', periodStart: '2026-11-21T16:30:00+02:00', periodEnd: '2026-11-21T18:30:00+02:00', text: 'καφές' };
+  const mk = (name: string, area: string): CandidateOption => ({ id: name, title: name, emoji: '', summary: '', location: '', costPerPerson: 6, costNote: '', startsAt: coffee.periodStart, endsAt: coffee.periodEnd, features: [], origin: 'ai', venue: { name, kind: 'καφέ', area, city: 'Αθήνα' } });
+  const r = prepareOptions([mk('Κάπου στα Ιλίσια', 'Ιλίσια'), mk('Καφές κοντά στο Σύνταγμα', 'Σύνταγμα'), mk('LOT 51 (MicroLot)', 'Ιλίσια'), mk('O Kokkos', 'Παγκράτι')], { req: coffee, items: [], wishes: [], wishText: '', catalogue: cat });
+  out.push({
+    name: 'Καφές σε Ζωγράφου/Ιλίσια: περνά μόνο επώνυμο καφέ μέσα στην περιοχή',
+    pass: r.valid.length === 1 && r.valid[0].venue?.name === 'LOT 51 (MicroLot)' && r.rejected.length === 3,
+    detail: `δεκτό: ${r.valid.map((o) => o.title).join(', ')} · απορρίφθηκαν: ${r.rejected.map((x) => `${x.title} (${x.reason})`).join(' | ')}`,
+  });
+  const live = prepareOptions([{ ...mk('Half Note Jazz Club', 'Μετς'), title: 'Συναυλία του Χ στο Half Note' }], { req: { ...coffee, kind: 'live', area: '' }, items: [], wishes: [], wishText: '', catalogue: cat }).valid[0];
+  out.push({ name: 'Live: χώρος χωρίς επιβεβαιωμένο πρόγραμμα δεν παρουσιάζεται ως εκδήλωση', pass: !!live && live.event?.status === 'unconfirmed' && !/συναυλ/i.test(live.title), detail: live?.title ?? '—' });
+  const period = { periodStart: '2026-12-04T09:00:00+02:00', periodEnd: '2026-12-07T21:00:00+02:00', city: 'Αθήνα' };
+  const trip = fixtureOption(loadTripFixtures()[0], period, loadSeed().memory);
+  const errors = validateItinerary(trip?.itinerary, period.periodStart, period.periodEnd);
+  out.push({ name: 'Τετραήμερο: 4 μέρες, χρονική σειρά, σύνολα κόστους, επιστροφή στην αφετηρία', pass: !!trip && trip.itinerary!.days.length === 4 && errors.length === 0, detail: errors.join(' · ') || `${trip?.title} · ${trip?.costPerPerson}€` });
+  out.push({ name: 'Μία βραδινή έξοδος μετά τα μεσάνυχτα μετρά ως 1 μέρα (όχι διπλάσιο budget)', pass: spanDays('2026-12-12T21:00:00+02:00', '2026-12-13T02:30:00+02:00') === 1, detail: '21:00 → 02:30' });
+  return out;
 }
 
 export function seedIntegrity() {
@@ -188,11 +213,14 @@ export function evaluationReport() {
     heuristic: holdoutHeuristic((id) => store.profile(id), store.personas),
     live: (store.liveEval as HoldoutReport | undefined) ?? null,
     scenarios: runScenarios(),
+    planChecks: planChecks(),
     integrity: seedIntegrity(),
     measures: [
       'Held-out: η ψήφος του Twin συγκρίνεται με την πραγματική (συνθετική) επιλογή του κατόχου, σε 8 αποφάσεις που δεν δόθηκαν ποτέ ως πηγή. Διαφορά βαθμολογίας < 3 μετρά ως «αβέβαιο», όχι ως σωστό.',
       'Live: το ίδιο με τον AI αξιολογητή (κοστίζει 8 μικρές κλήσεις, τρέχει μόνο όταν το ζητήσετε). Heuristic: ο κανόνας του demo mode, για σύγκριση.',
-      'Σενάρια: ελέγχουν τη λογική της ομάδας — περιορισμοί σε κώδικα, αλλαγή μετά από διόρθωση, συμβιβασμός όταν τίποτα δεν χωράει, απουσία δεδομένων.',
+      'Σενάρια: ελέγχουν τη λογική της ομάδας — περιορισμοί σε κώδικα, αλλαγή μετά από διόρθωση, πρόταση που χρειάζεται αλλαγή ορίου όταν τίποτα δεν χωράει, απουσία δεδομένων.',
+      'Ποιότητα προτάσεων: επώνυμο μαγαζί στη σωστή περιοχή, πλήρες πρόγραμμα ταξιδιού, τίμια αβεβαιότητα για live. Δεν αποδεικνύει ότι ένα μαγαζί είναι ανοιχτό ή έχει πρόγραμμα — αυτά εμφανίζονται πάντα «προς έλεγχο».',
+      'Fidelity (held-out) ≠ λογική ≠ ποιότητα προτάσεων: τα 8 held-out είναι συνθετικά και λίγα· δείχνουν τον μηχανισμό, όχι ότι το Twin γνωρίζει πραγματικούς ανθρώπους.',
       'Όλα τα δεδομένα είναι συνθετικά και λίγα — δείχνουν ότι ο μηχανισμός λειτουργεί, όχι στατιστική ακρίβεια σε πραγματικούς ανθρώπους.',
     ],
   };

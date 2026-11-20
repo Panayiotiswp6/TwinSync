@@ -5,7 +5,9 @@ import { describeDeadline, formatWhen } from '../../../shared/time';
 import { STANCE_THRESHOLDS } from '../../../shared/decide';
 import { api, type AppState } from '../api';
 import { Working } from '../components/Composer';
+import { Checks, PlanDetails, PlanHead } from '../components/Plan';
 import { LiveTwinChat, TwinChatView } from '../components/TwinChat';
+import { KIND_LABEL } from '../../../shared/plan';
 import { Avatar, AvatarStack, Badge, CATEGORY, Cite, Empty, ScoreRing, Spinner, timeAgo, type OpenSource } from '../components/ui';
 
 const STANCE = {
@@ -30,10 +32,12 @@ function OptionCard({ o, d, people, onOpen, memory }: { o: CandidateOption; d: D
       </div>
       <div className="opt-body">
         <h4>{o.title}</h4>
-        <p className="tiny muted">{o.location}</p>
+        <p className="tiny muted">{o.venue ? [o.venue.address, o.venue.area, o.venue.city].filter(Boolean).join(', ') : o.location}</p>
         <div className="opt-chips">
-          <span>{o.costPerPerson !== null ? `${o.costPerPerson}€/άτομο` : 'κόστος ;'}</span>
-          {o.endsAt && <span>έως {formatWhen(o.endsAt)}</span>}
+          <span>{o.costPerPerson !== null ? `≈${o.costPerPerson}€/άτομο` : 'κόστος ;'}</span>
+          {o.startsAt && <span>{formatWhen(o.startsAt)}</span>}
+          {o.itinerary && <span>{o.itinerary.days.length} μέρες</span>}
+          {o.synthetic && <span>συνθετικό</span>}
         </div>
         <p className="small">{o.summary}</p>
         <ul className="feat">
@@ -63,8 +67,9 @@ function OptionCard({ o, d, people, onOpen, memory }: { o: CandidateOption; d: D
             ⚠ {w}
           </p>
         ))}
+        <Checks checks={o.checks?.filter((c) => c.field === 'existence' || c.field === 'program')} compact />
         <p className="tiny muted">
-          {o.costNote} {o.origin === 'ai' ? '· εκτίμηση AI, όχι κράτηση' : '· κατάλογος demo'}
+          {o.costNote} {o.origin === 'ai' ? '· εκτίμηση AI, όχι κράτηση' : o.synthetic ? '· συνθετικό demo' : '· επιμελημένος κατάλογος'}
         </p>
       </div>
     </article>
@@ -75,6 +80,7 @@ function Wishes({ req, d, people, state, onState, onOpen }: { req: AppState['req
   const [who, setWho] = useState(people[0]?.id ?? '');
   const [text, setText] = useState('');
   const [scope, setScope] = useState<'request' | 'profile'>('request');
+  const [fresh, setFresh] = useState(false);
   const [limit, setLimit] = useState('');
   const [busy, setBusy] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -125,7 +131,10 @@ function Wishes({ req, d, people, state, onState, onOpen }: { req: AppState['req
           <option value="request">Μόνο για αυτό</option>
           <option value="profile">Αποθήκευση στο προφίλ</option>
         </select>
-        <button className="btn btn-brand" disabled={!!busy || text.trim().length < 3} onClick={() => run('wish', () => api.addWish(req.id, who, text, scope))}>
+        <label className="tiny muted fresh" title="Μια ποιοτική επιθυμία μπορεί να αλλάξει ΤΙ πρέπει να προταθεί">
+          <input type="checkbox" checked={fresh} onChange={(e) => setFresh(e.target.checked)} /> και νέες επιλογές
+        </label>
+        <button className="btn btn-brand" disabled={!!busy || text.trim().length < 3} onClick={() => run('wish', () => api.addWish(req.id, who, text, scope, fresh))}>
           {busy === 'wish' ? <Spinner /> : <Send size={15} />}
         </button>
       </div>
@@ -262,6 +271,18 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
   const chosen = d.options.find((o) => o.id === d.outcome.chosenOptionId);
   const live = state.status.aiMode === 'live';
 
+  const relax = async (memoryId: string, optionId: string) => {
+    setBusy('relax');
+    setErr(null);
+    try {
+      onState((await api.relax(req.id, memoryId, optionId)).state);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(null);
+    }
+  };
+
   const rerun = async (regenerate: boolean) => {
     setBusy(regenerate ? 'regen' : 'rerun');
     setErr(null);
@@ -281,7 +302,7 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
         </span>
         <div>
           <p className="eyebrow">
-            {CATEGORY[req.category].label} · {timeAgo(req.createdAt)} · {decisions.length} εκτελέσεις
+            {req.kind ? KIND_LABEL[req.kind] : CATEGORY[req.category].label} · {timeAgo(req.createdAt)} · {decisions.length} εκτελέσεις
           </p>
           <h2>{req.title}</h2>
           <p className="small muted">
@@ -290,6 +311,8 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
           {req.days && (
             <p className="tiny muted">
               Πλαίσιο: {req.days} {req.days === 1 ? 'μέρα' : 'μέρες'} · {req.where === 'abroad' ? 'εξωτερικό' : req.where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}
+              {req.city ? ` · ${req.kind === 'trip' ? 'αφετηρία' : 'πόλη'}: ${req.city}${req.cityAssumed ? ' (παραδοχή — αλλάζει στη φόρμα αιτήματος)' : ''}` : ''}
+              {req.area ? ` · περιοχή: ${req.area}` : ''}
               {req.place ? ` · ${req.place}` : ''} — τα όρια του προφίλ εφαρμόζονται μόνο όπου ταιριάζει το πλαίσιο.
             </p>
           )}
@@ -330,36 +353,72 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
             <Spinner label="Ξεκινάει…" />
           </div>
         )
-      ) : chosen ? (
-        <section className={`hero card ${d.outcome.status === 'compromise' ? 'compromise' : ''}`}>
+      ) : chosen && d.outcome.status === 'compromise' ? (
+        <section className="hero card compromise">
           <div className="hero-cover">
-            <span className="hero-emoji">{chosen.emoji}</span>
+            <span className="hero-emoji">{d.outcome.noCommonTime ? '⏱️' : '⚖️'}</span>
             <div>
-              <span className="eyebrow light">{d.outcome.status === 'compromise' ? 'Συμβιβασμός — η πιο κοντινή επιλογή σε όλους' : 'Η κοινή πρόταση των Twins'}</span>
-              <h2>{chosen.title}</h2>
-              <span className="cover-chips">
-                {chosen.costPerPerson !== null && <span>{chosen.costPerPerson}€/άτομο</span>}
-                {chosen.endsAt && <span>έως {formatWhen(chosen.endsAt)}</span>}
-                {chosen.location && <span>{chosen.location}</span>}
-              </span>
+              <span className="eyebrow light">Χρειάζεται απόφαση των κατόχων</span>
+              <h2>{d.outcome.noCommonTime ? 'Δεν υπάρχει κοινή ώρα' : 'Δεν υπάρχει πρόταση που να χωράει σε όλα τα αυστηρά όρια'}</h2>
+              <p className="small muted">Τα Twins δεν δέχονται παραβίαση ορίου για λογαριασμό κανενός. Τι θα άνοιγε επιλογές:</p>
             </div>
           </div>
           <div className="hero-body">
+            <ul className="plain relax">
+              {d.outcome.relaxations.map((r) => {
+                const m = d.inputs.find((x) => x.id === r.memoryId);
+                const owner = people.find((p) => p.id === r.personaId);
+                return (
+                  <li key={r.memoryId + r.optionId}>
+                    → {r.text}{' '}
+                    {m?.rule && owner && (
+                      <button className="btn btn-sm" disabled={!!busy} onClick={() => relax(r.memoryId, r.optionId)} title="Αλλάζει μόνο για αυτό το αίτημα, από τον ίδιο τον κάτοχο">
+                        <Avatar persona={owner} size={18} /> Το αλλάζω εγώ, μόνο για αυτό
+                      </button>
+                    )}
+                  </li>
+                );
+              })}
+              {!d.outcome.relaxations.length && <li>Καμία μεμονωμένη αλλαγή δεν αρκεί — αλλάξτε μια επιθυμία ή ζητήστε νέες επιλογές.</li>}
+            </ul>
+            <div className="hypo">
+              <p className="eyebrow">Πιο κοντινή εναλλακτική — υποθετική, όχι εφικτή χωρίς αλλαγή</p>
+              <h3>
+                {chosen.emoji} {chosen.title}
+              </h3>
+              <PlanHead o={chosen} />
+              {d.outcome.results
+                .find((r) => r.optionId === chosen.id)
+                ?.violations.map((v) => (
+                  <p key={v.memoryId} className="violation">
+                    ⛔ <b>{name(v.personaId)}</b>: {v.text}
+                  </p>
+                ))}
+            </div>
+            <ul className="plain rationale small">
+              {d.outcome.rationale.slice(-1).map((r) => (
+                <li key={r}>{r}</li>
+              ))}
+            </ul>
+          </div>
+        </section>
+      ) : chosen ? (
+        <section className="hero card">
+          <div className="hero-cover">
+            <span className="hero-emoji">{chosen.emoji}</span>
+            <div>
+              <span className="eyebrow light">Η κοινή πρόταση των Twins</span>
+              <h2>{chosen.venue?.name ?? chosen.title}</h2>
+              <PlanHead o={chosen} />
+            </div>
+          </div>
+          <div className="hero-body">
+            <PlanDetails o={chosen} people={people} memory={d.inputs} onOpen={onOpen} />
             <ul className="plain rationale">
               {d.outcome.rationale.slice(-2).map((r) => (
                 <li key={r}>{r}</li>
               ))}
             </ul>
-            {d.outcome.status === 'compromise' && d.outcome.relaxations.length > 0 && (
-              <details className="more">
-                <summary>Εναλλακτικά: τι θα έκανε εφικτή άλλη επιλογή</summary>
-                <ul className="plain relax small">
-                  {d.outcome.relaxations.map((r) => (
-                    <li key={r.memoryId + r.optionId}>→ {r.text}</li>
-                  ))}
-                </ul>
-              </details>
-            )}
             <div className="concessions">
               {d.outcome.concessions.map((c) => {
                 const p = people.find((x) => x.id === c.personaId)!;
@@ -500,6 +559,18 @@ export function Thread({ id, state, onState, onOpen }: { id: string; state: AppS
 
       <section>
         <h3 className="sec-title">Υποψήφιες επιλογές ({d.options.length})</h3>
+        {!!d.rejectedOptions?.length && (
+          <details className="more">
+            <summary>Απορρίφθηκαν πριν την ψηφοφορία ({d.rejectedOptions.length}) — έλεγχος σε κώδικα</summary>
+            <ul className="small">
+              {d.rejectedOptions.map((r, i) => (
+                <li key={r.title + i}>
+                  «{r.title}»: {r.reason}
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
         <div className="carousel">
           {d.options.map((o) => (
             <OptionCard key={o.id} o={o} d={d} people={people} onOpen={onOpen} memory={d.inputs} />

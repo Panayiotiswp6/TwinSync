@@ -1,14 +1,16 @@
 // Retrieval of the memory relevant to a request (RAG over each twin's memory).
-// Always included: hard constraints and request-only wishes. Soft memory is ranked by
+// Always included: request-only wishes and strict needs that bind this request. Soft memory is filtered by
+// relevance (category, context, domain) and ranked by
 // cosine similarity (OpenAI text-embedding-3-large, cached per item) or, without embeddings,
 // by keyword overlap. Keeps prompts small as owners add many sources.
 
 import { normalizeGreek } from '../shared/text';
-import type { MemoryItem } from '../shared/types';
+import { coreDomain, relevantTo, type RequestContext } from '../shared/context';
+import type { Category, MemoryItem, RequestKind } from '../shared/types';
 import { aiErrorReason, embed, embeddingsEnabled } from './ai';
 import { store } from './store';
 
-const TOP_K = Number(process.env.RETRIEVAL_TOP_K || 16);
+const TOP_K = Number(process.env.RETRIEVAL_TOP_K || 12);
 
 const itemText = (m: MemoryItem) => `${m.statement}. ${m.keywords.join(', ')}`;
 
@@ -35,16 +37,32 @@ function tokens(s: string): Set<string> {
 
 export interface RetrievalResult {
   items: MemoryItem[];
-  method: 'embeddings' | 'keywords' | 'all';
+  method: 'embeddings' | 'keywords';
   note?: string;
 }
 
-export async function retrieve(query: string, profile: MemoryItem[], requestItems: MemoryItem[]): Promise<RetrievalResult> {
-  const always = [...profile.filter((m) => m.hard), ...requestItems];
-  const soft = profile.filter((m) => !m.hard && m.kind !== 'style');
-  if (soft.length + always.length <= TOP_K + 4) return { items: [...always, ...soft], method: 'all' };
+export interface RetrievalScope {
+  kind?: RequestKind;
+  category: Category;
+  ctx?: RequestContext | null;
+}
 
-  if (embeddingsEnabled()) {
+/**
+ * Only memory that concerns THIS request:
+ *  - the twin's own wishes for the request — always;
+ *  - strict needs that bind here (category + context) — always;
+ *  - soft memory: relevant by category/context, then ranked (embeddings or keywords), even for small profiles.
+ */
+export async function retrieve(query: string, profile: MemoryItem[], requestItems: MemoryItem[], scope?: RetrievalScope): Promise<RetrievalResult> {
+  const fits = (m: MemoryItem) => !scope || relevantTo(m, scope.kind, scope.category, scope.ctx);
+  const always = [...requestItems, ...profile.filter((m) => m.hard && fits(m))];
+  const candidates = profile.filter((m) => !m.hard && m.kind !== 'style' && fits(m));
+  const q = tokens(query);
+  const overlap = (m: MemoryItem) => [...tokens(itemText(m))].filter((t) => q.has(t)).length;
+  // Small profiles too: an item must either share words with the request or belong to a domain that matters for it.
+  const soft = candidates.filter((m) => overlap(m) > 0 || coreDomain(m, scope?.kind) || m.rule);
+
+  if (embeddingsEnabled() && soft.length > TOP_K) {
     try {
       const missing = soft.filter((m) => !store.vectors[m.id]);
       for (let i = 0; i < missing.length; i += 64) {
@@ -52,9 +70,9 @@ export async function retrieve(query: string, profile: MemoryItem[], requestItem
         const vecs = await embed(batch.map(itemText));
         batch.forEach((m, j) => (store.vectors[m.id] = vecs[j]));
       }
-      const [q] = await embed([query]);
+      const [qv] = await embed([query]);
       store.save();
-      const ranked = [...soft].sort((a, b) => cosine(q, store.vectors[b.id]) - cosine(q, store.vectors[a.id]));
+      const ranked = [...soft].sort((a, b) => cosine(qv, store.vectors[b.id]) - cosine(qv, store.vectors[a.id]));
       return { items: [...always, ...ranked.slice(0, TOP_K)], method: 'embeddings' };
     } catch (e) {
       const note = `embeddings απέτυχαν (${aiErrorReason(e)}) — χρησιμοποιήθηκαν λέξεις-κλειδιά`;

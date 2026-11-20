@@ -99,6 +99,19 @@ export function Eval({ state, onState }: { state: AppState; onState: () => void 
                 </li>
               ))}
             </ul>
+            {!!report.planChecks?.length && (
+              <>
+                <h3>📍 Ποιότητα προτάσεων</h3>
+                <ul className="plain scen">
+                  {report.planChecks.map((s) => (
+                    <li key={s.name}>
+                      <Badge tone={s.pass ? 'good' : 'bad'}>{s.pass ? 'PASS' : 'FAIL'}</Badge> <b className="small">{s.name}</b>
+                      <div className="tiny muted">{s.detail}</div>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            )}
             <p className="tiny muted">
               Ακεραιότητα δεδομένων: {report.integrity.personas} Twins · {report.integrity.sources} πηγές · {report.integrity.memoryItems} αναμνήσεις · {report.integrity.verifiedQuotes} παραπομπές επαληθευμένες ως αυτούσια
               αποσπάσματα.

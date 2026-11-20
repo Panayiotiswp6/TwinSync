@@ -1,13 +1,13 @@
 // Offline tests (no network, ephemeral store — see vitest.config.ts).
 import { beforeEach, describe, expect, it } from 'vitest';
-import { contextFit } from '../shared/context';
+import { contextFit, spanDays } from '../shared/context';
 import { checkRule, decide } from '../shared/decide';
 import { evaluateWithRules, extractWithRules, parseRequestWithRules } from '../shared/heuristics';
 import { messageFacts, templateMessage, ungroundedReason } from '../shared/messages';
 import { deadlineFor } from '../shared/time';
 import type { CandidateOption, MemoryItem } from '../shared/types';
 import { evaluationReport } from '../server/evaluation';
-import { addWish, analyzeAndStore, createRequest, groupMessages, setLimit } from '../server/pipeline';
+import { addWish, analyzeAndStore, createRequest, groupMessages, runDecision, setLimit } from '../server/pipeline';
 import { loadSeed } from '../server/seed';
 import { store } from '../server/store';
 
@@ -154,7 +154,10 @@ describe('end-to-end pipeline (demo mode, no network)', () => {
     expect(d2.steps.find((s) => s.key === 'evaluate')?.mode).toBe('code');
     expect(d2.outcome.status).toBe('compromise'); // nothing fits 60€ -> still a proposal, the closest one
     expect(d2.outcome.chosenOptionId).not.toBeNull();
-    expect(d2.outcome.concessions.find((c) => c.personaId === 'geo')?.items.join(' ')).toMatch(/Πρέπει να δεχτεί/);
+    const geo = d2.outcome.concessions.find((c) => c.personaId === 'geo');
+    expect(geo?.items.join(' ')).toMatch(/Παραβιάζεται αυστηρό όριο/); // never "accepted" on the owner's behalf
+    expect(geo?.stance).toBe('object');
+    expect(d2.status).toBe('deadlock'); // cannot be approved until an owner changes a limit
     expect(d2.diff?.changes.join(' ')).toMatch(/60€/);
   });
 
@@ -327,5 +330,150 @@ describe('team demo group export', () => {
     for (const m of g.memory) expect(g.sources.find((s) => s.id === m.refs[0].sourceId)?.text).toContain(m.refs[0].quote);
     expect(g.holdouts).toHaveLength(1);
     expect(g.personas[0].synthetic).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Concrete plans (fixtures / mocked AI output — no network)
+// ---------------------------------------------------------------------------
+describe('concrete local plans', async () => {
+  const { prepareOptions, isGenericVenue, validateLocal, kindFromText, planWishes } = await import('../shared/plan');
+  const { venueCatalogue } = await import('../server/pipeline');
+  const req = { kind: 'coffee' as const, city: 'Αθήνα', area: 'Παγκράτι', periodStart: '2026-11-21T16:30:00+02:00', periodEnd: '2026-11-21T18:30:00+02:00', text: 'καφές στο Παγκράτι' };
+  const aiOpt = (name: string, area: string, city = 'Αθήνα') => opt({ id: name, title: name, origin: 'ai', startsAt: req.periodStart, endsAt: req.periodEnd, costPerPerson: 5, venue: { name, kind: 'καφέ', area, city } });
+
+  it('a coffee plan must be a NAMED café inside the requested area', () => {
+    expect(isGenericVenue('Καφές κοντά στο Σύνταγμα')).toBe(true);
+    expect(isGenericVenue('Κάπου στα Ιλίσια')).toBe(true);
+    expect(isGenericVenue('ένα μαγαζί στην Ηπίτου')).toBe(true);
+    expect(isGenericVenue('ένα από τα καφέ της οδού Παπάγου')).toBe(true);
+    expect(isGenericVenue('Bless & Hopes')).toBe(false);
+    expect(validateLocal(aiOpt('O Kokkos', 'Παγκράτι'), req)).toBeNull();
+    expect(validateLocal(aiOpt('Taf Coffee', 'Εξάρχεια'), req)).toMatch(/όχι Παγκράτι/);
+    const r = prepareOptions([aiOpt('Καφές κοντά στο Σύνταγμα', 'Σύνταγμα'), aiOpt('O Kokkos', 'Παγκράτι'), aiOpt('Καφέ Άγνωστο Όνομα', 'Παγκράτι')], { req, items: [], wishes: [], wishText: '', catalogue: venueCatalogue() });
+    expect(r.rejected.map((x) => x.title)).toEqual(['Καφές κοντά στο Σύνταγμα']);
+    const kokkos = r.valid.find((o) => o.venue?.name === 'O Kokkos')!;
+    expect(kokkos.checks?.find((c) => c.field === 'existence')).toMatchObject({ status: 'confirmed', url: 'https://www.thisisathens.org/cafes-bakeries/kokkos' });
+    const unknown = r.valid.find((o) => o.venue?.name === 'Καφέ Άγνωστο Όνομα')!;
+    expect(unknown.checks?.find((c) => c.field === 'existence')?.status).toBe('to_check'); // named by the AI, not verified
+    expect(unknown.checks?.find((c) => c.field === 'existence')?.url).toBeUndefined(); // never an invented URL
+  });
+
+  it('keeps the city the request names (Thessaloniki is a local plan there, not a trip)', async () => {
+    store.reset();
+    const now = new Date('2026-11-20T12:00:00+02:00');
+    const p = parseRequestWithRules('Είμαστε στη Θεσσαλονίκη: καφές κοντά στην Καμάρα ή στη Ναυαρίνου το Σάββατο', now);
+    expect(p.kind).toBe('coffee');
+    expect(p.city).toBe('Θεσσαλονίκη');
+    expect(p.area).toMatch(/Ναυαρίνου|Καμάρα/);
+    const { request, decision } = await createRequest('Είμαστε στη Θεσσαλονίκη: καφές κοντά στην Καμάρα ή στη Ναυαρίνου το Σάββατο', ['pan', 'geo'], {});
+    expect(request.where).toBe('local');
+    expect(request.city).toBe('Θεσσαλονίκη');
+    expect(decision.options.length).toBeGreaterThan(0);
+    for (const o of decision.options) expect(o.venue?.city).toBe('Θεσσαλονίκη');
+  });
+
+  it('drinks are an outing (not food) and a night past midnight is ONE outing for the budget', () => {
+    const now = new Date('2026-11-20T12:00:00+02:00');
+    const p = parseRequestWithRules('Ποτό στο κέντρο το Σάββατο μετά τις 21:30, ως 25€', now);
+    expect(kindFromText('ποτό στο κέντρο')).toBe('drinks');
+    expect(p.category).toBe('entertainment');
+    expect(spanDays('2026-11-21T21:30:00+02:00', '2026-11-22T02:00:00+02:00')).toBe(1);
+    const budget: MemoryItem = { ...rule('max_cost', '25'), scope: 'profile', hard: true, context: { where: 'local', days: 1 } };
+    const fit = contextFit(budget, { days: spanDays('2026-11-21T21:30:00+02:00', '2026-11-22T02:00:00+02:00'), where: 'local' });
+    expect(fit.scale).toBe(1); // not "scaled to 2 days"
+    // "μετά τις 21:30" is the start, "γυρνάμε με μετρό" is how — neither is a return deadline.
+    expect(extractWithRules('Ποτό στο κέντρο την Παρασκευή μετά τις 21:30, ως 25€, γυρνάμε με μετρό').some((d) => d.rule?.metric === 'latest_end')).toBe(false);
+  });
+
+  it('live music: the venue may be known, the programme is never presented as confirmed', () => {
+    const live = { ...req, kind: 'live' as const, area: '' };
+    const o = opt({ id: 'h', title: 'Jazz συναυλία με τον Χ στο Half Note', origin: 'ai', startsAt: req.periodStart, endsAt: req.periodEnd, venue: { name: 'Half Note Jazz Club', kind: 'jazz club', area: 'Μετς', city: 'Αθήνα' } });
+    const r = prepareOptions([o], { req: live, items: [], wishes: [], wishText: 'επιστροφή με μετρό', catalogue: venueCatalogue() });
+    const v = r.valid[0];
+    expect(v.title).toBe('Half Note Jazz Club — πρόγραμμα προς επιβεβαίωση');
+    expect(v.event?.status).toBe('unconfirmed');
+    expect(v.checks?.find((c) => c.field === 'program')?.status).toBe('to_check');
+    expect(v.checks?.find((c) => c.field === 'route')?.text).toMatch(/τελευταίου συρμού/);
+  });
+
+  it('irrelevant memory (tent) is left out of a coffee request, the relevant limit stays', async () => {
+    const { retrieve } = await import('../server/retrieval');
+    const s = loadSeed();
+    const pant = s.memory.filter((m) => m.personaId === 'pant');
+    const geo = s.memory.filter((m) => m.personaId === 'geo');
+    const ctx = { days: 1, where: 'local' as const };
+    const coffee = await retrieve('καφές στο Παγκράτι', pant, [], { kind: 'coffee', category: 'entertainment', ctx });
+    expect(coffee.items.some((m) => m.statement.includes('σκηνή'))).toBe(false);
+    const geoCoffee = await retrieve('καφές στο Παγκράτι', geo, [], { kind: 'coffee', category: 'entertainment', ctx });
+    expect(geoCoffee.items.some((m) => m.rule?.metric === 'max_cost' && m.rule.value === '25')).toBe(true);
+    const trip = await retrieve('τριήμερο', pant, [], { kind: 'trip', category: 'trip', ctx: { days: 3, where: 'domestic' } });
+    expect(trip.items.some((m) => m.statement.includes('σκηνή'))).toBe(true);
+    expect(planWishes([], () => false)).toEqual([]);
+  });
+});
+
+describe('four-day trip plan', async () => {
+  const { validateItinerary, coverageOf } = await import('../shared/plan');
+  const { fixtureOption } = await import('../server/pipeline');
+  const { loadTripFixtures } = await import('../server/seed');
+  const period = { periodStart: '2026-12-04T09:00:00+02:00', periodEnd: '2026-12-07T21:00:00+02:00', city: 'Αθήνα' };
+  const s = loadSeed();
+
+  it('covers all four days in order, adds up, and ties slots to the right twin wishes', () => {
+    const nature: MemoryItem = { ...rule('max_cost', '0'), id: 'w-nature', personaId: 'pan', rule: undefined, hard: false, statement: 'Θέλει πεζοπορία', domain: 'activities', keywords: ['πεζοπορία'], polarity: 'likes' };
+    const club: MemoryItem = { ...nature, id: 'w-club', personaId: 'pant', statement: 'Θέλει ένα βράδυ σε club', keywords: ['club'] };
+    const sea: MemoryItem = { ...nature, id: 'w-sea', personaId: 'geo', statement: 'Θέλει θάλασσα', keywords: ['θάλασσα'] };
+    const o = fixtureOption(loadTripFixtures()[0], period, [nature, club, sea])!;
+    expect(o.itinerary!.days.map((d) => d.date)).toEqual(['2026-12-04', '2026-12-05', '2026-12-06', '2026-12-07']);
+    expect(validateItinerary(o.itinerary, period.periodStart, period.periodEnd)).toEqual([]);
+    const cov = coverageOf(o, [nature, club, sea]);
+    expect(cov.find((c) => c.memoryId === 'w-nature')?.status).toBe('conditional'); // the trail depends on the weather
+    expect(cov.find((c) => c.memoryId === 'w-club')?.status).toBe('covered');
+    expect(cov.find((c) => c.memoryId === 'w-sea')?.status).toBe('uncovered');
+    const club3 = o.itinerary!.days.flatMap((d) => d.slots).find((x) => x.title.includes('Club'))!;
+    expect(club3.serves).toEqual([{ personaId: 'pant', memoryId: 'w-club' }]);
+  });
+
+  it('rejects a plan with a missing day, overlapping stops or totals that do not add up', () => {
+    const o = fixtureOption(loadTripFixtures()[0], period, s.memory)!;
+    const it = o.itinerary!;
+    expect(validateItinerary({ ...it, days: it.days.slice(0, 3) }, period.periodStart, period.periodEnd)[0]).toMatch(/2026-12-07/);
+    const overlap = { ...it, days: [{ ...it.days[0], slots: [it.days[0].slots[1], { ...it.days[0].slots[1], title: 'Διπλό' }] }, ...it.days.slice(1)] };
+    expect(validateItinerary(overlap, period.periodStart, period.periodEnd).join(' ')).toMatch(/επικαλύπτεται/);
+    expect(validateItinerary({ ...it, cost: { ...it.cost, total: it.cost.total + 100 } }, period.periodStart, period.periodEnd).join(' ')).toMatch(/σύνολα/);
+    expect(validateItinerary({ ...it, return: { ...it.return, at: '2026-12-07T12:00:00+02:00' } }, period.periodStart, period.periodEnd).join(' ')).toMatch(/ώρα επιστροφής/);
+  });
+
+  it('demo: a four-day trip abroad gets full plans, with the full plan on the chosen proposal', async () => {
+    store.reset();
+    const { decision, request } = await createRequest('Τετραήμερο στο εξωτερικό 4–7 Δεκεμβρίου', ['pan', 'pant', 'geo'], {});
+    expect(request.kind).toBe('trip');
+    expect(request.where).toBe('abroad');
+    const chosen = decision.options.find((o) => o.id === decision.outcome.chosenOptionId)!;
+    expect(chosen.itinerary?.days).toHaveLength(4);
+    expect(chosen.synthetic).toBe(true);
+  });
+});
+
+describe('incompatible times', () => {
+  it('no common time: never shown as feasible, cannot be approved, no twin "accepts" the breach', async () => {
+    store.reset();
+    const { request } = await createRequest('Καφές στο Παγκράτι το Σάββατο στις 16:00', ['pan', 'pant'], {});
+    const d1 = store.decisionsFor(request.id).at(-1)!;
+    const start = d1.options[0].startsAt!;
+    // Παναγιώτης must leave 30' BEFORE the plan starts (a one-off strict limit).
+    const src = store.addSource('pan', 'wish', 'test', 'πρέπει να φύγω πριν τις 15:30');
+    const leave = new Date(new Date(start).getTime() - 30 * 60000).toISOString();
+    store.addMemory('pan', src, [{ kind: 'constraint', statement: 'Πρέπει να φύγει πριν τις 15:30', domain: 'schedule', polarity: 'neutral', strength: 1, hard: true, rule: { metric: 'latest_end', value: leave }, categories: [], keywords: [], quote: 'πρέπει να φύγω πριν τις 15:30', confidence: 1 }], { origin: 'owner', status: 'confirmed', scope: 'request', requestId: request.id });
+    const d = await runDecision(request.id, {});
+    expect(d.outcome.status).toBe('compromise');
+    expect(d.outcome.noCommonTime).toBe(true);
+    expect(d.outcome.results.every((r) => !r.feasible)).toBe(true);
+    expect(d.status).toBe('deadlock');
+    expect(() => store.approve(d.id, 'pan', 'approved')).toThrow();
+    const panLines = d.chat!.lines.filter((l) => l.personaId === 'pan').map((l) => l.text).join(' ');
+    expect(panLines).not.toMatch(/κάνω πίσω|δέχομαι|Οκ, πάμε/);
+    expect(d.outcome.concessions.find((c) => c.personaId === 'pan')?.stance).toBe('object');
   });
 });

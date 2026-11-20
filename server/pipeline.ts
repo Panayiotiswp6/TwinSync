@@ -5,13 +5,15 @@
 import { contextFit, requestContext, spanDays, type RequestContext } from '../shared/context';
 import { decide } from '../shared/decide';
 import { contextOf, evaluateWithRules, extractWithRules, parseRequestWithRules, type MemoryDraft } from '../shared/heuristics';
-import { chatFacts, messageFacts, styleSamples, templateChat, templateMessage, ungroundedReason } from '../shared/messages';
+import { chatFacts, messageFacts, placeLine, styleSamples, templateChat, templateMessage, ungroundedReason } from '../shared/messages';
+import { areasOf, datesBetween, inArea, KIND_CATEGORY, KIND_LABEL, linkByKeywords, LOCAL_KINDS, planWishes, prepareOptions } from '../shared/plan';
 import { normalizeGreek } from '../shared/text';
-import { athensIso, localParts, parseIso } from '../shared/time';
-import type { CandidateOption, Category, Decision, Evaluation, MemoryItem, Persona, PersonaId, PipelineStep, StyleCard, TwinChat, TwinMessage } from '../shared/types';
+import { athensIso, formatWhen, localParts, parseIso, WEEKDAYS_EL } from '../shared/time';
+import type { CandidateOption, Category, Decision, Evaluation, GroupRequest, Itinerary, MemoryItem, Persona, PersonaId, PipelineStep, RequestKind, StyleCard, TwinChat, TwinMessage, Venue } from '../shared/types';
 import { aiErrorReason, aiModel, analyzeSource, buildStyle, draftMessages, evaluateOptions, generateOptions, liveAi, negotiationChat, parseRequest, type TwinContext } from './ai';
 import { noEmit, type Emit } from './jobs';
 import { retrieve } from './retrieval';
+import { loadTripFixtures, loadVenues, type TripFixture, type VenueEntry } from './seed';
 import { store } from './store';
 
 const timer = () => {
@@ -81,9 +83,25 @@ export async function refreshStyle(personaId: PersonaId): Promise<{ style: Style
 // Request + one-off wishes
 // ---------------------------------------------------------------------------
 
-type Parsed = { title: string; category: Category; periodStart: string | null; periodEnd: string | null; where: 'local' | 'domestic' | 'abroad' | null; place: string; groupDrafts: MemoryDraft[]; wishDrafts: Record<string, MemoryDraft[]> };
+type Parsed = {
+  title: string;
+  category: Category;
+  kind: RequestKind;
+  city: string | null;
+  area: string;
+  periodStart: string | null;
+  periodEnd: string | null;
+  where: 'local' | 'domestic' | 'abroad' | null;
+  place: string;
+  groupDrafts: MemoryDraft[];
+  wishDrafts: Record<string, MemoryDraft[]>;
+};
 
-export async function createRequest(text: string, participants: PersonaId[], wishes: Record<PersonaId, string>, emit: Emit = noEmit) {
+/** Where the group is: the request text > the city in the form > the demo's assumption (shown, editable). */
+export const DEFAULT_CITY = 'Αθήνα';
+
+export async function createRequest(text: string, participants: PersonaId[], wishes: Record<PersonaId, string>, emit: Emit = noEmit, form: { city?: string; cityAssumed?: boolean } = {}) {
+  const formCity = form.city?.trim() || DEFAULT_CITY;
   const now = new Date();
   const wishList = participants.filter((id) => wishes[id]?.trim()).map((id) => ({ personaId: id, name: store.persona(id)!.name, text: wishes[id].trim() }));
   emit({ who: 'system', kind: 'info', text: `Νέο αίτημα: «${text.trim().slice(0, 120)}»` });
@@ -94,7 +112,7 @@ export async function createRequest(text: string, participants: PersonaId[], wis
   const t = timer();
   if (liveAi()) {
     try {
-      parsed = await parseRequest(text, now, wishList);
+      parsed = await parseRequest(text, now, wishList, formCity, participants.length);
       mode = 'ai';
     } catch (e) {
       note = `Live AI απέτυχε (${aiErrorReason(e)}) — χρησιμοποιήθηκαν κανόνες.`;
@@ -104,9 +122,18 @@ export async function createRequest(text: string, participants: PersonaId[], wis
     parsed = rulesParse(text, now, wishList);
   }
   const days = spanDays(parsed.periodStart, parsed.periodEnd);
-  const where = parsed.where ?? (parsed.category === 'trip' ? 'domestic' : 'local');
-  const req = store.addRequest({ text, title: parsed.title, category: parsed.category, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd, participants, days, where, place: parsed.place });
-  emit({ who: 'system', kind: 'info', text: `${labelCategory(parsed.category)} · ${days} ${days === 1 ? 'μέρα' : 'μέρες'} · ${where === 'abroad' ? 'εξωτερικό' : where === 'domestic' ? 'Ελλάδα' : 'στην πόλη'}${parsed.place ? ` · ${parsed.place}` : ''}` });
+  const kind = parsed.kind;
+  const category = KIND_CATEGORY[kind] ?? parsed.category;
+  // A local plan is local wherever the group is (Thessaloniki is not "a trip in Greece").
+  const where = kind === 'trip' ? (parsed.where === 'local' || !parsed.where ? 'domestic' : parsed.where) : LOCAL_KINDS.includes(kind) ? 'local' : (parsed.where ?? 'local');
+  const city = parsed.city || formCity;
+  const cityAssumed = !parsed.city && (form.cityAssumed ?? !form.city);
+  const req = store.addRequest({ text, title: parsed.title, category, kind, city, cityAssumed, area: parsed.area, periodStart: parsed.periodStart, periodEnd: parsed.periodEnd, participants, days, where, place: parsed.place });
+  emit({
+    who: 'system',
+    kind: 'info',
+    text: `${KIND_LABEL[kind]} · ${kind === 'trip' ? `${days} ${days === 1 ? 'μέρα' : 'μέρες'} · από ${city} · ${where === 'abroad' ? 'εξωτερικό' : 'Ελλάδα'}${parsed.place ? ` · ${parsed.place}` : ''}` : `${city}${cityAssumed ? ' (παραδοχή)' : ''}${parsed.area ? ` · ${parsed.area}` : ''} · ${formatWhen(parsed.periodStart)}`}`,
+  });
   const reqSource = store.addSource('group', 'request', `Αίτημα: ${parsed.title}`, text);
   reqSource.analyzed = true;
   for (const pid of participants) {
@@ -117,7 +144,8 @@ export async function createRequest(text: string, participants: PersonaId[], wis
     src.analyzed = true;
     store.addMemory(w.personaId, src, parsed.wishDrafts[w.personaId] ?? [], { origin: mode === 'ai' ? 'ai' : 'rules', status: 'confirmed', scope: 'request', requestId: req.id });
   }
-  const parseStep: PipelineStep = { key: 'parse', label: 'Κατανόηση αιτήματος & επιθυμιών', detail: `${labelCategory(parsed.category)} · ${wishList.length} προσωρινές επιθυμίες${note ? ` · ${note}` : ''}`, mode, ms: t() };
+  for (const d of new Map(parsed.groupDrafts.map((x) => [x.statement, x])).values()) emit({ who: 'system', kind: 'info', text: `Το αίτημα λέει: ${d.statement}` });
+  const parseStep: PipelineStep = { key: 'parse', label: 'Κατανόηση αιτήματος & επιθυμιών', detail: `${KIND_LABEL[kind]} · ${labelCategory(category)}${kind !== 'trip' ? ` · ${city}${parsed.area ? ` / ${parsed.area}` : ''}` : ''} · ${wishList.length} προσωρινές επιθυμίες${note ? ` · ${note}` : ''}`, mode, ms: t() };
   const decision = await runDecision(req.id, { parseStep, emit });
   return { request: req, decision };
 }
@@ -125,7 +153,7 @@ export async function createRequest(text: string, participants: PersonaId[], wis
 function rulesParse(text: string, now: Date, wishes: { personaId: string; text: string }[]): Parsed {
   const r = parseRequestWithRules(text, now);
   const c = contextOf(normalizeGreek(text));
-  const where = c.where === 'abroad' ? 'abroad' : r.category === 'trip' ? 'domestic' : 'local';
+  const where = c.where === 'abroad' ? 'abroad' : r.kind === 'trip' ? 'domestic' : 'local';
   const wishDrafts: Record<string, MemoryDraft[]> = {};
   for (const w of wishes) wishDrafts[w.personaId] = extractWithRules(w.text).map((d) => ({ ...d, categories: [] }));
   const groupDrafts = extractWithRules(text).filter((d) => d.hard).map((d) => ({ ...d, categories: [] }));
@@ -133,7 +161,7 @@ function rulesParse(text: string, now: Date, wishes: { personaId: string; text: 
 }
 
 /** Add a one-off wish (or save it to the profile) for one person, then re-decide. */
-export async function addWish(requestId: string, personaId: PersonaId, text: string, scope: 'request' | 'profile') {
+export async function addWish(requestId: string, personaId: PersonaId, text: string, scope: 'request' | 'profile', regenerate = false) {
   const req = store.request(requestId);
   if (!req) throw new Error('not found');
   const t = timer();
@@ -142,7 +170,7 @@ export async function addWish(requestId: string, personaId: PersonaId, text: str
   let note: string | undefined;
   if (liveAi()) {
     try {
-      const p = await parseRequest(req.text, new Date(req.createdAt), [{ personaId, name: store.persona(personaId)!.name, text }]);
+      const p = await parseRequest(req.text, new Date(req.createdAt), [{ personaId, name: store.persona(personaId)!.name, text }], req.city || DEFAULT_CITY, req.participants.length);
       drafts = p.wishDrafts[personaId] ?? [];
       mode = 'ai';
     } catch (e) {
@@ -156,7 +184,8 @@ export async function addWish(requestId: string, personaId: PersonaId, text: str
   src.analyzed = true;
   const { created } = store.addMemory(personaId, src, drafts, { origin: 'owner', status: 'confirmed', scope, requestId: scope === 'request' ? requestId : undefined });
   const parseStep: PipelineStep = { key: 'parse', label: 'Νέα επιθυμία', detail: `${created.length} στοιχεία ${scope === 'request' ? 'μόνο για αυτό το αίτημα' : 'αποθηκεύτηκαν στο προφίλ'}${note ? ` · ${note}` : ''}`, mode, ms: t() };
-  const decision = await runDecision(requestId, { parseStep });
+  // A new qualitative wish can change WHAT should be proposed: optionally ask for new options.
+  const decision = await runDecision(requestId, { parseStep, regenerateOptions: regenerate });
   return { created, decision };
 }
 
@@ -204,8 +233,7 @@ function judgementKey(items: MemoryItem[]): string {
 function catalogOptions(category: Category, start: string | null, end: string | null): CandidateOption[] {
   const cats: Category[] = category === 'trip' ? ['trip'] : category === 'food' ? ['food'] : category === 'entertainment' ? ['entertainment'] : ['entertainment', 'food'];
   const s = parseIso(start) ?? new Date();
-  const days = start && end ? Math.round((parseIso(end)!.getTime() - s.getTime()) / 86400000) : 1;
-  const long = category === 'trip' && days >= 2;
+  const long = category === 'trip' && spanDays(start, end) >= 3;
   const p = localParts(s);
   const at = (day: number, time: string) => {
     const d = new Date(Date.UTC(p.y, p.m - 1, p.d + day));
@@ -227,7 +255,132 @@ function catalogOptions(category: Category, start: string | null, end: string | 
       endsAt: at(c.end.day + (long ? 1 : 0), c.end.time),
       features: c.features,
       origin: 'catalog' as const,
+      synthetic: true,
     }));
+}
+
+// ---------------------------------------------------------------------------
+// Curated venues (real places, public listing) and synthetic trip fixtures
+// ---------------------------------------------------------------------------
+
+let venues: VenueEntry[] | null = null;
+const allVenues = () => (venues ??= loadVenues());
+
+/** Catalogue in the shape used for matching (existence + public reference). */
+export function venueCatalogue(): Venue[] {
+  return allVenues().map((v) => ({ name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt }));
+}
+
+const KIND_VENUES: Partial<Record<RequestKind, VenueEntry['kind'][]>> = { coffee: ['coffee'], drinks: ['drinks'], club: ['club'], live: ['live'], dinner: ['dinner'] };
+
+/** Venues of the requested kind in the group's city, those inside the requested area first. */
+export function catalogueFor(req: Pick<GroupRequest, 'kind' | 'city' | 'area'>): VenueEntry[] {
+  const kinds = req.kind ? KIND_VENUES[req.kind] : undefined;
+  if (!kinds) return [];
+  const city = normalizeGreek(req.city || DEFAULT_CITY).slice(0, 5);
+  const list = allVenues().filter((v) => kinds.includes(v.kind) && normalizeGreek(v.city).startsWith(city));
+  const areas = areasOf(req.area);
+  return [...list].sort((a, b) => Number(inArea(b, areas)) - Number(inArea(a, areas)));
+}
+
+const KIND_EMOJI: Record<string, string> = { coffee: '☕', drinks: '🍸', live: '🎶', club: '🪩', dinner: '🍽️' };
+
+function venueOption(v: VenueEntry, req: GroupRequest, items: MemoryItem[]): CandidateOption {
+  const text = `${v.subtype} ${v.features.join(' ')} ${v.quiet ? 'ήσυχο' : ''}`;
+  return {
+    id: v.id,
+    title: v.name,
+    emoji: KIND_EMOJI[v.kind] ?? '📍',
+    summary: `${v.subtype} · ${v.area}${v.address ? `, ${v.address}` : ''}`,
+    location: `${v.area}, ${v.city}`,
+    costPerPerson: v.priceHint ?? null,
+    costNote: 'εκτίμηση της ομάδας, όχι τιμή καταστήματος',
+    startsAt: req.periodStart,
+    endsAt: req.periodEnd,
+    features: [...v.features, ...(v.quiet ? ['ήσυχο'] : [])],
+    origin: 'catalog',
+    venue: { name: v.name, kind: v.subtype, area: v.area, city: v.city, address: v.address, catalogId: v.id, source: v.source, url: v.url, checkedAt: v.checkedAt },
+    why: linkByKeywords(text, items).map((l) => ({ personaId: l.personaId, memoryId: l.memoryId, text: `ταιριάζει με «${l.statement}»` })),
+  };
+}
+
+/** A synthetic demo trip, laid out on the requested dates (first day, middle days, last day). */
+export function fixtureOption(f: TripFixture, req: Pick<GroupRequest, 'periodStart' | 'periodEnd' | 'city'>, items: MemoryItem[]): CandidateOption | null {
+  const dates = datesBetween(req.periodStart, req.periodEnd);
+  if (dates.length < 2) return null;
+  const at = (date: string, time: string) => {
+    const [y, m, d] = date.split('-').map(Number);
+    const [hh, mm] = time.split(':').map(Number);
+    return athensIso(y, m, d, hh, mm);
+  };
+  const days = dates.map((date, i) => {
+    const t = i === 0 ? f.first : i === dates.length - 1 ? f.last : f.middle[(i - 1) % f.middle.length];
+    const wd = WEEKDAYS_EL[new Date(`${date}T12:00:00Z`).getUTCDay()];
+    return {
+      date,
+      title: `${wd} — ${t.title}`,
+      slots: t.slots.map((x) => ({
+        start: x.start,
+        end: x.end,
+        part: x.part,
+        title: x.title,
+        place: x.place,
+        serves: linkByKeywords(`${x.title} ${x.tags.join(' ')}`, items).map((l) => ({ personaId: l.personaId, memoryId: l.memoryId })),
+        ...(x.alternative ? { alternative: x.alternative } : {}),
+        ...(x.conditional ? { conditional: x.conditional } : {}),
+      })),
+    };
+  });
+  const n = dates.length;
+  const cost = { transport: f.cost.transport, stay: f.cost.stayPerNight * (n - 1), food: f.cost.foodPerDay * n, activities: f.cost.activitiesPerDay * n, total: 0 };
+  cost.total = cost.transport + cost.stay + cost.food + cost.activities;
+  const itinerary: Itinerary = {
+    origin: req.city || DEFAULT_CITY,
+    destination: f.destination,
+    country: f.country,
+    depart: { at: at(dates[0], f.depart.time), mode: f.depart.mode },
+    return: { at: at(dates[n - 1], f.return.time), mode: f.return.mode },
+    stay: f.stay,
+    days,
+    cost,
+  };
+  return {
+    id: f.id,
+    title: f.title,
+    emoji: f.emoji,
+    summary: f.summary,
+    location: `${f.destination}, ${f.country}`,
+    costPerPerson: cost.total,
+    costNote: `μετακίνηση ${cost.transport}€ + διαμονή ${cost.stay}€ + φαγητό ${cost.food}€ + δραστηριότητες ${cost.activities}€ (συνθετικές τιμές)`,
+    startsAt: itinerary.depart.at,
+    endsAt: itinerary.return.at,
+    features: f.features,
+    origin: 'catalog',
+    synthetic: true,
+    itinerary,
+  };
+}
+
+/** Demo mode / last fallback: named venues from the curated catalogue, synthetic trips, then the synthetic catalogue. */
+function demoOptions(req: GroupRequest, twins: TwinContext[]): CandidateOption[] {
+  const items = twins.flatMap((t) => t.items);
+  const kind = req.kind ?? 'other';
+  const out: CandidateOption[] = [];
+  if (LOCAL_KINDS.includes(kind)) {
+    const list = catalogueFor(req);
+    const areas = areasOf(req.area);
+    const inside = list.filter((v) => inArea(v, areas));
+    for (const v of (inside.length ? inside : list).slice(0, 5)) out.push(venueOption(v, req, items));
+  }
+  if (kind === 'trip' && req.where === 'abroad') {
+    for (const f of loadTripFixtures()) {
+      const o = fixtureOption(f, req, items);
+      if (o) out.push(o);
+    }
+  }
+  // A coffee/drinks/live request never falls back to unrelated synthetic outings.
+  if (out.length >= 2 || (LOCAL_KINDS.includes(kind) && kind !== 'dinner')) return out;
+  return [...out, ...catalogOptions(req.category, req.periodStart, req.periodEnd)];
 }
 
 export async function runDecision(requestId: string, opts: { regenerateOptions?: boolean; parseStep?: PipelineStep; emit?: Emit }): Promise<Decision> {
@@ -245,39 +398,65 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
   const twins: TwinContext[] = [];
   const methods = new Set<string>();
   for (const p of personas) {
-    const r = await retrieve(`${req.title}. ${req.text}`, store.profile(p.id), store.requestItems(requestId, p.id));
+    const r = await retrieve(`${req.title}. ${req.text}`, store.profile(p.id), store.requestItems(requestId, p.id), { kind: req.kind, category: req.category, ctx });
     methods.add(r.method);
     twins.push({ persona: p, items: r.items, learned: learnedIds(r.items) });
     for (const line of recall(r.items, ctx)) emit({ who: p.id, kind: 'think', text: line });
   }
   const inputs = twins.flatMap((x) => x.items);
-  steps.push({ key: 'retrieve', label: 'Ανάκτηση μνήμης', detail: `${inputs.length} αναμνήσεις από ${personas.length} Twins (${[...methods].map((m) => (m === 'embeddings' ? 'embeddings' : m === 'keywords' ? 'λέξεις-κλειδιά' : 'όλες')).join(', ')})`, mode: methods.has('embeddings') ? 'ai' : 'code', ms: t() });
+  steps.push({ key: 'retrieve', label: 'Ανάκτηση μνήμης', detail: `${inputs.length} αναμνήσεις από ${personas.length} Twins (${[...methods].map((m) => (m === 'embeddings' ? 'embeddings' : 'λέξεις-κλειδιά')).join(', ')} · μόνο ό,τι αφορά ${req.kind ? KIND_LABEL[req.kind].toLowerCase() : 'το αίτημα'})`, mode: methods.has('embeddings') ? 'ai' : 'code', ms: t() });
 
-  // 2. Options: reuse unless asked to regenerate.
+  // 2. Options: reuse unless asked to regenerate. New options are VALIDATED before anyone votes:
+  //    a named place in the right area for local plans, a complete day-by-day plan for trips.
   t = timer();
   let options: CandidateOption[];
+  let rejected: { title: string; reason: string }[] = previous?.rejectedOptions ?? [];
   let optMode: PipelineStep['mode'] = 'demo';
   let optDetail = '';
+  const groupItem = (m: MemoryItem) => m.refs.some((r) => store.source(r.sourceId)?.personaId === 'group');
+  const prep = (list: CandidateOption[]) =>
+    prepareOptions(list, {
+      req,
+      items: inputs,
+      wishes: planWishes(inputs, groupItem, req.kind === 'trip'),
+      wishText: inputs.filter((m) => m.scope === 'request').map((m) => m.statement).join(' '),
+      catalogue: venueCatalogue(),
+    });
   if (previous && !opts.regenerateOptions) {
     options = previous.options;
     optMode = 'code';
     optDetail = 'ίδιες επιλογές με την προηγούμενη εκτέλεση';
-  } else if (live) {
-    try {
-      emit({ who: 'system', kind: 'info', text: 'Ψάχνουμε επιλογές που ταιριάζουν σε όλους…' });
-      options = await generateOptions(req, twins, ctx);
-      optMode = 'ai';
-      optDetail = `${options.length} επιλογές από το ${aiModel()}`;
-    } catch (e) {
-      options = catalogOptions(req.category, req.periodStart, req.periodEnd);
-      optDetail = `Live AI απέτυχε (${aiErrorReason(e)}) — κατάλογος demo`;
-    }
   } else {
-    options = catalogOptions(req.category, req.periodStart, req.periodEnd);
-    optDetail = `${options.length} επιλογές από τον συνθετικό κατάλογο (demo)`;
+    let note = '';
+    let got: ReturnType<typeof prep> = { valid: [], rejected: [] };
+    if (live) {
+      emit({ who: 'system', kind: 'info', text: req.kind === 'trip' ? 'Φτιάχνουμε πλήρη προγράμματα ανά ημέρα…' : 'Ψάχνουμε συγκεκριμένα μέρη που ταιριάζουν σε όλους…' });
+      const cat = catalogueFor(req).map((v) => ({ name: v.name, subtype: v.subtype, area: v.area, address: v.address, quiet: v.quiet, priceHint: v.priceHint }));
+      try {
+        got = prep(await generateOptions(req, twins, ctx, cat));
+        // At most one retry, telling the model exactly what the validator rejected.
+        if (got.valid.length < 2 && got.rejected.length) {
+          emit({ who: 'system', kind: 'info', text: `${got.rejected.length} προτάσεις απορρίφθηκαν από τον έλεγχο (π.χ. ${got.rejected[0].reason}) — νέα προσπάθεια…` });
+          const second = prep(await generateOptions(req, twins, ctx, cat, got.rejected.map((r) => `«${r.title}»: ${r.reason}`)));
+          got = { valid: [...got.valid, ...second.valid].slice(0, 6), rejected: [...got.rejected, ...second.rejected] };
+        }
+        optMode = 'ai';
+      } catch (e) {
+        note = `Live AI απέτυχε (${aiErrorReason(e)})`;
+      }
+    }
+    if (!got.valid.length) {
+      const demo = prep(demoOptions(req, twins));
+      got = { valid: demo.valid, rejected: [...got.rejected, ...demo.rejected] };
+      optMode = 'demo';
+      note = note ? `${note} — κατάλογος/fixtures demo` : 'κατάλογος επώνυμων μαγαζιών & συνθετικά fixtures (demo)';
+    }
+    options = got.valid.map((o, i) => ({ ...o, id: o.id.startsWith('opt-') ? `opt-${i + 1}` : o.id }));
+    rejected = got.rejected;
+    optDetail = `${options.length} επιλογές${optMode === 'ai' ? ` από το ${aiModel()}` : ''} πέρασαν τον έλεγχο${rejected.length ? ` · ${rejected.length} απορρίφθηκαν πριν την ψηφοφορία` : ''}${note ? ` · ${note}` : ''}`;
   }
   steps.push({ key: 'options', label: 'Υποψήφιες επιλογές', detail: optDetail, mode: optMode, ms: t() });
-  emit({ who: 'system', kind: 'options', text: options.map((o) => `${o.emoji} ${o.title}${o.costPerPerson !== null ? ` · ~${o.costPerPerson}€` : ''}`).join('\n') });
+  emit({ who: 'system', kind: 'options', text: options.map((o) => `${o.emoji} ${o.venue ? placeLine(o) : o.title}${o.costPerPerson !== null ? ` · ~${o.costPerPerson}€` : ''}`).join('\n') });
 
   // 3. Each twin evaluates each option (reuse when only numeric rules changed).
   t = timer();
@@ -327,12 +506,15 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
     outcome,
     steps,
     approvals: Object.fromEntries(personas.map((p) => [p.id, 'pending'])),
-    status: outcome.status === 'deadlock' ? 'deadlock' : 'awaiting_approval',
+    // Only a plan that passes every strict limit can be approved; otherwise an owner must change something first.
+    status: outcome.status === 'agreement' ? 'awaiting_approval' : 'deadlock',
+    rejectedOptions: rejected,
     aiModel: live ? aiModel() : null,
   });
   if (previous) decision.diff = { previousId: previous.id, changes: diffChanges(previous, decision) };
   emit({ who: 'system', kind: 'info', text: 'Τα Twins συζητούν…' });
-  decision.chat = await twinChat(decision, personas);
+  const sameOutcome = previous?.chat && sameJudgement && previous.outcome.chosenOptionId === outcome.chosenOptionId && previous.outcome.status === outcome.status;
+  decision.chat = sameOutcome ? { ...previous!.chat!, note: 'Ίδια πρόταση με πριν — η συζήτηση δεν ξαναγράφτηκε (χωρίς νέα κλήση AI).' } : await twinChat(decision, personas);
   for (const l of decision.chat.lines) emit({ who: l.personaId, kind: 'say', text: l.text });
   store.save();
   return decision;
@@ -343,13 +525,11 @@ function learnedIds(items: MemoryItem[]): Set<string> {
   return new Set(items.filter((m) => m.refs.some((r) => store.source(r.sourceId)?.kind === 'past_decision')).map((m) => m.id));
 }
 
-/** What a twin "remembers" first for this request — shown in the live chat. */
+/** What a twin "remembers" first for this request — its OWN wishes first, then what actually applies. */
 function recall(items: MemoryItem[], ctx: RequestContext): string[] {
   const out: string[] = [];
-  for (const m of items.filter((x) => x.scope === 'request').slice(0, 2)) {
-    const fromGroup = m.refs.some((r) => store.source(r.sourceId)?.personaId === 'group');
-    out.push(`${fromGroup ? 'Το αίτημα λέει' : 'Για αυτό ζήτησα'}: ${m.statement}`);
-  }
+  const own = items.filter((x) => x.scope === 'request' && !x.refs.some((r) => store.source(r.sourceId)?.personaId === 'group'));
+  for (const m of own.slice(0, 2)) out.push(`Για αυτό ζήτησα: ${m.statement}`);
   for (const m of items.filter((x) => x.scope === 'profile' && x.rule)) {
     const fit = contextFit(m, ctx);
     if (fit.note) out.push(`«${m.statement}» — ${fit.note}${fit.applies ? '' : ', το κρατάω μόνο ως ένδειξη'}`);
@@ -374,7 +554,14 @@ async function twinChat(d: Decision, personas: Persona[]): Promise<TwinChat> {
       shared,
     );
     let dropped = 0;
+    // A twin never "accepts" breaking its own strict limit — drop such lines.
+    const breached = new Set(d.outcome.status === 'compromise' ? (d.outcome.results.find((r) => r.optionId === d.outcome.chosenOptionId)?.violations.map((v) => v.personaId) ?? []) : []);
+    const ACCEPT = /(κανω πισω|δεχομαι|ας ειναι|συμφωνω|ενταξει|^οκ\b|^ok\b|πααμε|παμε)/;
     const lines = raw.filter((l) => {
+      if (breached.has(l.personaId) && ACCEPT.test(normalizeGreek(l.text))) {
+        dropped++;
+        return false;
+      }
       const bad = ungroundedReason(l.text, [...shared, ...(perPerson[l.personaId] ?? [])], d.options);
       if (bad) dropped++;
       return !bad;
@@ -594,4 +781,31 @@ export async function learnFromDecision(decisionId: string, personaId: PersonaId
   // The owner approved this plan themselves, so what it teaches is confirmed (and stays editable in the profile).
   for (const m of r.created) store.updateMemory(m.id, { status: 'confirmed' });
   return r;
+}
+
+
+// ---------------------------------------------------------------------------
+// The owner (not the twin) relaxes one strict limit, only for this request.
+// ---------------------------------------------------------------------------
+
+export async function relaxLimit(requestId: string, memoryId: string, optionId: string) {
+  const req = store.request(requestId);
+  const d = store.decisionsFor(requestId).at(-1);
+  const m = d?.inputs.find((x) => x.id === memoryId) ?? store.item(memoryId);
+  const o = d?.options.find((x) => x.id === optionId);
+  if (!req || !d || !m || !o || !m.rule) throw new Error('Μόνο αριθμητικά όρια (κόστος, ώρα) αλλάζουν από εδώ.');
+  const value = m.rule.metric === 'max_cost' ? (o.costPerPerson === null ? null : String(o.costPerPerson)) : o.endsAt;
+  if (!value) throw new Error('Η επιλογή δεν έχει γνωστό κόστος ή ώρα λήξης.');
+  const label = m.rule.metric === 'max_cost' ? `${value}€ ανά άτομο` : formatWhen(value);
+  const text = `Ο κάτοχος αλλάζει το όριο μόνο για «${req.title}»: ${label} (αντί για «${m.statement}»)`;
+  const src = store.addSource(m.personaId, 'wish', `Αλλαγή ορίου για «${req.title}»`, text);
+  src.analyzed = true;
+  for (const x of store.requestItems(requestId, m.personaId)) if (x.rule?.metric === m.rule.metric) x.status = 'superseded';
+  store.addMemory(
+    m.personaId,
+    src,
+    [{ kind: 'constraint', statement: `${m.rule.metric === 'max_cost' ? 'Όριο κόστους' : 'Λήξη το αργότερο'} ${label} (αλλαγή του κατόχου, μόνο για αυτό)`, domain: m.domain, polarity: 'neutral', strength: 1, hard: true, rule: { metric: m.rule.metric, value }, categories: [], keywords: [], quote: text, confidence: 1 }],
+    { origin: 'owner', status: 'confirmed', scope: 'request', requestId },
+  );
+  return runDecision(requestId, {});
 }

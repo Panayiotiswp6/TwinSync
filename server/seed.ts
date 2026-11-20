@@ -120,3 +120,67 @@ export function loadTeamSeed(): GroupExport | null {
     return null;
   }
 }
+
+// ---------------------------------------------------------------------------
+// Curated venues (real, public listings) and synthetic demo trip plans.
+// ---------------------------------------------------------------------------
+
+export interface VenueEntry {
+  id: string;
+  name: string;
+  kind: 'coffee' | 'drinks' | 'live' | 'club' | 'dinner';
+  subtype: string;
+  city: string;
+  area: string;
+  address?: string;
+  quiet?: boolean;
+  priceHint?: number;
+  source: string;
+  url: string;
+  checkedAt: string;
+  features: string[];
+}
+
+export function loadVenues(): VenueEntry[] {
+  try {
+    return readJson<{ venues: VenueEntry[] }>('venues.json').venues;
+  } catch {
+    return [];
+  }
+}
+
+export interface FixtureSlot {
+  start: string;
+  end: string;
+  part: 'morning' | 'afternoon' | 'evening' | 'night';
+  title: string;
+  place: string;
+  tags: string[];
+  alternative?: string;
+  conditional?: string;
+}
+export interface TripFixture {
+  id: string;
+  title: string;
+  emoji: string;
+  summary: string;
+  destination: string;
+  country: string;
+  where: 'abroad' | 'domestic';
+  depart: { time: string; mode: string };
+  return: { time: string; mode: string };
+  stay: { name: string; area: string; note: string };
+  cost: { transport: number; stayPerNight: number; foodPerDay: number; activitiesPerDay: number };
+  features: string[];
+  first: { title: string; slots: FixtureSlot[] };
+  middle: { title: string; slots: FixtureSlot[] }[];
+  last: { title: string; slots: FixtureSlot[] };
+}
+
+export function loadTripFixtures(): TripFixture[] {
+  try {
+    return readJson<{ trips: TripFixture[] }>('trip-fixtures.json').trips;
+  } catch {
+    return [];
+  }
+}
