@@ -116,21 +116,25 @@ export function chatFacts(d: Decision, req: GroupRequest, personas: Persona[]): 
   } else if (chosen) shared.push(`Τελική κοινή πρόταση: ${chosen.venue ? placeLine(chosen) : chosen.title}.`);
   if (chosen?.itinerary) for (const day of chosen.itinerary.days) shared.push(`Πρόγραμμα ${day.title || day.date}: ${day.slots.map((x) => `${x.start} ${x.title}`).join(' · ')}.`);
   const perPerson: Record<PersonaId, string[]> = {};
+  // A strict need the proposal already meets (allergy, private bathroom, no tent) says nothing about the choice:
+  // it stays out of the chat, unless the proposal breaks it.
+  const broken = new Set(d.outcome.results.find((r) => r.optionId === chosen?.id)?.violations.map((v) => v.memoryId) ?? []);
+  const quiet = new Set(d.inputs.filter((m) => m.hard && m.rule?.metric !== 'max_cost' && m.rule?.metric !== 'latest_end' && m.scope === 'profile' && !broken.has(m.id)).map((m) => m.id));
   for (const p of personas) {
     const f: string[] = [];
     const vote = d.outcome.votes.find((v) => v.personaId === p.id);
     const mine = opt(vote?.optionId ?? null);
     if (mine) f.push(`Η πρώτη μου επιλογή: ${mine.title}${vote?.verdict ? ` — «${vote.verdict}»` : ''}.`);
-    for (const r of vote?.reasons.slice(0, 3) ?? []) f.push(`${r.effect === 'for' ? 'Υπέρ' : 'Κατά'}: ${r.text}`);
+    for (const r of vote?.reasons.filter((x) => !quiet.has(x.memoryId)).slice(0, 3) ?? []) f.push(`${r.effect === 'for' ? 'Υπέρ' : 'Κατά'}: ${r.text}`);
     for (const m of d.inputs.filter((x) => x.personaId === p.id && x.scope === 'request').slice(0, 3)) f.push(`Ζήτησα για αυτό: ${m.statement}`);
     if (chosen && chosen.id !== mine?.id) {
       const ev = d.evaluations.find((e) => e.personaId === p.id && e.optionId === chosen.id);
-      for (const r of ev?.reasons.slice(0, 2) ?? []) f.push(`Για την τελική πρόταση — ${r.effect === 'for' ? 'υπέρ' : 'κατά'}: ${r.text}`);
+      for (const r of ev?.reasons.filter((x) => !quiet.has(x.memoryId)).slice(0, 2) ?? []) f.push(`Για την τελική πρόταση — ${r.effect === 'for' ? 'υπέρ' : 'κατά'}: ${r.text}`);
     }
     const c = d.outcome.concessions.find((x) => x.personaId === p.id);
     for (const item of c?.items.slice(0, 3) ?? []) f.push(item.startsWith('Δεν καλύπτεται') ? `${item}. Το Twin δεν το δέχεται μόνο του· ο κάτοχος αποφασίζει με την έγκρισή του.` : `Παραχώρηση: ${item}`);
-    for (const day of chosen?.itinerary?.days ?? []) for (const x of day.slots) if (x.serves.some((sv) => sv.personaId === p.id)) f.push(`Στο πρόγραμμα για μένα: ${day.title || day.date} ${x.start} — ${x.title}`);
-    for (const w of chosen?.why?.filter((x) => x.personaId === p.id).slice(0, 2) ?? []) f.push(`Γιατί μου ταιριάζει: ${w.text}`);
+    for (const day of chosen?.itinerary?.days ?? []) for (const x of day.slots) if (x.serves.some((sv) => sv.personaId === p.id && !quiet.has(sv.memoryId))) f.push(`Στο πρόγραμμα για μένα: ${day.title || day.date} ${x.start} — ${x.title}`);
+    for (const w of chosen?.why?.filter((x) => x.personaId === p.id && !quiet.has(x.memoryId)).slice(0, 2) ?? []) f.push(`Γιατί μου ταιριάζει: ${w.text}`);
     if (c) f.push(c.stance === 'agree' ? 'Συμφωνώ με την τελική πρόταση.' : c.stance === 'agree_with_concession' ? 'Τη δέχομαι με παραχώρηση.' : 'Δεν με βολεύει η τελική πρόταση, θέλω να το συζητήσουμε.');
     perPerson[p.id] = f;
   }

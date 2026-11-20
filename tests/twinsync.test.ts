@@ -715,3 +715,19 @@ describe('group edits (demo mode, no network)', () => {
     expect(wish?.rule?.value).toBe('20');
   });
 });
+
+describe('the twins’ chat stays on the decision', () => {
+  beforeEach(() => store.reset());
+
+  it('a strict need the proposal already meets (allergy, no tent) is not fed to the chat', async () => {
+    const { chatFacts } = await import('../shared/messages');
+    const { decision, request } = await createRequest('Τετραήμερο στο εξωτερικό 4–7 Δεκεμβρίου', ['pan', 'pant', 'geo'], {});
+    const chosen = decision.options.find((o) => o.id === decision.outcome.chosenOptionId)!;
+    const broken = new Set(decision.outcome.results.find((r) => r.optionId === chosen.id)!.violations.map((v) => v.memoryId));
+    const need = decision.inputs.find((m) => m.hard && !m.rule && m.scope === 'profile' && !broken.has(m.id));
+    expect(need).toBeTruthy();
+    chosen.why = [...(chosen.why ?? []), { personaId: need!.personaId, memoryId: need!.id, text: 'ΧΩΡΙΣ-ΝΟΗΜΑ: καλύπτεται κι αυτό' }];
+    const { perPerson } = chatFacts(decision, request, ['pan', 'pant', 'geo'].map((id) => store.persona(id)!));
+    expect(perPerson[need!.personaId].some((f) => f.includes('ΧΩΡΙΣ-ΝΟΗΜΑ'))).toBe(false);
+  });
+});

@@ -439,6 +439,7 @@ const READING_RULES = `How to read each person's memory:
 - Routine obligations (e.g. "back by Sunday 21:00, work on Monday") do not override dates the group explicitly asked for: whoever joins a Friday–Monday trip has arranged it.
 - Weekly routines (classes, gym, work, practice) matter for everyday local plans: an option that clashes with or is tight against one at that hour scores lower and says so in reasons; one that fits around it is better. For trips and special occasions they are flexible.
 - For big trips outside Europe (once-in-a-while experiences), everyday money amounts are only a loose reference; the request's own budget, if any, is what counts.
+- Money is a guard-rail, not the goal. What the group will DO — the activities, places, food, nightlife and nature each person likes — decides. A price around someone's usual amount, or up to ~25% above it, costs at most a few points; only a clear overshoot of a stated strict limit, or something far above what they usually spend (over ~30%), is a real minus. Never prefer an option just because it is cheaper, and never rank a cheaper option above one with clearly better activities for the person.
 - If nothing in the memory covers an aspect, do not penalise it: infer cautiously from similar items, or stay neutral and mention it in unknowns.`;
 
 /** A catalogue venue as given to the model (public listing; hours/programme never verified). */
@@ -489,7 +490,7 @@ ${
   local
     ? `- Each option is ONE specific, NAMED place (its real name) of the requested kind, in ${city}${req.area ? ` and inside the requested area: ${req.area}` : ''}. Never "κάπου στα …", "ένα καφέ κοντά στο …", "ένα από τα μπαρ της οδού …".
 - Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well.
-- coffee: cafés only. drinks: follow the asked type (cocktail bar, quiet bar, wine bar, beer). club: a club. live: a venue for live music — do NOT state an artist, programme, start time or ticket price as fact; say the programme must be confirmed.
+- coffee: cafés only. drinks: follow the asked type (cocktail bar, quiet bar, wine bar, beer). club: a club. live: a venue for live music — do NOT state an artist, programme, start time or ticket price as fact; describe the venue and its kind of music.
 - Use what people listen to: their genres decide the TYPE of place (λαϊκά → μπουζούκια/πίστα, house/pop → club, jazz → jazz club, rock → rock bar/live). If someone's favourite artist usually plays at a kind of venue, propose such a venue and put that artist in artistHint (it will be shown as "δείτε αν εμφανίζεται", never as a confirmed date). artistHint "" otherwise.
 - startsAt/endsAt: the proposed time window inside the requested period (ISO with the Athens offset). One evening past midnight is one outing.
 - costPerPerson: honest estimate per person for what they will order/pay (-1 if unknown); costNote: what it includes.
@@ -610,7 +611,7 @@ async function generateTrips(req: PlanRequest, twins: TwinContext[], ctx: Reques
     system: `You plan complete group trips that people can actually follow. The group starts from ${origin}. Destination: ${where}${req.place ? `, the request names: ${req.place}` : ''}.
 ${READING_RULES}
 ${TONE}
-- 3 DIFFERENT plans, each ONE destination city and country.
+- 3 DIFFERENT plans, each ONE destination city and country. Choose destinations for the activities and places the group wants, not for being cheap: do not default to the nearest or cheapest city (e.g. always Κωνσταντινούπολη) unless it is truly the best fit; the three should differ in character (e.g. mountains/nature, a city break, sea or food).
 - itinerary.days: one entry for EVERY date in ${JSON.stringify(dates)} (date as YYYY-MM-DD, title like "Πέμπτη — άφιξη"), each with 2-4 slots in time order, no overlaps (HH:MM local time). First day starts with the departure transfer, last day ends with the return.
 - Slots are SPECIFIC: a named trail/peak, museum, market, a named club or bar for the night, a restaurant area. Realistic transfer times and a safety buffer before the return. In winter, if a cable car / trail / beach may not run, give an "alternative".
 - serves: the memory ids (with the owner's personaId) each slot really serves. Cover every person's wishes somewhere if possible; strict needs (e.g. private bathroom) go into stay.note.
@@ -922,6 +923,7 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
 - 6-10 messages in total, each person at least once, natural order (not strictly round-robin). Each message max 160 characters, casual Greek chat, first person. No "Twin", "AI", "memory", "score" or numbers out of 100.
 - Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.
 - Talk about the plan as settled: no "να το επιβεβαιώσουμε", "να ελέγξουμε", "αν είναι ανοιχτό".
+- Every message must move the decision forward: a preference, a trade-off, a disagreement, or a concrete detail of the plan that matters for THIS choice. No filler, no box-ticking. Do not bring up a need that the options already meet (an allergy, a diet, a private bathroom, no camping) unless it is a real reason for or against an option — e.g. never «έχει και φαγητό χωρίς γαλακτοκομικά» while picking a city.
 - A twin NEVER accepts breaking its own strict limit on its owner's behalf. If the SHARED facts say the proposal does not cover someone's limit, the group still converges on that closest proposal; that person says plainly what is not covered and that they will decide themselves (with their own approval) — no "οκ, κάνω πίσω".`,
     user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
       .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${styleLine(b.style, 'unknown — write plainly')}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
