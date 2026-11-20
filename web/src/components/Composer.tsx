@@ -1,16 +1,17 @@
-import { ChevronDown, ChevronUp, MapPin, Sparkles } from 'lucide-react';
+import { Check, ChevronDown, ChevronUp, MapPin, Sparkles, Store } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, type AppState } from '../api';
 import { go } from './Shell';
 import { LiveTwinChat } from './TwinChat';
-import { Avatar } from './ui';
+import { Avatar, shortName } from './ui';
 
+/** Short samples; each fills in a complete request. */
 const IDEAS = [
-  { emoji: '☕', text: 'Καφές στο Παγκράτι το Σάββατο στις 16:30, ως 8€, κάπου ήσυχο' },
-  { emoji: '🍸', text: 'Ποτό στο κέντρο την Παρασκευή μετά τις 21:30, ως 25€' },
-  { emoji: '🧳', text: 'Τετραήμερο στο εξωτερικό 4–7 Δεκεμβρίου, ως 450€' },
-  { emoji: '🎶', text: 'Live μουσική το Σάββατο 12 Δεκεμβρίου μετά τις 21:00, ως 30€' },
-  { emoji: '🏞️', text: 'Βρες μας ένα διήμερο αυτό το ΣΚ' },
+  { label: 'Καφές', text: 'Καφές στο Παγκράτι το Σάββατο στις 16:30, ως 8€, κάπου ήσυχο' },
+  { label: 'Βραδινή έξοδος', text: 'Ποτό στο κέντρο την Παρασκευή μετά τις 21:30, ως 25€' },
+  { label: 'Live μουσική', text: 'Live μουσική το Σάββατο 12 Δεκεμβρίου μετά τις 21:00, ως 30€' },
+  { label: 'Διήμερο', text: 'Βρες μας ένα διήμερο αυτό το ΣΚ' },
+  { label: 'Τετραήμερο', text: 'Τετραήμερο στο εξωτερικό 4–7 Δεκεμβρίου, ως 450€' },
 ];
 const CITY_KEY = 'twinsync.city';
 const readCity = () => {
@@ -106,63 +107,61 @@ export function Composer({ state, onState, compact }: { state: AppState; onState
   }
   if (busy) return <div className="card composer">{<Working live={state.status.aiMode === 'live'} />}</div>;
 
+  const chosen = state.personas.filter((p) => participants.includes(p.id));
   return (
     <div className="card composer">
-      <div className="composer-top">
-        <span className="composer-icon">
-          <Sparkles size={18} />
-        </span>
-        <textarea rows={compact ? 2 : 3} value={text} onChange={(e) => setText(e.target.value)} placeholder="Τι θέλει να κάνει η παρέα; π.χ. «Βρείτε μας ένα τριήμερο για τις 4–6 Δεκεμβρίου»" aria-label="Αίτημα παρέας" />
-      </div>
-      <div className="ideas">
+      <label className="composer-label" htmlFor="ask">
+        Τι θέλει να κάνει η παρέα;
+      </label>
+      <textarea id="ask" rows={compact ? 2 : 3} value={text} onChange={(e) => setText(e.target.value)} placeholder="π.χ. «Ποτό στο κέντρο την Παρασκευή μετά τις 22:00, κάπου με μουσική»" />
+      <div className="samples" aria-label="Παραδείγματα">
         {IDEAS.map((i) => (
-          <button key={i.text} className="chip" onClick={() => setText(i.text)}>
-            {i.emoji} {i.text}
+          <button key={i.label} type="button" className={`chip ${text === i.text ? 'chip-on' : ''}`} onClick={() => setText(i.text)} title={i.text}>
+            {i.label}
           </button>
         ))}
       </div>
-      <div className="composer-row">
-        <div className="who">
-          {state.personas.map((p) => {
-            const on = participants.includes(p.id);
-            return (
-              <button key={p.id} className={`who-btn ${on ? 'on' : ''}`} onClick={() => setParticipants((ps) => (on ? ps.filter((x) => x !== p.id) : [...ps, p.id]))} aria-pressed={on}>
-                <Avatar persona={p} size={26} /> {p.name}
-              </button>
-            );
-          })}
-        </div>
-        <label className="city-field small" title="Πού βρίσκεται η παρέα. Αν το γράψει το αίτημα («είμαστε στη Θεσσαλονίκη»), μετράει εκείνο.">
-          📍
-          <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Αθήνα (παραδοχή)" aria-label="Πόλη της παρέας" />
-        </label>
-        <label className="city-field pick-field small" title="Προαιρετικό: ένα συγκεκριμένο μέρος που θέλετε να ελέγξουν τα Twins — αν ταιριάζει σε όλους και με ποιον αντικρούεται.">
-          <MapPin size={14} />
-          <input value={pick} onChange={(e) => setPick(e.target.value)} placeholder="Συγκεκριμένο μέρος; π.χ. The Clumsies" aria-label="Συγκεκριμένο μέρος για έλεγχο" />
-        </label>
-        <button className="link-btn small" onClick={() => setShowWishes((s) => !s)}>
-          {showWishes ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Προσωρινές επιθυμίες
-        </button>
+      <div className="composer-who" role="group" aria-label="Ποιοι συμμετέχουν">
+        <span className="tiny muted">Ποιοι:</span>
+        {state.personas.map((p) => {
+          const on = participants.includes(p.id);
+          return (
+            <button key={p.id} type="button" className={`who-btn ${on ? 'on' : ''}`} onClick={() => setParticipants((ps) => (on ? ps.filter((x) => x !== p.id) : [...ps, p.id]))} aria-pressed={on} title={p.name}>
+              <Avatar persona={p} size={20} /> {shortName(p, state.personas)}
+              {on && <Check size={13} />}
+            </button>
+          );
+        })}
       </div>
-      {showWishes && (
-        <div className="wishes">
-          {state.personas
-            .filter((p) => participants.includes(p.id))
-            .map((p) => (
-              <label key={p.id} className="wish">
-                <Avatar persona={p} size={30} />
-                <input
-                  value={wishes[p.id] ?? ''}
-                  onChange={(e) => setWishes({ ...wishes, [p.id]: e.target.value })}
-                  placeholder={`${p.name}: μόνο για αυτό (μετράει πάνω από το προφίλ), π.χ. «ως 500€ όλα μαζί», «Δευτέρα πρωί πίσω», «θέλω θάλασσα»`}
-                />
-              </label>
-            ))}
+      <details className="composer-more" open={showWishes}>
+        <summary onClick={(e) => {
+          e.preventDefault();
+          setShowWishes((x) => !x);
+        }}>
+          {showWishes ? <ChevronUp size={14} /> : <ChevronDown size={14} />} Περισσότερα: πόλη, συγκεκριμένο μέρος, προσωρινές επιθυμίες
+        </summary>
+        <div className="composer-fields">
+          <label className="field-inline small" title="Πού βρίσκεται η παρέα. Αν το γράψει το αίτημα («είμαστε στη Θεσσαλονίκη»), μετράει εκείνο.">
+            <MapPin size={14} />
+            <input value={city} onChange={(e) => setCity(e.target.value)} placeholder="Πόλη: Αθήνα (παραδοχή)" aria-label="Πόλη της παρέας" />
+          </label>
+          <label className="field-inline small" title="Προαιρετικό: ένα συγκεκριμένο μέρος που θέλετε να ελέγξουν τα Twins — αν ταιριάζει σε όλους και με ποιον αντικρούεται.">
+            <Store size={14} />
+            <input value={pick} onChange={(e) => setPick(e.target.value)} placeholder="Συγκεκριμένο μέρος (π.χ. The Clumsies)" aria-label="Συγκεκριμένο μέρος για έλεγχο" />
+          </label>
         </div>
-      )}
+        <div className="wishes">
+          {chosen.map((p) => (
+            <label key={p.id} className="wish">
+              <Avatar persona={p} size={24} />
+              <input value={wishes[p.id] ?? ''} onChange={(e) => setWishes({ ...wishes, [p.id]: e.target.value })} placeholder={`${shortName(p, state.personas)}: μόνο για αυτό, π.χ. «ως 500€ όλα μαζί», «θέλω θάλασσα»`} aria-label={`Προσωρινή επιθυμία: ${p.name}`} />
+            </label>
+          ))}
+        </div>
+      </details>
       <div className="composer-foot">
-        <span className="tiny muted">Οι επιθυμίες για αυτό το αίτημα μετράνε πάνω από το μόνιμο προφίλ. Τίποτα δεν κλείνεται χωρίς έγκριση.</span>
-        <button className="btn btn-brand" disabled={text.trim().length < 3 || participants.length < 2} onClick={submit}>
+        <span className="tiny muted">Τίποτα δεν κλείνεται χωρίς ανθρώπινη έγκριση.</span>
+        <button className="btn btn-brand big" disabled={text.trim().length < 3 || participants.length < 2} onClick={submit}>
           <Sparkles size={16} /> Ρώτα τα Twins
         </button>
       </div>

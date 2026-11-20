@@ -2,7 +2,7 @@ import { ArrowRight, Check, Pencil, RefreshCw, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { ChatLine, JobEvent, Persona, TwinChat } from '../../../shared/types';
 import { api, type AppState } from '../api';
-import { Avatar, AvatarStack, Badge, InfoTip } from './ui';
+import { Avatar, AvatarStack, Badge, InfoTip, shortName } from './ui';
 
 /** Instagram-like group DM header. */
 function DmHead({ people, live, sub }: { people: Persona[]; live: boolean; sub: string }) {
@@ -10,7 +10,7 @@ function DmHead({ people, live, sub }: { people: Persona[]; live: boolean; sub: 
     <header className="dm-head">
       <AvatarStack personas={people} size={30} />
       <div>
-        <b>{people.map((p) => p.name.split(' ')[0]).join(', ')}</b>
+        <b>{people.map((p) => shortName(p, people)).join(', ')}</b>
         <div className="tiny muted">
           <span className={`dm-dot ${live ? 'on' : ''}`} /> {sub}
         </div>
@@ -90,7 +90,7 @@ function Thinkers({ people, thoughts, thinking }: { people: Persona[]; thoughts:
       {who.map((p) => (
         <span key={p.id} className="thinker">
           <Avatar persona={p} size={22} />
-          <span className="tiny">{p.name.split(' ')[0]}</span>
+          <span className="tiny">{shortName(p, people)}</span>
           <InfoTip
             className={`cloud ${thinking ? 'pulse' : ''}`}
             trigger={<span aria-hidden>💭</span>}
@@ -263,9 +263,11 @@ function EditableLine({ p, text, edited, showHead, onEdit, onUndo }: { p: Person
 }
 
 /** Static: the stored negotiation of a decision. Owners can correct their twin's lines and re-run from them. */
-export function TwinChatView({ chat, people, onRegenerate }: { chat: TwinChat | undefined; people: Persona[]; onRegenerate?: (edits: { personaId: string; text: string }[]) => void }) {
+export function TwinChatView({ chat, people, onRegenerate, preview }: { chat: TwinChat | undefined; people: Persona[]; onRegenerate?: (edits: { personaId: string; text: string }[]) => void; preview?: number }) {
   const [edits, setEdits] = useState<Record<number, string>>({});
+  const [all, setAll] = useState(false);
   if (!chat?.lines.length) return null;
+  const shown = preview && !all ? chat.lines.slice(0, preview) : chat.lines;
   const n = Object.keys(edits).length;
   let prev = '';
   return (
@@ -280,7 +282,7 @@ export function TwinChatView({ chat, people, onRegenerate }: { chat: TwinChat | 
       <div className="dm dm-static">
         <DmHead people={people} live={false} sub="ομαδική συνομιλία" />
         <div className="dm-body">
-          {chat.lines.map((l: ChatLine, i) => {
+          {shown.map((l: ChatLine, i) => {
             const p = people.find((x) => x.id === l.personaId);
             if (!p) return null;
             const head = prev !== p.id;
@@ -303,9 +305,16 @@ export function TwinChatView({ chat, people, onRegenerate }: { chat: TwinChat | 
             );
           })}
         </div>
+        {shown.length < chat.lines.length && (
+          <button className="dm-more" onClick={() => setAll(true)}>
+            Δες όλη τη συζήτηση ({chat.lines.length} μηνύματα)
+          </button>
+        )}
         {n > 0 && onRegenerate && (
           <footer className="dm-foot dm-regen">
-            <span className="small">{n === 1 ? '1 μήνυμα διορθώθηκε' : `${n} μηνύματα διορθώθηκαν`} — τα Twins ξανααποφασίζουν με βάση τη συζήτηση.</span>
+            <span className="small">
+              <b>Διορθώσεις σε αναμονή:</b> {n === 1 ? '1 μήνυμα' : `${n} μηνύματα`}. Με «Regenerate» γίνονται επιθυμίες σας και τα Twins ξανααποφασίζουν.
+            </span>
             <button className="btn btn-brand" onClick={() => onRegenerate(Object.entries(edits).map(([i, text]) => ({ personaId: chat.lines[Number(i)].personaId, text })))}>
               <RefreshCw size={15} /> Regenerate
             </button>
