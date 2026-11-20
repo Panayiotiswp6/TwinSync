@@ -7,6 +7,7 @@ import { aiModel, aiProvider, embeddingsEnabled } from './ai';
 import { evaluationReport, holdoutLive } from './evaluation';
 import { getJob, startJob } from './jobs';
 import { onboard } from './onboarding';
+import { privateChat } from './privateChat';
 import { addWish, analyzeAndStore, approveMessage, createRequest, groupMessages, importPackage, learnFromDecision, refreshStyle, relaxLimit, removeItemAndRerun, runDecision, setLimit } from './pipeline';
 import { hasTeamSeed, parseFrontMatter } from './seed';
 import { DATA_DIR, store } from './store';
@@ -192,6 +193,16 @@ app.get('/api/jobs/:id', (req, res) => {
   if (!j) return res.status(404).json({ error: 'not found' });
   res.json(j.status === 'done' ? { ...j, state: snapshot() } : j);
 });
+
+// ---- Private chat with one twin (nothing is stored) ----
+app.post(
+  '/api/personas/:id/chat',
+  wrap(async (req, res) => {
+    const b = z.object({ turns: z.array(z.object({ role: z.enum(['user', 'twin']), text: z.string().trim().min(1).max(500) })).min(1).max(30) }).parse(req.body);
+    if (b.turns.at(-1)!.role !== 'user') return res.status(400).json({ error: 'Το τελευταίο μήνυμα πρέπει να είναι του χρήστη.' });
+    res.json(await privateChat(req.params.id, b.turns));
+  }),
+);
 
 // ---- In-app onboarding interview -> new twin ----
 const Money = z.object({ amount: z.number().nullable(), strict: z.boolean() });

@@ -603,3 +603,17 @@ describe('address grounding', () => {
     expect(ungroundedReason('Πάμε Σταυρό, Θαρύπου 37 στις 21:00', facts.concat('Σάββατο 21/11 21:00'), [half, stav])).toBeNull();
   });
 });
+
+describe('private chat with one twin', () => {
+  it('answers from that twin’s own memory (demo mode: the closest memory, no AI) and stores nothing', async () => {
+    store.reset();
+    const { privateChat } = await import('../server/privateChat');
+    const before = JSON.stringify({ s: store.sources.length, m: store.memory.length, r: store.requests.length });
+    const r = await privateChat('pan', [{ role: 'user', text: 'Σου αρέσει η πεζοπορία στο βουνό;' }]);
+    expect(r.mode).toBe('demo');
+    expect(r.used.length).toBe(1);
+    expect(store.item(r.used[0].id)?.personaId).toBe('pan');
+    expect(r.reply).toMatch(/πεζοπορ|βουν/i);
+    expect(JSON.stringify({ s: store.sources.length, m: store.memory.length, r: store.requests.length })).toBe(before);
+  });
+});

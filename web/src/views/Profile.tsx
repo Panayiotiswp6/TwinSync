@@ -1,4 +1,4 @@
-import { Check, FilePlus2, Grid3x3, Inbox, Lock, PenLine, RefreshCw, Trash2, X } from 'lucide-react';
+import { Check, FilePlus2, Grid3x3, Inbox, Lock, MessageCircle, PenLine, RefreshCw, Trash2, X } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import type { Domain, MemoryItem } from '../../../shared/types';
 import { describeDeadline } from '../../../shared/time';
@@ -147,6 +147,9 @@ export function Profile({ id, state, onState, onOpen }: { id: string; state: App
             </button>
             <button className="btn" onClick={() => go('/new')}>
               Νέο αίτημα
+            </button>
+            <button className="btn" onClick={() => go(`/chat/${persona.id}`)} title="Ιδιωτική συζήτηση με αυτό το Twin">
+              <MessageCircle size={16} /> Chat
             </button>
             {persona.locked ? (
               <span className="badge badge-ai" title="Μέλος της ομάδας — έρχεται με την εφαρμογή και δεν διαγράφεται">

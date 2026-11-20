@@ -1,9 +1,9 @@
-import { BarChart3, Download, Eraser, Home, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
+import { BarChart3, Download, Eraser, Home, MessageCircle, PlusSquare, RotateCcw, Sparkles, UserPlus, Users } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { AppState, StartGroup } from '../api';
 import { Avatar } from './ui';
 
-export type Route = { name: 'home' } | { name: 'new' } | { name: 'onboard' } | { name: 'twin'; id: string } | { name: 'request'; id: string } | { name: 'eval' } | { name: 'twins' };
+export type Route = { name: 'home' } | { name: 'new' } | { name: 'onboard' } | { name: 'twin'; id: string } | { name: 'request'; id: string } | { name: 'eval' } | { name: 'twins' } | { name: 'chat'; id?: string };
 
 export function parseRoute(hash: string): Route {
   let h = hash.replace(/^#/, '');
@@ -19,6 +19,7 @@ export function parseRoute(hash: string): Route {
   if (a === 'twins') return { name: 'twins' };
   if (a === 'req' && b) return { name: 'request', id: b };
   if (a === 'eval') return { name: 'eval' };
+  if (a === 'chat') return b ? { name: 'chat', id: b } : { name: 'chat' };
   return { name: 'home' };
 }
 export const go = (path: string) => {
@@ -58,6 +59,7 @@ export function Shell({ route, state, children, onReset }: { route: Route; state
     { key: 'home', path: '/', label: 'Αρχική', icon: <Home size={22} /> },
     { key: 'new', path: '/new', label: 'Νέο αίτημα', icon: <PlusSquare size={22} /> },
     { key: 'twins', path: '/twins', label: 'Twins', icon: <Users size={22} /> },
+    { key: 'chat', path: '/chat', label: 'Chat με Twin', icon: <MessageCircle size={22} /> },
     { key: 'eval', path: '/eval', label: 'Αξιολόγηση', icon: <BarChart3 size={22} /> },
   ];
   const active = route.name === 'twin' || route.name === 'onboard' ? 'twins' : route.name === 'request' ? 'home' : route.name;
