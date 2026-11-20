@@ -569,3 +569,17 @@ describe('richer interview: places, music, area', () => {
     expect(hinted?.event?.status).toBe('unconfirmed');
   });
 });
+
+describe('shipped team group (server/data/team/group.json)', () => {
+  it('has the three team members, and every memory quote is an exact span of its source', async () => {
+    const { readFileSync, existsSync } = await import('node:fs');
+    const { containsQuote } = await import('../shared/text');
+    const file = new URL('../server/data/team/group.json', import.meta.url);
+    if (!existsSync(file)) return;
+    const g = JSON.parse(readFileSync(file, 'utf8'));
+    expect(g.personas.map((p: { name: string }) => p.name)).toEqual(['Παναγιώτης Κουζάρης', 'Παναγιώτης Τσακύρης', 'Γρηγόρης Πατέλης']);
+    const src = new Map(g.sources.map((s: { id: string; text: string }) => [s.id, s.text]));
+    for (const m of g.memory) for (const r of m.refs) expect(containsQuote(String(src.get(r.sourceId) ?? ''), r.quote), m.statement).toBe(true);
+    expect(JSON.stringify(g)).not.toMatch(/sk-proj|sk-ant-/);
+  });
+});
