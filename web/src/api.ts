@@ -67,6 +67,8 @@ export const api = {
   approve: (decisionId: string, personaId: string, approve: boolean) => call<AppState>('POST', `/api/decisions/${decisionId}/approval`, { personaId, approve }),
   messages: (decisionId: string, regenerate = false) => call<AppState>('POST', `/api/decisions/${decisionId}/messages${regenerate ? '?regenerate=1' : ''}`),
   approveMessage: (decisionId: string, personaId: string, text?: string) => call<AppState>('POST', `/api/decisions/${decisionId}/messages/${personaId}/approve`, { text }),
+  privateChat: (personaId: string, turns: { role: 'user' | 'twin'; text: string }[]) =>
+    call<{ reply: string; used: Pick<MemoryItem, 'id' | 'statement' | 'refs'>[]; mode: 'live' | 'demo'; model: string | null; note?: string }>('POST', `/api/personas/${personaId}/chat`, { turns }),
   evaluation: () => call<EvalReport>('GET', '/api/eval'),
   evaluationLive: () => call<EvalReport>('POST', '/api/eval/live'),
   importPackage: (pkg: ImportPackage) =>

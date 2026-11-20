@@ -8,6 +8,7 @@ import { SourceDrawer } from './components/SourceDrawer';
 import { Eval } from './views/Eval';
 import { Home } from './views/Home';
 import { Onboard } from './views/Onboard';
+import { PrivateChat } from './views/PrivateChat';
 import { Profile, TwinsList } from './views/Profile';
 import { Thread } from './views/Thread';
 
@@ -69,6 +70,7 @@ export function App() {
       {route.name === 'twin' && <Profile key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'request' && <Thread key={route.id} id={route.id} state={state} onState={setState} onOpen={setSource} />}
       {route.name === 'eval' && <Eval state={state} onState={refresh} />}
+      {route.name === 'chat' && <PrivateChat key={route.id ?? 'pick'} id={route.id} state={state} onOpen={setSource} />}
       </ErrorBoundary>
       <ErrorBoundary resetKey={source?.sourceId ?? ''}>
         <SourceDrawer target={source} sources={state.sources} personas={state.personas} memory={state.memory} onClose={() => setSource(null)} />

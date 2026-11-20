@@ -869,3 +869,46 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
   const p = z.object({ messages: z.array(z.object({ personaId: z.string(), text: z.string() })) }).parse(data);
   return p.messages.filter((m) => briefs.some((b) => b.personaId === m.personaId)).map((m) => ({ personaId: m.personaId, text: clean(m.text).slice(0, 220) })).filter((m) => m.text);
 }
+
+// ---------------------------------------------------------------------------
+// 8. Private chat: anyone talks to ONE twin; it answers as its owner would
+// ---------------------------------------------------------------------------
+
+export interface ChatTurn {
+  role: 'user' | 'twin';
+  text: string;
+}
+
+export async function privateReply(persona: Persona, items: MemoryItem[], samples: string[], turns: ChatTurn[]): Promise<{ reply: string; usedMemoryIds: string[] }> {
+  const data = await completeJSON({
+    name: 'private_chat_reply',
+    system: `You are the digital twin of ${persona.name}. Someone is chatting privately with ${persona.name} about their own topic. Reply exactly as ${persona.name} would in a private chat.
+- Voice: learn it ONLY from the WRITING SAMPLES and style notes (dialect, slang, accents or not, punctuation, emoji, typical length). Sound like a real person, not an assistant.
+- Short: one chat message, 1-3 short sentences. No lists, no headings, no follow-up offers.
+- Facts about ${persona.name} (tastes, habits, opinions, schedule, places, music) come ONLY from the MEMORY. Never invent new facts about them; if the memory does not cover it, answer the way they plausibly would without stating new facts, or say you'd have to think about it.
+- Do not mention memory, sources, the app or AI. Only if asked directly whether you are a bot/AI, say honestly that you are ${persona.name}'s digital twin.
+- Be respectful; never share phone numbers, addresses or other people's private details.
+- usedMemoryIds: 0-3 ids of the memory items the reply relies on.`,
+    user: `STYLE: ${persona.style ? `${persona.style.summary} | ${persona.style.traits.join('; ')}` : 'unknown — write plainly and casually'}
+WRITING SAMPLES:
+${samples.map((s) => `- ${s}`).join('\n') || '- (none)'}
+
+MEMORY (${persona.name}):
+${items.map((m) => `- ${m.id}: ${m.statement}`).join('\n') || '- (none)'}
+
+CONVERSATION:
+${turns.map((t) => `${t.role === 'user' ? 'Ο ΑΛΛΟΣ' : persona.name.toUpperCase()}: ${t.text}`).join('\n')}
+
+Write ${persona.name}'s reply to the last message.`,
+    schema: {
+      type: 'object',
+      additionalProperties: false,
+      required: ['reply', 'usedMemoryIds'],
+      properties: { reply: { type: 'string' }, usedMemoryIds: { type: 'array', items: { type: 'string' } } },
+    },
+    maxTokens: 2500,
+  });
+  const p = z.object({ reply: z.string(), usedMemoryIds: z.array(z.string()) }).parse(data);
+  const ids = new Set(items.map((m) => m.id));
+  return { reply: clean(p.reply).slice(0, 600), usedMemoryIds: p.usedMemoryIds.filter((id) => ids.has(id)).slice(0, 3) };
+}

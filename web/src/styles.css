@@ -773,3 +773,22 @@ h3 { font-size: 16.5px; }
 .ranked-n { width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; font-size: 12px; font-weight: 700; color: #fff; background: var(--ai-grad); }
 .ranked-btns { display: inline-flex; }
 @media (max-width: 640px) { .ranked-row { grid-template-columns: 26px 1fr auto; } .ranked-row input:nth-of-type(2) { grid-column: 2 / 4; } }
+
+/* ---------- private chat with one twin ---------- */
+.private-chat .dm-head { gap: 10px; }
+.private-chat .spacer { flex: 1; }
+.private-chat .dm-body { min-height: 260px; max-height: calc(100dvh - 300px); }
+.dm-row.me { justify-content: flex-end; }
+.dm-row.me .dm-col { align-items: flex-end; }
+.dm-bubble.mine { background: var(--ai-grad); color: #fff; border: 0; }
+.dm-why { margin: 3px 0 0 10px; max-width: 100%; }
+.dm-why summary { cursor: pointer; list-style: none; }
+.dm-why summary::-webkit-details-marker { display: none; }
+.dm-why li { padding: 2px 0; }
+.private-input { flex-wrap: nowrap; }
+.private-input input { flex: 1; min-width: 0; border: 1px solid var(--line-2); border-radius: 999px; padding: 10px 14px; background: var(--surface-solid); color: var(--ink); outline: none; font: inherit; }
+.private-input input:focus { border-color: var(--accent); box-shadow: 0 0 0 4px rgba(124, 58, 237, 0.12); }
+@media (max-width: 640px) {
+  .private-chat .dm-head .badge { display: none; }
+  .private-chat .dm-body { max-height: calc(100dvh - 330px); }
+}
