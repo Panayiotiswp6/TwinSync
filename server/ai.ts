@@ -18,6 +18,7 @@ import { containsQuote, clamp } from '../shared/text';
 import { athensIso, localParts, parseIso } from '../shared/time';
 
 const KINDS: RequestKind[] = ['coffee', 'drinks', 'club', 'live', 'dinner', 'trip', 'activity', 'gift', 'other'];
+const WEEKDAY_EN = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 /** "2026-11-20T14:05:00+02:00" in Athens local time (correct offset, DST included). */
 function athensNow(now: Date): string {
   const p = localParts(now);
@@ -425,6 +426,7 @@ const READING_RULES = `How to read each person's memory:
 - Items "από προηγούμενη απόφαση" come from how the person actually decided before — they are better evidence than general statements.
 - Ranked places someone has visited ("#1 … — why") show the TYPE of trip they love: prefer destinations with the same qualities. A place they never want to visit again is a strict "avoid".
 - Routine obligations (e.g. "back by Sunday 21:00, work on Monday") do not override dates the group explicitly asked for: whoever joins a Friday–Monday trip has arranged it.
+- Weekly routines (classes, gym, work, practice) matter for everyday local plans: an option that clashes with or is tight against one at that hour scores lower and says so in reasons; one that fits around it is better. For trips and special occasions they are flexible.
 - For big trips outside Europe (once-in-a-while experiences), everyday money amounts are only a loose reference; the request's own budget, if any, is what counts.
 - If nothing in the memory covers an aspect, do not penalise it: infer cautiously from similar items, or stay neutral and mention it in unknowns.`;
 
@@ -879,13 +881,15 @@ export interface ChatTurn {
   text: string;
 }
 
-export async function privateReply(persona: Persona, items: MemoryItem[], samples: string[], turns: ChatTurn[]): Promise<{ reply: string; usedMemoryIds: string[] }> {
+export async function privateReply(persona: Persona, items: MemoryItem[], samples: string[], turns: ChatTurn[], now = new Date()): Promise<{ reply: string; usedMemoryIds: string[] }> {
+  const p0 = localParts(now);
   const data = await completeJSON({
     name: 'private_chat_reply',
     system: `You are the digital twin of ${persona.name}. Someone is chatting privately with ${persona.name} about their own topic. Reply exactly as ${persona.name} would in a private chat.
 - Voice: learn it ONLY from the WRITING SAMPLES and style notes (dialect, slang, accents or not, punctuation, emoji, typical length). Sound like a real person, not an assistant.
 - Short: one chat message, 1-3 short sentences. No lists, no headings, no follow-up offers.
 - Facts about ${persona.name} (tastes, habits, opinions, schedule, places, music) come ONLY from the MEMORY. Never invent new facts about them; if the memory does not cover it, answer the way they plausibly would without stating new facts, or say you'd have to think about it.
+- Use judgement with their SCHEDULE like a real person: today is ${WEEKDAY_EN[p0.weekday]} ${athensNow(now)} (Athens). If someone proposes a day/time for an everyday plan (coffee, drinks, a call) that clashes with or is tight against a routine in the memory (classes, gym, work, practice), say so naturally and suggest another time ("λίγο δύσκολο στις 6, έχω γυμναστήριο — πάμε πιο νωρίς / μετά τις 8;"). Do not mention routines that do not touch the proposed time. Routines are flexible for special occasions: for a trip or a few days away they would happily skip a class or the gym.
 - Do not mention memory, sources, the app or AI. Only if asked directly whether you are a bot/AI, say honestly that you are ${persona.name}'s digital twin.
 - Be respectful; never share phone numbers, addresses or other people's private details.
 - usedMemoryIds: 0-3 ids of the memory items the reply relies on.`,
