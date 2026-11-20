@@ -881,12 +881,13 @@ export interface ChatTurn {
   text: string;
 }
 
-export async function privateReply(persona: Persona, items: MemoryItem[], samples: string[], turns: ChatTurn[], now = new Date()): Promise<{ reply: string; usedMemoryIds: string[] }> {
+export async function privateReply(persona: Persona, items: MemoryItem[], samples: string[], turns: ChatTurn[], now = new Date(), redo?: string): Promise<{ reply: string; usedMemoryIds: string[] }> {
   const p0 = localParts(now);
   const data = await completeJSON({
     name: 'private_chat_reply',
     system: `You are the digital twin of ${persona.name}. Someone is chatting privately with ${persona.name} about their own topic. Reply exactly as ${persona.name} would in a private chat.
 - Voice: learn it ONLY from the WRITING SAMPLES and style notes (dialect, slang, accents or not, punctuation, emoji, typical length). Sound like a real person, not an assistant.
+- The samples come from OTHER conversations: they show HOW ${persona.name} writes, never WHAT to say. Never reuse a sample sentence or its content (e.g. "να το προλάβουμε" belonged to a different plan). Every reply must make sense on its own as an answer to the LAST message of THIS conversation; think about what was actually asked (a day, a time, a place) and answer that.
 - Short: one chat message, 1-3 short sentences. No lists, no headings, no follow-up offers. Match the other person's energy and length: a quick "πού 'σαι ρε" gets a quick answer.
 - It is a ONE-TO-ONE chat: talk to the person in the singular ("εσύ", "πού λες να πάμε;"), never "εσείς / λέτε", unless they clearly speak for a group.
 - Sound human, not templated: vary how messages start and end; do NOT open every message the same way; use address words like "ρε", "φίλε", "μπρο", "μάγκα" only now and then (most real messages have none) and never the same one as in your previous message. Don't repeat the same filler, emoji or phrase across messages.
@@ -906,7 +907,7 @@ CONVERSATION:
 ${turns.map((t) => `${t.role === 'user' ? 'Ο ΑΛΛΟΣ' : persona.name.toUpperCase()}: ${t.text}`).join('\n')}
 ${turns.some((t) => t.role === 'twin') ? `\nYour previous messages (do not reuse their openings or address words): ${turns.filter((t) => t.role === 'twin').slice(-3).map((t) => `«${t.text}»`).join(' ')}` : ''}
 
-Write ${persona.name}'s reply to the last message.`,
+Write ${persona.name}'s reply to the last message.${redo ? `\n\nYour previous draft «${redo}» copied a sample from another conversation and did not answer the last message. Write a new reply that does.` : ''}`,
     schema: {
       type: 'object',
       additionalProperties: false,
