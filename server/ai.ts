@@ -489,11 +489,11 @@ ${TONE}
 ${
   local
     ? `- Each option is ONE specific, NAMED place (its real name) of the requested kind, in ${city}${req.area ? ` and inside the requested area: ${req.area}` : ''}. Never "κάπου στα …", "ένα καφέ κοντά στο …", "ένα από τα μπαρ της οδού …".
-- Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well.
+- Prefer the CATALOGUE venues below (real places with a public listing). You may name another real place you know well. Name only places you are sure exist in that area; never invent or guess a name to fit a budget or a theme — a real place that fits a little less is better than an invented one. Each option a DIFFERENT place.
 - coffee: cafés only. drinks: follow the asked type (cocktail bar, quiet bar, wine bar, beer). club: a club. live: a venue for live music — do NOT state an artist, programme, start time or ticket price as fact; describe the venue and its kind of music.
 - Use what people listen to: their genres decide the TYPE of place (λαϊκά → μπουζούκια/πίστα, house/pop → club, jazz → jazz club, rock → rock bar/live). If someone's favourite artist usually plays at a kind of venue, propose such a venue and put that artist in artistHint (it will be shown as "δείτε αν εμφανίζεται", never as a confirmed date). artistHint "" otherwise.
 - startsAt/endsAt: the proposed time window inside the requested period (ISO with the Athens offset). One evening past midnight is one outing.
-- costPerPerson: honest estimate per person for what they will order/pay (-1 if unknown); costNote: what it includes.
+- costPerPerson: honest estimate per person for what they will typically order/pay AT THAT PLACE (its own price level: e.g. one or two drinks in a cocktail bar, one coffee in a café); -1 if unknown. A catalogue "~€" hint is the team's estimate for that place: use it. Never copy the group's budget or the same number into every option — different places have different prices. costNote: what it includes.
 - features: 3-5 short Greek facts that help judging (quiet or loud, comfortable tables, music, distance to metro…).`
     : `- Concrete options with real place names where relevant; startsAt/endsAt inside the requested period (ISO with the Athens offset); honest cost per person (-1 if unknown); 3-5 features. venueName: the main place ("" if none), area/city where it is.`
 }
@@ -926,7 +926,7 @@ export async function negotiationChat(briefs: ChatBrief[], shared: string[]): Pr
 - Every fact, number, place or option title must come from that person's FACTS or the SHARED facts. Nothing invented.
 - Talk about the plan as settled: no "να το επιβεβαιώσουμε", "να ελέγξουμε", "αν είναι ανοιχτό".
 - Every message must move the decision forward: a preference, a trade-off, a disagreement, or a concrete detail of the plan that matters for THIS choice. No filler, no box-ticking. Do not bring up a need that the options already meet (an allergy, a diet, a private bathroom, no camping) unless it is a real reason for or against an option — e.g. never «έχει και φαγητό χωρίς γαλακτοκομικά» while picking a city.
-- A twin NEVER accepts breaking its own strict limit on its owner's behalf. If the SHARED facts say the proposal does not cover someone's limit, the group still converges on that closest proposal; that person says plainly what is not covered and that they will decide themselves (with their own approval) — no "οκ, κάνω πίσω".`,
+- A twin NEVER accepts breaking its own strict limit on its owner's behalf. If the SHARED facts say the proposal does not cover someone's limit, the group still converges on that closest proposal; that person says plainly what is not covered and that they will decide themselves (with their own approval) — no "οκ, κάνω πίσω". If the SHARED facts do NOT say that, nobody talks about deciding "with their own approval": everyone's limits are covered.`,
     user: `SHARED:\n${shared.map((f) => `- ${f}`).join('\n')}\n\n${briefs
       .map((b) => `## personaId: ${b.personaId} (${b.name})\nSTYLE: ${styleLine(b.style, 'unknown — write plainly')}\nWRITING SAMPLES:\n${b.samples.map((s) => `- ${s}`).join('\n') || '- (none)'}\nFACTS:\n${b.facts.map((f) => `- ${f}`).join('\n')}`)
       .join('\n\n')}`,
