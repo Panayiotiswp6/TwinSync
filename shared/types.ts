@@ -15,6 +15,15 @@ export interface StyleCard {
   /** Short verbatim phrases from the persona's own writing. */
   phrases: SourceRef[];
   usesEmoji: boolean;
+  /** Dialect words that stand for a standard word, e.g. Cypriot «τζε» for «και»: used exactly there and nowhere else. */
+  swaps?: WordSwap[];
+}
+
+export interface WordSwap {
+  /** The standard words it replaces ("και", "κι"). */
+  from: string[];
+  /** The person's own word ("τζε"). */
+  to: string;
 }
 
 export interface Persona {

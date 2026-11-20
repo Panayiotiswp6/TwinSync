@@ -1,8 +1,8 @@
-import { ArrowRight, Info } from 'lucide-react';
+import { ArrowRight } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactElement } from 'react';
 import type { ChatLine, JobEvent, Persona, TwinChat } from '../../../shared/types';
 import { api, type AppState } from '../api';
-import { Avatar, AvatarStack, Badge } from './ui';
+import { Avatar, AvatarStack, Badge, InfoTip } from './ui';
 
 /** Instagram-like group DM header. */
 function DmHead({ people, live, sub }: { people: Persona[]; live: boolean; sub: string }) {
@@ -178,19 +178,17 @@ export function TwinChatView({ chat, people }: { chat: TwinChat | undefined; peo
   const events: JobEvent[] = chat.lines.map((l: ChatLine, i) => ({ at: i, who: l.personaId, kind: 'say', text: l.text }));
   return (
     <section>
-      <h3 className="sec-title">
+      <h3 className="sec-title meta-row">
         Η συζήτηση των Twins <Badge tone={chat.mode === 'live' ? 'ai' : 'neutral'}>{chat.mode === 'live' ? 'ύφος κάθε κατόχου · AI' : 'πρότυπο'}</Badge>
+        <InfoTip label="Πώς ελέγχεται η συζήτηση" tone={chat.note ? 'warn' : undefined}>
+          {chat.note && <p className="tip-note warn-text">{chat.note}</p>}
+          Κάθε μήνυμα ελέγχεται σε κώδικα: αριθμοί και επιλογές πρέπει να υπάρχουν στα δεδομένα της απόφασης, αλλιώς απορρίπτεται.
+        </InfoTip>
       </h3>
       <div className="dm dm-static">
         <DmHead people={people} live={false} sub="ομαδική συνομιλία" />
         <div className="dm-body">{renderEvents(events, people)}</div>
-        {chat.note && (
-          <footer className="dm-foot tiny muted">
-            <Info size={13} /> {chat.note}
-          </footer>
-        )}
       </div>
-      <p className="tiny muted">Κάθε μήνυμα ελέγχεται σε κώδικα: αριθμοί και επιλογές πρέπει να υπάρχουν στα δεδομένα της απόφασης, αλλιώς απορρίπτεται.</p>
     </section>
   );
 }

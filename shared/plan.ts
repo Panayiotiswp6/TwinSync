@@ -267,15 +267,27 @@ export function coverageOf(o: CandidateOption, wishes: MemoryItem[], all: Memory
 
 /**
  * The wishes a plan should answer to: each twin's own wishes for this request, the group's qualitative asks
- * (once), and — for trips — each twin's strongest likes (max 2 each).
+ * (once), and — for trips — each twin's strongest likes (max 2 each); likes about WHERE to go are left out
+ * when the request already named the destination, and likes said for another kind of trip (abroad vs Greece).
  */
-export function planWishes(items: MemoryItem[], isGroupItem: (m: MemoryItem) => boolean, trip = true): MemoryItem[] {
+// "Θέλει οπωσδήποτε να πάει: Ιαπωνία", "Η Αυστρία είναι ο αγαπημένος του προορισμός": wishes about WHERE to go.
+const DESTINATION = /(να (παει|παω|ταξιδεψει|επισκεφθει|επισκεφτει)|μερη που εχει παει|προορισμ|bucket)/;
+
+/** A wish about which destination to pick: it cannot be "covered" once the request has named the place. */
+export function isDestinationWish(m: Pick<MemoryItem, 'statement'>): boolean {
+  return DESTINATION.test(normalizeGreek(m.statement));
+}
+
+/** "Στα ταξίδια στο εξωτερικό…" is not a wish for a weekend in Greece (and vice versa). */
+const otherPlace = (m: MemoryItem, where?: GroupRequest['where']) => !!where && !!m.context && m.context.where !== 'any' && m.context.where !== where;
+
+export function planWishes(items: MemoryItem[], isGroupItem: (m: MemoryItem) => boolean, trip = true, placeFixed = false, where?: GroupRequest['where']): MemoryItem[] {
   const qualitative = (m: MemoryItem) => !m.rule && m.status === 'confirmed' && m.scope === 'request' && m.polarity !== 'avoids';
   const own = items.filter((m) => qualitative(m) && !isGroupItem(m));
   const seen = new Set<string>();
   const group = items.filter((m) => qualitative(m) && isGroupItem(m) && !seen.has(m.statement) && seen.add(m.statement));
   if (!trip) return [...own, ...group];
-  const likes = items.filter((m) => !m.rule && m.status === 'confirmed' && m.scope === 'profile' && !m.hard && m.polarity === 'likes' && m.strength >= 0.7 && m.kind !== 'style');
+  const likes = items.filter((m) => !m.rule && m.status === 'confirmed' && m.scope === 'profile' && !m.hard && m.polarity === 'likes' && m.strength >= 0.7 && m.kind !== 'style' && !(placeFixed && isDestinationWish(m)) && !otherPlace(m, where));
   const per = new Map<string, number>();
   const strongest = [...likes]
     .sort((a, b) => Number(b.hard) - Number(a.hard) || b.strength - a.strength)

@@ -1,7 +1,7 @@
 import { FlaskConical } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { api, type AppState, type EvalReport, type HoldoutReport } from '../api';
-import { Avatar, Badge, Spinner } from '../components/ui';
+import { Avatar, Badge, InfoTip, Spinner } from '../components/ui';
 
 const OUT = { correct: { label: 'σωστό', tone: 'good' }, wrong: { label: 'λάθος', tone: 'bad' }, uncertain: { label: 'αβέβαιο', tone: 'warn' } } as const;
 
@@ -26,9 +26,13 @@ function HoldoutTable({ r, state }: { r: HoldoutReport; state: AppState }) {
               <tr key={row.id}>
                 <td>{p && <Avatar persona={p} size={26} />}</td>
                 <td>
-                  <b className="small">{row.question}</b>
-                  <div className="tiny muted">{row.why}</div>
-                  <div className="tiny muted">Πραγματικά: {row.note}</div>
+                  <span className="meta-row">
+                    <b className="small">{row.question}</b>
+                    <InfoTip size={13} label="Αιτιολόγηση πρόβλεψης">
+                      <p>{row.why}</p>
+                      <p className="muted">Πραγματικά: {row.note}</p>
+                    </InfoTip>
+                  </span>
                   {row.origin === 'imported' && <Badge tone="brand">πραγματική απόφαση κατόχου</Badge>}
                 </td>
                 <td>
@@ -94,8 +98,10 @@ export function Eval({ state, onState }: { state: AppState; onState: () => void 
             <ul className="plain scen">
               {report.scenarios.map((s) => (
                 <li key={s.name}>
-                  <Badge tone={s.pass ? 'good' : 'bad'}>{s.pass ? 'PASS' : 'FAIL'}</Badge> <b className="small">{s.name}</b>
-                  <div className="tiny muted">{s.detail}</div>
+                  <span className="meta-row">
+                    <Badge tone={s.pass ? 'good' : 'bad'}>{s.pass ? 'PASS' : 'FAIL'}</Badge> <b className="small">{s.name}</b>
+                    <InfoTip size={13} label="Λεπτομέρειες σεναρίου">{s.detail}</InfoTip>
+                  </span>
                 </li>
               ))}
             </ul>
@@ -105,8 +111,10 @@ export function Eval({ state, onState }: { state: AppState; onState: () => void 
                 <ul className="plain scen">
                   {report.planChecks.map((s) => (
                     <li key={s.name}>
-                      <Badge tone={s.pass ? 'good' : 'bad'}>{s.pass ? 'PASS' : 'FAIL'}</Badge> <b className="small">{s.name}</b>
-                      <div className="tiny muted">{s.detail}</div>
+                      <span className="meta-row">
+                        <Badge tone={s.pass ? 'good' : 'bad'}>{s.pass ? 'PASS' : 'FAIL'}</Badge> <b className="small">{s.name}</b>
+                        <InfoTip size={13} label="Λεπτομέρειες ελέγχου">{s.detail}</InfoTip>
+                      </span>
                     </li>
                   ))}
                 </ul>

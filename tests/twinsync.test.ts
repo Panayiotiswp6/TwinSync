@@ -411,6 +411,19 @@ describe('concrete local plans', async () => {
     expect(trip.items.some((m) => m.statement.includes('σκηνή'))).toBe(true);
     expect(planWishes([], () => false)).toEqual([]);
   });
+
+  it('a named destination leaves out wishes about WHERE to go (they cannot be "uncovered")', async () => {
+    const { isDestinationWish } = await import('../shared/plan');
+    const like = (id: string, statement: string): MemoryItem => ({ ...rule('max_cost', '1'), id, personaId: 'p', kind: 'preference', statement, scope: 'profile', polarity: 'likes', strength: 0.9, hard: false, rule: undefined });
+    const items = [like('a', 'Θέλει οπωσδήποτε να πάει: Ιαπωνία, Αμερική'), like('b', 'Στα ταξίδια του αρέσουν τα βουνά και η πεζοπορία')];
+    expect(isDestinationWish(items[0])).toBe(true);
+    expect(isDestinationWish(items[1])).toBe(false);
+    expect(planWishes(items, () => false, true, true).map((m) => m.id)).toEqual(['b']);
+    expect(planWishes(items, () => false, true, false).map((m) => m.id)).toContain('a');
+    const abroad = { ...like('c', 'Στα ταξίδια στο εξωτερικό εκτιμά το καλό φαγητό'), context: { where: 'abroad' as const, days: 0 } };
+    expect(planWishes([abroad], () => false, true, false, 'domestic')).toEqual([]);
+    expect(planWishes([abroad], () => false, true, false, 'abroad').map((m) => m.id)).toEqual(['c']);
+  });
 });
 
 describe('four-day trip plan', async () => {
@@ -647,5 +660,18 @@ describe('private chat does not paste lines from other conversations', () => {
     const samples = ['Πολύ νωρίς ρε αλλά αν είναι να το προλάβουμε πάμε', 'Κλείσε οπωσδήποτε μπρο, πάμε λίγοο'];
     expect(copiesSample('Πολύ νωρίς ρε φίλε, αλλά πάμε άμα είναι να το προλάβουμε!', samples)).toBe(true);
     expect(copiesSample('Δευτέρα στις 10 έχω σχολή, πάμε μετά τις 2;', samples)).toBe(false);
+  });
+});
+
+describe('dialect words stand for one standard word only', () => {
+  it('Kouzaris writes «τζε» exactly where «και» goes, never as a filler', async () => {
+    const { applySwaps } = await import('../shared/dialect');
+    const sw = [{ from: ['και', 'κι'], to: 'τζε' }];
+    expect(applySwaps('Τα 162€ βγαίνουν οικονομικά, τζε έχει φύση και Παλαμήδι.', sw)).toBe('Τα 162€ βγαίνουν οικονομικά, τζε έχει φύση τζε Παλαμήδι.');
+    expect(applySwaps('Η αναχώρηση 11:00 βολεύει μετά το μάθημα τζε', sw)).toBe('Η αναχώρηση 11:00 βολεύει μετά το μάθημα');
+    expect(applySwaps('Κι εγώ ψήνομαι, καιρός είναι', sw)).toBe('Τζε εγώ ψήνομαι, καιρός είναι');
+    expect(applySwaps('ναι και πάμε', undefined)).toBe('ναι και πάμε');
+    const kouzaris = store.persona('panayiotis-kouzaris');
+    if (kouzaris) expect(kouzaris.style?.swaps?.[0]?.to).toBe('τζε');
   });
 });

@@ -5,6 +5,7 @@
 import { contextFit, requestContext, spanDays, type RequestContext } from '../shared/context';
 import { decide } from '../shared/decide';
 import { contextOf, evaluateWithRules, extractWithRules, parseRequestWithRules, type MemoryDraft } from '../shared/heuristics';
+import { applySwaps } from '../shared/dialect';
 import { chatFacts, messageFacts, placeLine, styleSamples, templateChat, templateMessage, ungroundedReason } from '../shared/messages';
 import { areasOf, datesBetween, inArea, KIND_CATEGORY, KIND_LABEL, kindFromText, linkByKeywords, LOCAL_KINDS, planWishes, prepareOptions } from '../shared/plan';
 import { normalizeGreek } from '../shared/text';
@@ -443,7 +444,7 @@ export async function runDecision(requestId: string, opts: { regenerateOptions?:
   const prepInput = () => ({
     req,
     items: inputs,
-    wishes: planWishes(inputs, groupItem, req.kind === 'trip'),
+    wishes: planWishes(inputs, groupItem, req.kind === 'trip', !!req.place, req.where),
     wishText: inputs.filter((m) => m.scope === 'request').map((m) => m.statement).join(' '),
     catalogue: venueCatalogue(),
   });
@@ -597,7 +598,8 @@ async function twinChat(d: Decision, personas: Persona[]): Promise<TwinChat> {
       return !bad;
     });
     if (lines.length >= 3 && new Set(lines.map((l) => l.personaId)).size >= Math.min(2, personas.length)) {
-      return { lines, mode: 'live', note: dropped ? `${dropped} μήνυμα(τα) απορρίφθηκαν από τον έλεγχο γεγονότων.` : undefined };
+      const style = (id: string) => personas.find((p) => p.id === id)?.style?.swaps;
+      return { lines: lines.map((l) => ({ ...l, text: applySwaps(l.text, style(l.personaId)) })), mode: 'live', note: dropped ? `${dropped} μήνυμα(τα) απορρίφθηκαν από τον έλεγχο γεγονότων.` : undefined };
     }
     return { lines: templateChat(d, personas), mode: 'template', note: 'Το AI έγραψε μηνύματα με στοιχεία εκτός απόφασης — μπήκε πρότυπο.' };
   } catch (e) {
@@ -658,7 +660,7 @@ export async function groupMessages(decisionId: string, regenerate = false): Pro
     const live = texts[b.personaId];
     if (live) {
       const problem = ungroundedReason(live, b.facts, d.options);
-      if (!problem) return { ...base, text: live, mode: 'live' };
+      if (!problem) return { ...base, text: applySwaps(live, b.style?.swaps), mode: 'live' };
       return { ...base, text: templateMessage(d, b.personaId), mode: 'template', guardNote: `Το AI ${problem} — απορρίφθηκε, μπήκε πρότυπο.` };
     }
     return { ...base, text: templateMessage(d, b.personaId), mode: 'template' };
